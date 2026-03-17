@@ -123,15 +123,20 @@ function SettingsPanel({
   onConnect,
   onDisconnect,
   appSettingsComponents,
+  visiblePacks,
 }: {
   isConnected: boolean;
   onConnect: (config: { endpoint: string; apiKey: string; model: string }) => void;
   onDisconnect: () => void;
   appSettingsComponents?: React.ComponentType[];
+  visiblePacks?: string[];
 }) {
   const [open, setOpen] = useState(false);
   const [config, setConfig] = useState(loadLLMConfig);
-  const packSettingsList = getPackSettingsComponents();
+  const allPackSettings = getPackSettingsComponents();
+  const packSettingsList = visiblePacks
+    ? allPackSettings.filter(p => visiblePacks.includes(p.name))
+    : allPackSettings;
 
   const handleConnect = () => {
     saveLLMConfig(config);
@@ -376,6 +381,9 @@ export interface AdaptiveAppProps {
 
   /** Ref callback that receives the sendPrompt function, allowing external components to trigger prompts */
   sendPromptRef?: React.MutableRefObject<((prompt: string) => void) | null>;
+
+  /** Restrict which pack settings appear in the settings panel. If omitted, all packs are shown. */
+  visiblePacks?: string[];
 }
 
 let turnCounter = Date.now();
@@ -397,6 +405,7 @@ export function AdaptiveApp({
   style,
   useIntents,
   sendPromptRef,
+  visiblePacks,
 }: AdaptiveAppProps) {
   // ─── Internal adapter management ───
   const [isConnected, setIsConnected] = useState(() => {
@@ -710,6 +719,7 @@ export function AdaptiveApp({
       onConnect: handleConnect,
       onDisconnect: handleDisconnect,
       appSettingsComponents: settingsComponents,
+      visiblePacks,
     }),
 
     // Main content

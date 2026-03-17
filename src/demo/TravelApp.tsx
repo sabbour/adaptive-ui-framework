@@ -95,6 +95,7 @@ function TravelPlannerApp() {
     React.createElement(AdaptiveApp, {
       initialSpec,
       systemPromptSuffix: TRAVEL_SYSTEM_PROMPT,
+      visiblePacks: ['travel-data'],
       theme: {
         primaryColor: '#059669',
         backgroundColor: '#f0fdf4',

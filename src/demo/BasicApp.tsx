@@ -442,6 +442,7 @@ export function SolutionArchitectApp() {
         persistKey: sessionId,
         systemPromptSuffix: ARCHITECT_SYSTEM_PROMPT,
         sendPromptRef,
+        visiblePacks: ['azure', 'github'],
         theme: {
           primaryColor: '#2563eb',
           backgroundColor: '#f0f2f5',

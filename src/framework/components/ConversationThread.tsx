@@ -90,21 +90,20 @@ const PastTurn = memo(function PastTurn({ turn }: { turn: ConversationTurn }) {
 // The latest turn with interactive UI + escape hatch text input.
 // Collapses to a summary once the user submits/proceeds.
 
-/** Check if a layout node tree already contains a free-text input */
-function hasTextInput(node: any): boolean {
+/** Check if a layout node tree already contains a chatInput (free-form conversation input).
+ *  Regular bound text inputs (e.g., "departure city") are form fields, not escape hatches. */
+function hasChatInput(node: any): boolean {
   if (!node) return false;
   const t = node.type || node.t;
   if (t === 'chatInput' || t === 'ci') return true;
-  if ((t === 'input' || t === 'in') && (!node.inputType || node.inputType === 'text')) return true;
-  if (t === 'textarea' || t === 'ta') return true;
   // Recurse children
   const kids = node.children || node.ch || [];
   for (const child of kids) {
-    if (hasTextInput(child)) return true;
+    if (hasChatInput(child)) return true;
   }
   if (Array.isArray(node.tabs)) {
     for (const tab of node.tabs) {
-      if (tab.children) for (const child of tab.children) { if (hasTextInput(child)) return true; }
+      if (tab.children) for (const child of tab.children) { if (hasChatInput(child)) return true; }
     }
   }
   return false;
@@ -113,8 +112,8 @@ function hasTextInput(node: any): boolean {
 function ActiveTurn({ turn }: { turn: ConversationTurn }) {
   const { sendPrompt, state, isLoading } = useAdaptive();
   const [escapeText, setEscapeText] = useState('');
-  const layoutHasTextInput = hasTextInput(turn.agentSpec.layout);
-  const [escapeOpen, setEscapeOpen] = useState(!layoutHasTextInput);
+  const layoutHasChatInput = hasChatInput(turn.agentSpec.layout);
+  const [escapeOpen, setEscapeOpen] = useState(!layoutHasChatInput);
   const [submitted, setSubmitted] = useState(false);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const savedDraftRef = useRef('');
@@ -213,8 +212,8 @@ function ActiveTurn({ turn }: { turn: ConversationTurn }) {
                 React.createElement(ActiveTurnUI, { node: turn.agentSpec.layout, onSend: handleSend })
               ),
 
-              // Escape hatch (hidden if layout already has a text input)
-              !layoutHasTextInput && React.createElement('div', {
+              // Escape hatch (hidden if layout already has a chatInput)
+              !layoutHasChatInput && React.createElement('div', {
                 style: { marginLeft: '38px', marginTop: '12px' },
               },
                 !escapeOpen
