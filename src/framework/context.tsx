@@ -14,7 +14,7 @@ interface AdaptiveContextValue {
   theme: AdaptiveTheme;
   isLoading: boolean;
   error: string | null;
-  sendPrompt: (prompt: string) => void;
+  sendPrompt: (prompt: string, userDisplayText?: string | null) => void;
   resetSession: () => void;
 }
 
@@ -76,7 +76,7 @@ interface AdaptiveProviderProps {
   children?: React.ReactNode;
   initialSpec?: AdaptiveUISpec | null;
   initialState?: StateStore;
-  onSendPrompt: (prompt: string, currentState: StateStore) => void;
+  onSendPrompt: (prompt: string, currentState: StateStore, userDisplayText?: string | null) => void;
   onCustomAction?: (name: string, payload: Record<string, unknown> | undefined, state: StateStore) => void;
   onResetSession?: () => void;
   theme?: AdaptiveTheme;
@@ -99,8 +99,8 @@ export function AdaptiveProvider({
   });
 
   const sendPrompt = useCallback(
-    (prompt: string) => {
-      onSendPrompt(prompt, adaptiveState.store);
+    (prompt: string, userDisplayText?: string | null) => {
+      onSendPrompt(prompt, adaptiveState.store, userDisplayText);
     },
     [onSendPrompt, adaptiveState.store]
   );
@@ -116,7 +116,7 @@ export function AdaptiveProvider({
           const resolvedPrompt = action.prompt
             ? interpolate(action.prompt, adaptiveState.store)
             : '';
-          if (resolvedPrompt) sendPrompt(resolvedPrompt);
+          if (resolvedPrompt) sendPrompt(resolvedPrompt, resolvedPrompt);
           break;
         }
         case 'setState': {
@@ -139,7 +139,7 @@ export function AdaptiveProvider({
           const prompt = action.prompt
             ? interpolate(action.prompt, adaptiveState.store)
             : `Form submitted with data: ${JSON.stringify(safeStore)}`;
-          sendPrompt(prompt);
+          sendPrompt(prompt, null);
           break;
         }
         case 'custom': {
@@ -156,7 +156,7 @@ export function AdaptiveProvider({
           const fallbackPrompt = payloadPrompt || (action.name
             ? `Proceed with action: ${action.name}`
             : 'Proceed to the next step.');
-          sendPrompt(interpolate(fallbackPrompt, adaptiveState.store));
+          sendPrompt(interpolate(fallbackPrompt, adaptiveState.store), null);
           break;
         }
       }

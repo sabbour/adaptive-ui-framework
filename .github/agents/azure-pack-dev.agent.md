@@ -82,6 +82,14 @@ The pack's `AZURE_SYSTEM_PROMPT` in `index.ts` teaches the LLM how to use Azure 
 1. Add a section to `AZURE_SYSTEM_PROMPT` documenting the component type, its props, and when to use it.
 2. Follow the existing format: `- "componentName": { prop1, prop2 } \n Description...`
 
+### Intent Mode
+
+In intent mode (`useIntents: true`), pack components are accessed via the `component` ask type:
+```json
+{ "type": "component", "component": "azureLogin", "props": {} }
+```
+The intent resolver passes these through directly to the component registry. No changes to `intent-resolver.ts` are needed for pack components.
+
 ## Constraints
 
 - DO NOT hardcode ARM resource schemas — always fetch from ARM APIs at runtime.

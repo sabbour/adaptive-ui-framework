@@ -261,6 +261,7 @@ export interface CodeBlockNode extends AdaptiveNodeBase {
   type: 'codeBlock';
   code: string;
   language?: string;
+  label?: string;
 }
 
 export interface LinkNode extends AdaptiveNodeBase {

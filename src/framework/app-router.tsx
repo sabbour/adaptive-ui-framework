@@ -51,8 +51,12 @@ export function AppRouter() {
       apps, activeId: active.id, onSelect: navigate,
     }),
 
-    // Render active app
-    React.createElement(active.component, { key: active.id })
+    // App container below the fixed top bar
+    React.createElement('div', {
+      style: { marginTop: '40px', height: 'calc(100vh - 40px)', overflow: 'hidden', position: 'relative' },
+    },
+      React.createElement(active.component, { key: active.id })
+    )
   );
 }
 

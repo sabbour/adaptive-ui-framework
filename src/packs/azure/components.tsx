@@ -155,26 +155,21 @@ export function AzureLogin({ node }: AdaptiveComponentProps<AzureLoginNode>) {
       ),
 
       // Always show picker when multiple subscriptions are available so users can switch.
-      subs.length > 1 && React.createElement('div', { style: { marginBottom: '12px' } },
-        React.createElement('label', {
-          style: { display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' },
-        }, 'Azure subscription'),
-        React.createElement(SearchableDropdown, {
-          options: subs.map((sub) => ({
-            value: sub.id,
-            label: `${sub.name} (${sub.id.slice(0, 8)}...)`,
-          })),
-          value: (state.__azureSubscription as string) || '',
-          onChange: (val: string) => {
-            const selectedSub = subs.find((s) => s.id === val);
-            if (selectedSub) {
-              dispatch({ type: 'SET', key: '__azureSubscription', value: selectedSub.id });
-              dispatch({ type: 'SET', key: '__azureSubscriptionName', value: selectedSub.name });
-            }
-          },
-          placeholder: `— Choose from ${subs.length} subscriptions —`,
-        })
-      )
+      subs.length > 1 && React.createElement(AzurePicker, {
+        node: {
+          type: 'azurePicker',
+          api: '/subscriptions?api-version=2022-12-01',
+          bind: '__azureSubscription',
+          labelBind: '__azureSubscriptionName',
+          label: 'Azure subscription',
+          itemsPath: 'value',
+          labelKey: 'displayName',
+          valueKey: 'subscriptionId',
+          filterKey: 'state',
+          filterValue: 'Enabled',
+          loadingLabel: 'Loading subscriptions...',
+        } as any,
+      })
     );
   }
 
@@ -563,10 +558,28 @@ export function AzureQuery({ node }: AdaptiveComponentProps<AzureQueryNode>) {
     },
       React.createElement('div', {
         style: { fontSize: '14px', fontWeight: 500, marginBottom: '8px', color: '#92400e' },
-      }, `Confirm ${method} operation`),
+      }, typeof node.confirm === 'string' ? node.confirm : `Confirm ${method} operation`),
       React.createElement('div', {
-        style: { fontSize: '12px', color: '#92400e', marginBottom: '12px', fontFamily: 'var(--adaptive-font-mono)', wordBreak: 'break-all' as const },
-      }, resolvedApi.split('?')[0]),
+        style: { fontSize: '12px', color: '#92400e', marginBottom: '8px', fontFamily: 'monospace', wordBreak: 'break-all' as const },
+      }, `${method} ${resolvedApi.split('?')[0]}`),
+      node.body && React.createElement('details', {
+        style: { marginBottom: '12px' },
+      },
+        React.createElement('summary', {
+          style: { fontSize: '11px', color: '#92400e', cursor: 'pointer', marginBottom: '4px' },
+        }, 'Show request body'),
+        React.createElement('pre', {
+          style: {
+            fontSize: '10px', color: '#d4d4d4', backgroundColor: '#1e1e1e',
+            padding: '8px', borderRadius: '6px', maxHeight: '200px',
+            overflow: 'auto', margin: 0, whiteSpace: 'pre-wrap' as const,
+            wordBreak: 'break-all' as const,
+          },
+        }, (() => {
+          try { return JSON.stringify(JSON.parse(interpolate(node.body!, state as Record<string, string>)), null, 2); }
+          catch { return interpolate(node.body!, state as Record<string, string>); }
+        })())
+      ),
       React.createElement('div', { style: { display: 'flex', gap: '8px' } },
         React.createElement('button', {
           onClick: () => { setConfirmed(true); executeQuery(); },
@@ -680,4 +693,120 @@ export function AzureQuery({ node }: AdaptiveComponentProps<AzureQueryNode>) {
   }
 
   return null;
+}
+
+// ═══════════════════════════════════════
+// Azure Picker (fetch API data → searchable dropdown)
+// ═══════════════════════════════════════
+
+interface AzurePickerNode extends AdaptiveNodeBase {
+  type: 'azurePicker';
+  api: string;
+  bind: string;
+  labelBind?: string;
+  label?: string;
+  /** JSON path to the array in the response (default: "value") */
+  itemsPath?: string;
+  /** Key to use as the option label */
+  labelKey?: string;
+  /** Key to use as the option value */
+  valueKey?: string;
+  /** Key to filter on */
+  filterKey?: string;
+  /** Value to filter for */
+  filterValue?: string;
+  loadingLabel?: string;
+}
+
+export function AzurePicker({ node }: AdaptiveComponentProps<AzurePickerNode>) {
+  const token = useAzureToken();
+  const { state, dispatch } = useAdaptive();
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [options, setOptions] = useState<Array<{ label: string; value: string }>>([]);
+
+  const api = interpolate(node.api, state as Record<string, string>);
+  const ARM_BASE_URL = 'https://management.azure.com';
+
+  useEffect(() => {
+    if (!token || !api) return;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const res = await trackedFetch(`${ARM_BASE_URL}${api}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) throw new Error(`API error: ${res.status}`);
+        const data = await res.json();
+
+        const itemsPath = node.itemsPath ?? 'value';
+        let items: any[] = data;
+        for (const part of itemsPath.split('.')) {
+          items = items?.[part as any];
+        }
+        if (!Array.isArray(items)) items = [];
+
+        // Filter
+        if (node.filterKey && node.filterValue) {
+          items = items.filter((item: any) => {
+            let val = item;
+            for (const part of node.filterKey!.split('.')) {
+              val = val?.[part];
+            }
+            return val === node.filterValue;
+          });
+        }
+
+        const labelKey = node.labelKey ?? 'displayName';
+        const valueKey = node.valueKey ?? 'name';
+
+        if (!cancelled) {
+          setOptions(items.map((item: any) => ({
+            label: String(item[labelKey] ?? item[valueKey] ?? ''),
+            value: String(item[valueKey] ?? ''),
+          })).sort((a: { label: string }, b: { label: string }) => a.label.localeCompare(b.label)));
+          setLoading(false);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : 'Failed to fetch');
+          setLoading(false);
+        }
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [token, api]);
+  if (!token) {
+    return React.createElement(Banner, { message: 'Sign in to Azure first', type: 'warning' });
+  }
+
+  if (loading) {
+    return React.createElement(LoadingSpinner, { label: node.loadingLabel ?? 'Loading...' });
+  }
+
+  if (error) {
+    return React.createElement(Banner, { message: error, type: 'error' });
+  }
+
+  return React.createElement('div', { style: { marginBottom: '12px', ...node.style } as React.CSSProperties },
+    node.label && React.createElement('label', {
+      style: { display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' },
+    }, node.label),
+    React.createElement(SearchableDropdown, {
+      options,
+      value: (state[node.bind] as string) ?? '',
+      onChange: (val: string) => {
+        const selected = options.find((option) => option.value === val);
+        dispatch({ type: 'SET', key: node.bind, value: val });
+        if (node.labelBind && selected) {
+          dispatch({ type: 'SET', key: node.labelBind, value: selected.label });
+        }
+      },
+      placeholder: `— Select (${options.length} available) —`,
+    })
+  );
 }
