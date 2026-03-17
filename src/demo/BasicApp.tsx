@@ -8,8 +8,8 @@ import { createGitHubPack } from '../packs/github';
 import { SessionsSidebar } from '../framework/components/SessionsSidebar';
 import { FileViewer, FileViewerPlaceholder } from '../framework/components/FileViewer';
 import { ResizeHandle } from '../framework/components/ResizeHandle';
-import { generateSessionId, saveSession } from '../framework/session-manager';
-import { upsertArtifact, getArtifacts, subscribeArtifacts } from '../framework/artifacts';
+import { generateSessionId, saveSession, deleteSession } from '../framework/session-manager';
+import { upsertArtifact, getArtifacts, subscribeArtifacts, loadArtifactsForSession, saveArtifactsForSession, deleteArtifactsForSession } from '../framework/artifacts';
 import { registerAzureDiagramIcons } from '../packs/azure/diagram-icons';
 
 // Register packs and diagram icons
@@ -296,6 +296,13 @@ export function SolutionArchitectApp() {
   const selectedArtifact = selectedFileId ? artifacts.find((a) => a.id === selectedFileId) || null : null;
   const sendPromptRef = useRef<((prompt: string) => void) | null>(null);
 
+  // Load artifacts for the initial session on mount
+  const initialLoadRef = useRef(false);
+  if (!initialLoadRef.current) {
+    initialLoadRef.current = true;
+    loadArtifactsForSession(sessionId);
+  }
+
   const handleCreatePR = useCallback(() => {
     if (sendPromptRef.current) {
       sendPromptRef.current('Create a pull request with the generated files');
@@ -339,6 +346,7 @@ export function SolutionArchitectApp() {
 
   const handleNewSession = useCallback(() => {
     // Save current session before creating a new one
+    saveArtifactsForSession(sessionId);
     try {
       const raw = localStorage.getItem(`adaptive-ui-turns-${sessionId}`);
       if (raw) {
@@ -358,6 +366,9 @@ export function SolutionArchitectApp() {
     saveSession(newId, 'New session', []);
     setSelectedFileId(null);
 
+    // Load artifacts for the new session (starts empty)
+    loadArtifactsForSession(newId);
+
     // Seed the diagram artifact from the initial spec so the viewer has it
     if (initialSpec.diagram) {
       const art = upsertArtifact('architecture.mmd', initialSpec.diagram, 'mermaid', 'Solution Architecture');
@@ -366,9 +377,32 @@ export function SolutionArchitectApp() {
   }, [sessionId]);
 
   const handleSelectSession = useCallback((id: string) => {
+    // Save current session's artifacts, load the new session's
+    saveArtifactsForSession(sessionId);
     setSessionId(id);
+    setSelectedFileId(null);
+    loadArtifactsForSession(id);
     try { localStorage.setItem('adaptive-ui-active-session', id); } catch {}
-  }, []);
+  }, [sessionId]);
+
+  const handleDeleteSession = useCallback((id: string) => {
+    // Delete session data and its artifacts
+    deleteSession(id);
+    deleteArtifactsForSession(id);
+    // If deleting the active session, create a new one
+    if (id === sessionId) {
+      const newId = generateSessionId();
+      setSessionId(newId);
+      setSelectedFileId(null);
+      saveSession(newId, 'New session', []);
+      loadArtifactsForSession(newId);
+      try { localStorage.setItem('adaptive-ui-active-session', newId); } catch {}
+      if (initialSpec.diagram) {
+        const art = upsertArtifact('architecture.mmd', initialSpec.diagram, 'mermaid', 'Solution Architecture');
+        setSelectedFileId(art.id);
+      }
+    }
+  }, [sessionId]);
 
   // Auto-save session name from spec changes
   const handleSpecChangeWithSave = useCallback((spec: AdaptiveUISpec) => {
@@ -399,6 +433,7 @@ export function SolutionArchitectApp() {
         activeSessionId: sessionId,
         onSelectSession: handleSelectSession,
         onNewSession: handleNewSession,
+        onDeleteSession: handleDeleteSession,
         selectedFileId,
         onSelectFile: setSelectedFileId,
         onCreatePR: handleCreatePR,

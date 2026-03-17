@@ -21,6 +21,8 @@ interface SessionsSidebarProps {
   activeSessionId: string | null;
   onSelectSession: (id: string) => void;
   onNewSession: () => void;
+  /** Called when user confirms session deletion. Receives the session id. */
+  onDeleteSession?: (id: string) => void;
   selectedFileId: string | null;
   onSelectFile: (id: string | null) => void;
   /** Called when user clicks the PR button — should send a prompt into the conversation */
@@ -29,6 +31,7 @@ interface SessionsSidebarProps {
 
 export function SessionsSidebar({
   activeSessionId, onSelectSession, onNewSession,
+  onDeleteSession,
   selectedFileId, onSelectFile, onCreatePR,
 }: SessionsSidebarProps) {
   const sessions = useSyncExternalStore(subscribeSessions, getSessions);
@@ -126,7 +129,13 @@ export function SessionsSidebar({
               session,
               isActive: session.id === activeSessionId,
               onSelect: () => onSelectSession(session.id),
-              onDelete: () => deleteSession(session.id),
+              onDelete: () => {
+                if (onDeleteSession) {
+                  onDeleteSession(session.id);
+                } else {
+                  deleteSession(session.id);
+                }
+              },
               onRename: (name: string) => renameSession(session.id, name),
             })
           )
@@ -215,6 +224,7 @@ function SessionItem({
   const timeAgo = formatTimeAgo(session.updatedAt);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(session.name);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const commitRename = () => {
     const trimmed = draft.trim();
@@ -223,6 +233,38 @@ function SessionItem({
     }
     setEditing(false);
   };
+
+  if (confirmingDelete) {
+    return React.createElement('div', {
+      style: {
+        padding: '10px 12px',
+        backgroundColor: 'rgba(239, 68, 68, 0.06)',
+        borderLeft: '3px solid #ef4444',
+        borderBottom: '1px solid var(--adaptive-border, #e5e7eb)',
+      } as React.CSSProperties,
+    },
+      React.createElement('div', {
+        style: { fontSize: '12px', color: 'var(--adaptive-text, #111827)', marginBottom: '8px' },
+      }, `Delete "${session.name}"? This will remove the session and all its files.`),
+      React.createElement('div', { style: { display: 'flex', gap: '6px' } },
+        React.createElement('button', {
+          onClick: (e: React.MouseEvent) => { e.stopPropagation(); onDelete(); setConfirmingDelete(false); },
+          style: {
+            background: '#ef4444', border: 'none', borderRadius: '4px',
+            color: '#fff', cursor: 'pointer', fontSize: '11px', padding: '4px 10px',
+            fontWeight: 600,
+          },
+        }, 'Delete'),
+        React.createElement('button', {
+          onClick: (e: React.MouseEvent) => { e.stopPropagation(); setConfirmingDelete(false); },
+          style: {
+            background: 'none', border: '1px solid var(--adaptive-border, #e5e7eb)', borderRadius: '4px',
+            color: 'var(--adaptive-text, #111827)', cursor: 'pointer', fontSize: '11px', padding: '4px 10px',
+          },
+        }, 'Cancel')
+      )
+    );
+  }
 
   return React.createElement('div', {
     onClick: onSelect,
@@ -267,7 +309,7 @@ function SessionItem({
       }, `${session.turnCount} turns \u00B7 ${timeAgo}`)
     ),
     React.createElement('button', {
-      onClick: (e: React.MouseEvent) => { e.stopPropagation(); onDelete(); },
+      onClick: (e: React.MouseEvent) => { e.stopPropagation(); setConfirmingDelete(true); },
       title: 'Delete session',
       style: {
         background: 'none', border: 'none', cursor: 'pointer',

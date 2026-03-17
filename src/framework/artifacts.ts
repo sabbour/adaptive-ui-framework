@@ -19,10 +19,18 @@ let snapshot: Artifact[] = [];
 let counter = 0;
 
 const STORAGE_KEY = 'adaptive-ui-artifacts';
+const SESSION_ARTIFACTS_PREFIX = 'adaptive-ui-artifacts-';
+let currentSessionId: string | null = null;
 
 /** Persist artifacts to localStorage */
 function persist(): void {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(artifacts)); } catch { /* quota exceeded or unavailable */ }
+  try {
+    // Save to session-scoped key if a session is active
+    if (currentSessionId) {
+      localStorage.setItem(`${SESSION_ARTIFACTS_PREFIX}${currentSessionId}`, JSON.stringify(artifacts));
+    }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(artifacts));
+  } catch { /* quota exceeded or unavailable */ }
 }
 
 /** Restore artifacts from localStorage on startup */
@@ -111,6 +119,54 @@ export function downloadArtifact(artifact: Artifact): void {
   a.download = artifact.filename;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+// ─── Session-scoped artifact persistence ───
+
+/** Save current artifacts to a specific session */
+export function saveArtifactsForSession(sessionId: string): void {
+  try {
+    localStorage.setItem(`${SESSION_ARTIFACTS_PREFIX}${sessionId}`, JSON.stringify(artifacts));
+  } catch { /* quota exceeded */ }
+}
+
+/** Load artifacts for a specific session (replaces in-memory artifacts) */
+export function loadArtifactsForSession(sessionId: string): void {
+  // Save current session's artifacts first
+  if (currentSessionId && currentSessionId !== sessionId) {
+    saveArtifactsForSession(currentSessionId);
+  }
+  currentSessionId = sessionId;
+  try {
+    const raw = localStorage.getItem(`${SESSION_ARTIFACTS_PREFIX}${sessionId}`);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        artifacts = parsed;
+        counter = artifacts.length;
+        notify();
+        return;
+      }
+    }
+  } catch { /* ignore corrupt data */ }
+  // No saved artifacts for this session — start fresh
+  artifacts = [];
+  counter = 0;
+  notify();
+}
+
+/** Delete artifacts storage for a session */
+export function deleteArtifactsForSession(sessionId: string): void {
+  try {
+    localStorage.removeItem(`${SESSION_ARTIFACTS_PREFIX}${sessionId}`);
+  } catch {}
+  // If we just deleted the active session's artifacts, clear in-memory too
+  if (currentSessionId === sessionId) {
+    artifacts = [];
+    counter = 0;
+    currentSessionId = null;
+    notify();
+  }
 }
 
 const LANG_EXTENSIONS: Record<string, string> = {
