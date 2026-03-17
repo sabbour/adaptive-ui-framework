@@ -77,11 +77,19 @@ interface ComponentPack {
 - ARM body templates are hardcoded for correctness (AKS, App Service, ACR, Container Apps, Storage, Key Vault, role assignments).
 - The LLM also has access to `fetch_webpage` and `azure_arm_get` tools for reading documentation and ARM APIs directly.
 
-### Pack Tools
+### Pack API Pattern: Tools vs Pickers vs Query Components
 
-- The Azure pack registers `azure_arm_get` — a read-only ARM API tool the LLM can call during inference.
-- This lets the LLM check existing resources, list subscriptions, etc. before generating the UI.
-- Write operations stay as components (azureQuery with confirm).
+Every pack with API access needs three types of API interaction:
+
+1. **Tool** (e.g., `azure_arm_get`) — LLM calls during inference, sees the response, reasons about it. Use ONLY when the LLM needs data to make decisions (check existing resources, read config, verify state).
+2. **Picker component** (e.g., `azurePicker`) — client-side dropdown that fetches + paginates data at render time. LLM never sees the data, saving thousands of tokens. Use for ALL selection lists (regions, resource groups, SKUs, subscriptions). Register intent resolvers for common pickers.
+3. **Query component** (e.g., `azureQuery`) — client-side API caller for write operations (PUT/POST/DELETE) with user confirmation dialog.
+
+**ANTI-PATTERNS to avoid:**
+- Using tools to fetch lists for selection (wastes tokens sending the full list through LLM context)
+- Using query components for reads (data loads into state but LLM never sees it → user gets "N items loaded")
+
+The pack system prompt must clearly document which operations use which type. See `githubPicker`/`azurePicker` as reference.
 
 ### Intent Resolvers
 
@@ -115,7 +123,7 @@ The intent resolver passes these through directly to the component registry. No 
 
 1. Identify which file(s) to modify based on the task (component, auth, introspection, skills, icons).
 2. Follow existing patterns in that file — match code style, error handling, caching approach.
-3. If adding a new component: define node interface → implement component → register in `createAzurePack()` → document in `AZURE_SYSTEM_PROMPT` → consider adding a read-only tool if the LLM needs API data during inference.
+3. If adding a new component: define node interface → implement component → register in `createAzurePack()` → document in `AZURE_SYSTEM_PROMPT` → decide if it's a **picker** (selection list → client-side, no LLM tokens), a **query** (write with confirmation), or needs a **tool** (LLM must see the data). Register intent resolvers for common picker use cases.
 4. If adding ARM body templates: add to `ARM_BODY_TEMPLATES` in `skills-resolver.ts` with the minimum correct PUT body structure.
 5. Run `npm run build` to verify TypeScript compilation succeeds.
 

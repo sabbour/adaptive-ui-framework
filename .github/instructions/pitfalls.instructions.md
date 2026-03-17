@@ -37,12 +37,14 @@ description: "Common pitfalls and conventions learned from iterative development
 - Components belong in `"ask"`, NEVER in `"show"`. Show is display-only.
 - When tools are registered, `response_format: json_object` is omitted. The adapter retries with `response_format` if the final response isn't JSON.
 
-## Tools vs Components
+## Tools vs Components vs Pickers
 
-- **Tools** = read-only queries the LLM calls during inference (before generating UI). Run in the adapter loop.
-- **Components** = interactive UI the user sees and interacts with. Run in the browser.
-- Write operations (PUT/POST/DELETE) should always be components with user confirmation, never tools.
-- **Pack system prompts must clearly separate tools from components.** When the LLM needs to READ data to present it (list repos, show issues, fetch resource groups), the pack prompt must direct it to use the tool — not a query component. Query components store results in state but the LLM never sees that data; it just renders "N items loaded". The pack prompt should explicitly say "Do NOT use [queryComponent] for read-only data fetching — use the [tool] instead."
+- **Tools** = read-only queries the LLM calls during inference (before generating UI). Run in the adapter loop. Use ONLY when the LLM needs to SEE the data to make decisions (e.g., check if a file exists, read a config, verify resource state).
+- **Picker components** = client-side dropdowns that fetch and display API data at render time. The LLM never sees the data — it just tells the client what endpoint to call. Use for ANY selection list (orgs, repos, branches, regions, resource groups, SKUs). Examples: `azurePicker`, `githubPicker`. Always auto-paginate. Always register intent resolvers (e.g., `github-orgs`, `azure-regions`) for common picks.
+- **Query components** = client-side API callers for write operations with user confirmation. Use for POST/PUT/DELETE mutations only.
+- **ANTI-PATTERN: Using tools to fetch lists for selection.** If the LLM calls a tool to list 100 repos just to put them in a select dropdown, that's ~3000 wasted tokens. Use a picker component instead — data stays client-side, zero token cost.
+- **ANTI-PATTERN: Using query components for reads.** Query components store results in state but the LLM never sees that data; the user just sees "N items loaded" with no actual list.
+- **Pack system prompts must clearly separate all three.** State which operations use tools (LLM needs the data), which use pickers (selection lists), and which use query components (writes with confirmation).
 
 ## Token Management
 
