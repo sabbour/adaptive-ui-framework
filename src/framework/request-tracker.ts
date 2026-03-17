@@ -66,9 +66,9 @@ export async function trackedFetch(input: RequestInfo | URL, init?: RequestInit)
   try {
     const res = await fetch(input, init);
     trackEnd(id);
-    // Log completed request for ARM debug panel
-    const isArm = url.includes('management.azure.com');
-    if (isArm) {
+    // Log completed request for the debug panel (all tracked requests except LLM endpoints)
+    const isLLM = url.includes('openai.com/v1/chat') || url.includes('openai.azure.com') || url.includes('.ai.azure.com');
+    if (!isLLM) {
       const cloned = res.clone();
       cloned.text().then((body) => {
         if (completedLog.length >= MAX_COMPLETED) completedLog.shift();
@@ -99,7 +99,7 @@ export function subscribe(fn: Listener): () => void {
   return () => listeners.delete(fn);
 }
 
-/** Get completed ARM request log. */
+/** Get completed request log. */
 export function getCompletedRequests(): CompletedRequest[] {
   return completedSnapshot;
 }

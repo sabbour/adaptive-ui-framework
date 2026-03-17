@@ -243,18 +243,18 @@ export function ConversationThread({ turns, isLoading, error, tokenUsage, lastRe
   const [requestOpen, setRequestOpen] = useState(false);
   const [responseOpen, setResponseOpen] = useState(true);
   const [decisionsOpen, setDecisionsOpen] = useState(true);
-  const [armLogOpen, setArmLogOpen] = useState(true);
-  const armRequests = useSyncExternalStore(subscribeCompleted, getCompletedRequests);
+  const [apiLogOpen, setApiLogOpen] = useState(true);
+  const apiRequests = useSyncExternalStore(subscribeCompleted, getCompletedRequests);
 
   // Track data versions for ping animation
   const [requestPing, setRequestPing] = useState(false);
   const [responsePing, setResponsePing] = useState(false);
   const [decisionsPing, setDecisionsPing] = useState(false);
-  const [armPing, setArmPing] = useState(false);
+  const [apiPing, setApiPing] = useState(false);
   const prevRequestRef = useRef(lastRawRequest);
   const prevResponseRef = useRef(lastRawResponse);
   const prevDecisionsRef = useRef(lastDecisionLog?.length ?? 0);
-  const prevArmRef = useRef(armRequests.length);
+  const prevApiRef = useRef(apiRequests.length);
 
   useEffect(() => {
     if (lastRawRequest && lastRawRequest !== prevRequestRef.current) {
@@ -282,12 +282,12 @@ export function ConversationThread({ turns, isLoading, error, tokenUsage, lastRe
   }, [lastDecisionLog]);
 
   useEffect(() => {
-    if (armRequests.length > 0 && armRequests.length !== prevArmRef.current) {
-      setArmPing(true);
-      setTimeout(() => setArmPing(false), 1500);
+    if (apiRequests.length > 0 && apiRequests.length !== prevApiRef.current) {
+      setApiPing(true);
+      setTimeout(() => setApiPing(false), 1500);
     }
-    prevArmRef.current = armRequests.length;
-  }, [armRequests]);
+    prevApiRef.current = apiRequests.length;
+  }, [apiRequests]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -572,7 +572,7 @@ export function ConversationThread({ turns, isLoading, error, tokenUsage, lastRe
       )
     ),
 
-    // Debug panel — ARM API requests
+    // Debug panel — API requests
     showDebug && React.createElement('div', {
       style: {
         margin: '8px 24px 0', borderRadius: '8px', border: '1px solid #333',
@@ -583,20 +583,20 @@ export function ConversationThread({ turns, isLoading, error, tokenUsage, lastRe
         style: {
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
           padding: '8px 12px', cursor: 'pointer',
-          backgroundColor: '#1e1e1e', borderBottom: armLogOpen ? '1px solid #333' : 'none',
-          borderRadius: armLogOpen ? '8px 8px 0 0' : '8px',
-          fontSize: '10px', color: armPing ? '#34d399' : '#888',
+          backgroundColor: '#1e1e1e', borderBottom: apiLogOpen ? '1px solid #333' : 'none',
+          borderRadius: apiLogOpen ? '8px 8px 0 0' : '8px',
+          fontSize: '10px', color: apiPing ? '#34d399' : '#888',
           transition: 'color 0.3s ease',
         },
-        onClick: () => setArmLogOpen(o => !o),
+        onClick: () => setApiLogOpen(o => !o),
       },
         React.createElement('span', {
           style: { textTransform: 'uppercase' as const, letterSpacing: '0.05em' },
-        }, `${armLogOpen ? '\u25BE' : '\u25B8'} ARM API Requests (${armRequests.length})`),
+        }, `${apiLogOpen ? '\u25BE' : '\u25B8'} Requests (${apiRequests.length})`),
         React.createElement('button', {
           onClick: (e: React.MouseEvent) => {
             e.stopPropagation();
-            navigator.clipboard.writeText(armRequests.map(r =>
+            navigator.clipboard.writeText(apiRequests.map(r =>
               `${r.method} ${r.url} → ${r.status} (${r.duration}ms)${r.bodyPreview ? '\n' + r.bodyPreview : ''}`
             ).join('\n\n'));
           },
@@ -604,20 +604,20 @@ export function ConversationThread({ turns, isLoading, error, tokenUsage, lastRe
           style: { background: 'none', border: 'none', color: '#aaa', fontSize: '14px', cursor: 'pointer', padding: '0 2px', lineHeight: 1 },
         }, '\u2398')
       ),
-      armLogOpen && React.createElement('div', {
+      apiLogOpen && React.createElement('div', {
         style: {
           padding: '8px 12px 12px', fontSize: '11px',
           fontFamily: 'Consolas, "Courier New", monospace',
           maxHeight: '300px', overflow: 'auto',
         },
       },
-        armRequests.length > 0
-          ? armRequests.slice(-20).map((req, i) =>
+        apiRequests.length > 0
+          ? apiRequests.slice(-20).map((req, i) =>
           React.createElement('div', {
             key: req.id,
             style: {
               padding: '4px 0',
-              borderBottom: i < armRequests.length - 1 ? '1px solid #333' : 'none',
+              borderBottom: i < apiRequests.length - 1 ? '1px solid #333' : 'none',
             },
           },
             React.createElement('div', {
