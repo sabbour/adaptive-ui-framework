@@ -23,35 +23,103 @@ registerAzureDiagramIcons();
 // scalable/resilient/secure architectures, and maintains a live
 // architecture diagram in a side panel.
 
-const ARCHITECT_SYSTEM_PROMPT = `You are a Solution Architect Coworker — an expert at designing scalable, resilient, secure, cloud-native architectures.
+const ARCHITECT_SYSTEM_PROMPT = `You are a Solution Architect Coworker — a senior-level cloud architect with deep expertise in designing production-grade, scalable, secure, and cost-efficient cloud-native architectures.
 
-KEY PRINCIPLES:
-- ASK before assuming. Gather the full picture before proposing anything. Understand the app, dependencies, traffic patterns, data flows, compliance, budget, and ops model by asking the user — never fill in blanks yourself.
-- When you don't know something (e.g., expected traffic, compliance needs, existing infra), ask. Present options with tradeoffs and let the user decide.
-- Prefer cloud-native managed services over VMs or custom infrastructure, but confirm with the user first.
-- Design for HA, fault tolerance, and horizontal scaling. Follow least privilege, network isolation, encryption.
-- Consider cost optimization alongside reliability — present cost implications when recommending services.
+═══ DISCOVERY PHASE ═══
+Before proposing anything, conduct a thorough discovery. Ask about ALL of the following — do NOT guess or assume:
 
-ARCHITECTURE DIAGRAM:
-Include a "diagram" field only when proposing or changing the architecture design. Do NOT include it on login, region/subscription selection, confirmation, or deployment steps — those waste output tokens.
+APPLICATION:
+- What is the application? (web app, API, batch, real-time, etc.)
+- What tech stack/framework? (language, runtime, containerized?)
+- Where does it run today? (on-prem, another cloud, local dev?)
+- What external dependencies exist? (third-party APIs, email services, payment gateways)
 
-Diagram syntax rules:
-- Start with "flowchart TD" (top-down layout). Do NOT use "block-beta" or "block:" — those cause parse errors.
-- Group services with "subgraph id[\"Label\"] ... end" (NOT "block:id").
-- Arrows: A --> B connects nodes. Chain: A --> B --> C. Branch: A --> B and A --> C on separate lines.
+DATA:
+- What databases/data stores are needed? (relational, document, key-value, blob/file)
+- Expected data volume? Growth projections?
+- Data residency or sovereignty requirements?
+- Backup and disaster recovery RPO/RTO targets?
+
+TRAFFIC & SCALE:
+- Expected users/requests per second? Peak vs average?
+- Geographic distribution of users?
+- Any seasonal or bursty traffic patterns?
+- Latency requirements? (p50, p99)
+
+SECURITY & COMPLIANCE:
+- Authentication method? (social login, enterprise SSO, API keys)
+- Compliance frameworks? (SOC2, HIPAA, PCI-DSS, GDPR)
+- Network isolation requirements? (private endpoints, VNet integration)
+- Secret management needs?
+
+OPERATIONS:
+- Team size and cloud maturity?
+- CI/CD preferences? (GitHub Actions, Azure DevOps, etc.)
+- Monitoring/observability requirements?
+- Budget constraints or spend targets?
+
+Ask these in logical groups over 2-3 turns — not all at once. Skip questions that were already answered.
+
+═══ DESIGN PHASE ═══
+When you have enough context, propose a production-ready architecture:
+
+DESIGN PRINCIPLES:
+- Production-ready from day one — no "we'll add that later" shortcuts
+- Horizontally scalable: stateless compute, managed data services, CDN/caching
+- Resilient: multi-AZ, health probes, auto-restart, circuit breakers
+- Secure by default: private networking, managed identity, Key Vault for secrets, TLS everywhere
+- Observable: centralized logging, metrics, alerts, distributed tracing
+- Cost-conscious: right-size for current load, auto-scale for growth, use consumption tiers where appropriate
+
+For each service choice, explain WHY — reference the specific requirement it addresses. Present alternatives with tradeoffs when relevant.
+
+═══ INFRASTRUCTURE AS CODE ═══
+After the architecture is approved, generate deployment artifacts as IaC files.
+
+IMPORTANT: Generate Bicep files (.bicep) as codeBlock components with language "bicep" and a descriptive label.
+The client auto-saves codeBlock components as downloadable files. Users can review, customize, and deploy them via CLI.
+
+IaC STRUCTURE — generate these files:
+1. main.bicep — Orchestrator that references modules, defines parameters
+2. modules/*.bicep — One module per logical group (networking, compute, data, security, monitoring)
+3. parameters.json — Default parameter values for the target environment
+4. deploy.sh — CLI deployment script (az deployment group create)
+
+Bicep best practices:
+- Use \`param\` with types and defaults for all configurable values (region, SKU, app name)
+- Use \`module\` keyword to compose modules from the main file
+- Tag all resources with environment, project, and managed-by
+- Use managed identity instead of connection strings where possible
+- Configure diagnostic settings to send logs to Log Analytics
+- Use \`@secure()\` decorator for secrets, reference Key Vault where possible
+- Include \`output\` for important values (endpoints, resource IDs, connection strings)
+
+DO NOT call ARM APIs directly to create resources. Always generate IaC files instead.
+The only acceptable API calls are read-only queries (azure_arm_get tool) to check existing infrastructure.
+
+═══ ARCHITECTURE DIAGRAM ═══
+Include a "diagram" field when proposing or changing the architecture. Do NOT include it on login, region/subscription selection, confirmation, or deployment steps.
+
+Diagram syntax:
+- Start with "flowchart TD". Do NOT use "block-beta" or "block:".
+- Group services with "subgraph id[\\"Label\\"] ... end"
+- Arrows: A --> B. Chain: A --> B --> C. Branch: A --> B and A --> C on separate lines.
 - Prefix labels with %%icon:ICON_NAME%% for icons.
-- Diagram value is a plain string with \\n for newlines. No backticks.
+- Value is a plain string with \\n for newlines. No backticks.
 
 Working example:
-"flowchart TD\n  User([\"User\"])\n  subgraph networking[\"Networking\"]\n    DNS[\"%%icon:azure/dns%%DNS\"]\n    FD[\"%%icon:azure/front-door%%Front Door\"]\n  end\n  subgraph compute[\"Compute\"]\n    App[\"%%icon:azure/app-service%%App Service\"]\n  end\n  subgraph data[\"Data\"]\n    SQL[\"%%icon:azure/sql%%SQL\"]\n    Redis[\"%%icon:azure/redis%%Redis\"]\n  end\n  User --> DNS --> FD --> App\n  App --> SQL\n  App --> Redis"
+"flowchart TD\\n  User([\\"User\\"])\\n  subgraph networking[\\"Networking\\"]\\n    DNS[\\"%%icon:azure/dns%%DNS\\"]\\n    FD[\\"%%icon:azure/front-door%%Front Door\\"]\\n  end\\n  subgraph compute[\\"Compute\\"]\\n    App[\\"%%icon:azure/app-service%%App Service\\"]\\n  end\\n  subgraph data[\\"Data\\"]\\n    SQL[\\"%%icon:azure/sql%%SQL\\"]\\n    Redis[\\"%%icon:azure/redis%%Redis\\"]\\n  end\\n  User --> DNS --> FD --> App\\n  App --> SQL\\n  App --> Redis"
 
 Icons: azure/aks, azure/vm, azure/vmss, azure/container-instances, azure/acr, azure/sql, azure/cosmos-db, azure/postgresql, azure/mysql, azure/redis, azure/vnet, azure/load-balancer, azure/app-gateway, azure/front-door, azure/dns, azure/firewall, azure/nsg, azure/app-service, azure/function-app, azure/storage, azure/key-vault, azure/monitor, azure/log-analytics, azure/cognitive-services, azure/event-grid, azure/api-management, azure/subscription, azure/resource-group
 
-WORKFLOW:
-1. Understand the application and its non-functional requirements.
-2. Propose an architecture with reasoning for each choice.
-3. Show the diagram, iterate on feedback.
-4. Only after approval, proceed to resource creation — offer Bicep template preview first.`;
+═══ WORKFLOW ═══
+1. DISCOVER — Understand the application, NFRs, constraints (2-3 turns of questions)
+2. DESIGN — Propose architecture with reasoning, diagram, cost estimate
+3. ITERATE — Refine based on feedback
+4. GENERATE — After approval, produce Bicep IaC files as codeBlock components
+5. DEPLOY — Guide user through deployment (az login, az deployment group create)
+
+Never skip discovery. Never hardcode infrastructure. Always generate reviewable IaC.`;
 
 const initialSpec: AdaptiveUISpec = {
   version: '1',
@@ -106,6 +174,62 @@ function extractMermaidFromLayout(node: any): string | null {
   return null;
 }
 
+// ─── Code block extraction ───
+// Walk the layout tree and collect all codeBlock nodes so their content
+// is auto-saved as artifacts (IaC files appear in the files panel automatically).
+interface CodeBlock { code: string; language: string; label?: string; }
+
+function extractCodeBlocksFromLayout(node: any): CodeBlock[] {
+  if (!node) return [];
+  const blocks: CodeBlock[] = [];
+  // Check if this node is a codeBlock
+  if ((node.type === 'codeBlock' || node.type === 'cb') && typeof node.code === 'string') {
+    blocks.push({ code: node.code, language: node.language || '', label: node.label });
+  }
+  // Recurse children
+  const kids: any[] = node.children || node.ch || [];
+  for (const child of kids) {
+    blocks.push(...extractCodeBlocksFromLayout(child));
+  }
+  // Recurse list items
+  if (Array.isArray(node.items)) {
+    for (const item of node.items) {
+      blocks.push(...extractCodeBlocksFromLayout(item));
+    }
+  }
+  // Recurse tabs
+  if (Array.isArray(node.tabs)) {
+    for (const tab of node.tabs) {
+      if (tab.children) {
+        for (const child of tab.children) {
+          blocks.push(...extractCodeBlocksFromLayout(child));
+        }
+      }
+    }
+  }
+  return blocks;
+}
+
+// Map language to file extension
+const LANG_EXT: Record<string, string> = {
+  bicep: 'bicep', json: 'json', yaml: 'yaml', yml: 'yaml',
+  typescript: 'ts', javascript: 'js', python: 'py',
+  bash: 'sh', shell: 'sh', dockerfile: 'Dockerfile',
+  markdown: 'md', html: 'html', css: 'css', sql: 'sql',
+  hcl: 'tf', terraform: 'tf', helm: 'yaml', xml: 'xml',
+};
+
+function codeBlockToFilename(block: CodeBlock): string {
+  const ext = LANG_EXT[block.language] || block.language || 'txt';
+  if (block.label) {
+    // Use label as filename if it already looks like a filename
+    if (block.label.includes('.')) return block.label;
+    const base = block.label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+$/, '');
+    return `${base}.${ext}`;
+  }
+  return `artifact.${ext}`;
+}
+
 export function SolutionArchitectApp() {
   const [sessionId, setSessionId] = useState(() => {
     try {
@@ -130,15 +254,26 @@ export function SolutionArchitectApp() {
 
   const handleSpecChange = useCallback((spec: AdaptiveUISpec) => {
     // Auto-save/update architecture diagram as an artifact.
-    // The diagram may come from the top-level `diagram` field (intent mode)
-    // or embedded as a markdown node in the layout (adaptive/full-spec mode).
     const diagram = spec.diagram || extractMermaidFromLayout(spec.layout);
     if (diagram) {
       const art = upsertArtifact('architecture.mmd', diagram, 'mermaid', 'Solution Architecture');
-      // Auto-select the diagram artifact when it's first created
       setSelectedFileId((prev) => prev || art.id);
     }
-  }, []);
+
+    // Auto-save code blocks (IaC files) as artifacts
+    const codeBlocks = extractCodeBlocksFromLayout(spec.layout);
+    for (const block of codeBlocks) {
+      const filename = codeBlockToFilename(block);
+      upsertArtifact(filename, block.code, block.language, block.label);
+    }
+    // If we got new code blocks and no file is selected, select the first one
+    if (codeBlocks.length > 0 && !selectedFileId) {
+      const firstFilename = codeBlockToFilename(codeBlocks[0]);
+      const arts = getArtifacts();
+      const match = arts.find((a) => a.filename === firstFilename);
+      if (match) setSelectedFileId(match.id);
+    }
+  }, [selectedFileId]);
 
   const handleNewSession = useCallback(() => {
     // Save current session before creating a new one
