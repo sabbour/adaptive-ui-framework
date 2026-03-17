@@ -97,7 +97,7 @@ export { saveArtifact, upsertArtifact, removeArtifact, clearArtifacts, getArtifa
 export type { Artifact } from './artifacts';
 
 // Session management
-export { getSessions, subscribeSessions, saveSession, loadSession, deleteSession, generateSessionId } from './session-manager';
+export { getSessions, subscribeSessions, saveSession, loadSession, deleteSession, renameSession, generateSessionId } from './session-manager';
 export type { Session } from './session-manager';
 
 // Intent-based UI resolution

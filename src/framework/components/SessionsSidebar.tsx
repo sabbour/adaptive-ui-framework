@@ -4,7 +4,7 @@
 
 import React, { useSyncExternalStore, useState } from 'react';
 import {
-  getSessions, subscribeSessions, deleteSession,
+  getSessions, subscribeSessions, deleteSession, renameSession,
   type Session,
 } from '../session-manager';
 import {
@@ -120,6 +120,7 @@ export function SessionsSidebar({
               isActive: session.id === activeSessionId,
               onSelect: () => onSelectSession(session.id),
               onDelete: () => deleteSession(session.id),
+              onRename: (name: string) => renameSession(session.id, name),
             })
           )
     ),
@@ -176,14 +177,25 @@ export function SessionsSidebar({
 }
 
 function SessionItem({
-  session, isActive, onSelect, onDelete,
+  session, isActive, onSelect, onDelete, onRename,
 }: {
   session: Session;
   isActive: boolean;
   onSelect: () => void;
   onDelete: () => void;
+  onRename: (name: string) => void;
 }) {
   const timeAgo = formatTimeAgo(session.updatedAt);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(session.name);
+
+  const commitRename = () => {
+    const trimmed = draft.trim();
+    if (trimmed && trimmed !== session.name) {
+      onRename(trimmed);
+    }
+    setEditing(false);
+  };
 
   return React.createElement('div', {
     onClick: onSelect,
@@ -196,13 +208,33 @@ function SessionItem({
     } as React.CSSProperties,
   },
     React.createElement('div', { style: { flex: 1, minWidth: 0 } },
-      React.createElement('div', {
-        style: {
-          fontSize: '13px', fontWeight: isActive ? 600 : 400,
-          color: 'var(--adaptive-text, #111827)',
-          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const,
-        },
-      }, session.name),
+      editing
+        ? React.createElement('input', {
+            value: draft,
+            onChange: (e: React.ChangeEvent<HTMLInputElement>) => setDraft(e.target.value),
+            onBlur: commitRename,
+            onKeyDown: (e: React.KeyboardEvent) => {
+              if (e.key === 'Enter') commitRename();
+              if (e.key === 'Escape') { setDraft(session.name); setEditing(false); }
+            },
+            onClick: (e: React.MouseEvent) => e.stopPropagation(),
+            autoFocus: true,
+            style: {
+              fontSize: '13px', fontWeight: 500, width: '100%',
+              padding: '2px 4px', border: '1px solid var(--adaptive-primary, #2563eb)',
+              borderRadius: '4px', outline: 'none',
+              background: 'var(--adaptive-surface, #fff)',
+              color: 'var(--adaptive-text, #111827)',
+            },
+          })
+        : React.createElement('div', {
+            onDoubleClick: (e: React.MouseEvent) => { e.stopPropagation(); setDraft(session.name); setEditing(true); },
+            style: {
+              fontSize: '13px', fontWeight: isActive ? 600 : 400,
+              color: 'var(--adaptive-text, #111827)',
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const,
+            },
+          }, session.name),
       React.createElement('div', {
         style: { fontSize: '11px', color: 'var(--adaptive-text-secondary, #6b7280)', marginTop: '2px' },
       }, `${session.turnCount} turns \u00B7 ${timeAgo}`)

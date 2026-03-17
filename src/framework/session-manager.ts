@@ -113,6 +113,25 @@ export function deleteSession(id: string): void {
   notify();
 }
 
+/** Rename a session */
+export function renameSession(id: string, newName: string): void {
+  const existing = loadIndex();
+  const idx = existing.findIndex((s) => s.id === id);
+  if (idx < 0) return;
+  existing[idx] = { ...existing[idx], name: newName, updatedAt: Date.now() };
+  saveIndex(existing);
+  // Also update the stored session data
+  try {
+    const raw = localStorage.getItem(`${STORAGE_PREFIX}${id}`);
+    if (raw) {
+      const session = JSON.parse(raw) as StoredSession;
+      session.name = newName;
+      localStorage.setItem(`${STORAGE_PREFIX}${id}`, JSON.stringify(session));
+    }
+  } catch {}
+  notify();
+}
+
 /** Generate a session ID */
 export function generateSessionId(): string {
   return `session-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
