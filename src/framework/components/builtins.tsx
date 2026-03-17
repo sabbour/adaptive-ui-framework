@@ -138,12 +138,12 @@ function TextComponent({ node }: AdaptiveComponentProps<TextNode>) {
   };
   const Tag = variantMap[node.variant ?? 'body'] ?? 'p';
   const variantStyles: Record<string, React.CSSProperties> = {
-    h1: { fontSize: '2rem', fontWeight: 700, margin: '0 0 0.5em' },
-    h2: { fontSize: '1.5rem', fontWeight: 600, margin: '0 0 0.4em' },
-    h3: { fontSize: '1.25rem', fontWeight: 600, margin: '0 0 0.3em' },
-    h4: { fontSize: '1.1rem', fontWeight: 600, margin: '0 0 0.2em' },
-    body: { fontSize: '1rem', margin: '0 0 0.5em' },
-    caption: { fontSize: '0.85rem', color: '#666' },
+    h1: { fontSize: '24px', fontWeight: 700, margin: '0 0 0.4em' },
+    h2: { fontSize: '20px', fontWeight: 600, margin: '0 0 0.3em' },
+    h3: { fontSize: '17px', fontWeight: 600, margin: '0 0 0.2em' },
+    h4: { fontSize: '15px', fontWeight: 600, margin: '0 0 0.15em' },
+    body: { fontSize: '14px', margin: '0 0 0.4em' },
+    caption: { fontSize: '13px', color: '#6b7280' },
     code: { fontFamily: 'monospace', backgroundColor: '#f4f4f4', padding: '2px 6px', borderRadius: '3px' },
   };
   return React.createElement(Tag, {
@@ -564,8 +564,8 @@ export function simpleMarkdown(md: string): string {
     .replace(/`(.+?)`/g, '<code style="background:#f4f4f4;padding:2px 4px;border-radius:3px">$1</code>')
     // Links
     .replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
-    // Unordered lists
-    .replace(/^- (.+)$/gm, '<li>$1</li>')
+    // Unordered lists: handle -, *, and • bullets
+    .replace(/^[\-\*\u2022] (.+)$/gm, '<li>$1</li>')
     // Paragraphs (double newline)
     .replace(/\n\n/g, '</p><p>')
     // Single newlines to <br>

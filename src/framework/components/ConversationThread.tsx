@@ -60,7 +60,7 @@ const PastTurn = memo(function PastTurn({ turn }: { turn: ConversationTurn }) {
             style: {
               padding: '8px 14px', borderRadius: '4px 16px 16px 16px',
               backgroundColor: 'var(--adaptive-surface, #fff)',
-              border: '1px solid #e5e7eb', fontSize: '15px', lineHeight: '1.6', maxWidth: '80%',
+              border: '1px solid #e5e7eb', fontSize: '14px', lineHeight: '1.6', maxWidth: '80%',
             } as React.CSSProperties,
             dangerouslySetInnerHTML: { __html: simpleMarkdown(turn.agentSpec.agentMessage) },
           })
@@ -79,7 +79,7 @@ const PastTurn = memo(function PastTurn({ turn }: { turn: ConversationTurn }) {
           maxWidth: '70%', padding: '10px 16px',
           borderRadius: '16px 16px 4px 16px',
           backgroundColor: 'var(--adaptive-primary, #2563eb)',
-          color: '#fff', fontSize: '15px', lineHeight: '1.5',
+          color: '#fff', fontSize: '14px', lineHeight: '1.5',
         } as React.CSSProperties,
       }, turn.userMessage)
     )
@@ -125,7 +125,7 @@ function ActiveTurn({ turn }: { turn: ConversationTurn }) {
             style: {
               padding: '8px 14px', borderRadius: '4px 16px 16px 16px',
               backgroundColor: 'var(--adaptive-surface, #fff)',
-              border: '1px solid #e5e7eb', fontSize: '15px', lineHeight: '1.6', maxWidth: '80%',
+              border: '1px solid #e5e7eb', fontSize: '14px', lineHeight: '1.6', maxWidth: '80%',
             } as React.CSSProperties,
             dangerouslySetInnerHTML: { __html: simpleMarkdown(turn.agentSpec.agentMessage) },
           })
@@ -209,7 +209,7 @@ function ActiveTurn({ turn }: { turn: ConversationTurn }) {
           maxWidth: '70%', padding: '10px 16px',
           borderRadius: '16px 16px 4px 16px',
           backgroundColor: 'var(--adaptive-primary, #2563eb)',
-          color: '#fff', fontSize: '15px', lineHeight: '1.5',
+          color: '#fff', fontSize: '14px', lineHeight: '1.5',
         } as React.CSSProperties,
       }, turn.userMessage)
     )

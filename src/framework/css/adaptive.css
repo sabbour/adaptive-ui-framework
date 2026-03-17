@@ -17,6 +17,15 @@
   --adaptive-shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
   --adaptive-shadow-md: 0 4px 12px rgba(0,0,0,0.08);
   --adaptive-shadow-lg: 0 8px 24px rgba(0,0,0,0.12);
+
+  /* ── Type scale ── */
+  --adaptive-fs-xs: 12px;   /* badges, meta, timestamps */
+  --adaptive-fs-sm: 13px;   /* captions, descriptions, secondary */
+  --adaptive-fs-base: 14px; /* body text, inputs, buttons, list items */
+  --adaptive-fs-md: 15px;   /* emphasis, card titles */
+  --adaptive-fs-lg: 17px;   /* section headings (h3) */
+  --adaptive-fs-xl: 20px;   /* page headings (h2) */
+  --adaptive-fs-2xl: 24px;  /* hero headings (h1) */
 }
 
 /* ── Base Reset ── */
@@ -28,8 +37,8 @@ body {
   margin: 0;
   padding: 0;
   font-family: var(--adaptive-font);
-  font-size: 15px;
-  line-height: 1.6;
+  font-size: var(--adaptive-fs-base);
+  line-height: 1.5;
   color: var(--adaptive-text);
   background: var(--adaptive-bg);
   -webkit-font-smoothing: antialiased;
@@ -54,22 +63,23 @@ h1, h2, h3, h4, h5, h6 {
   line-height: 1.3;
 }
 
-h1 { font-size: 26px; }
-h2 { font-size: 22px; }
-h3 { font-size: 18px; }
-h4 { font-size: 15px; }
+h1 { font-size: var(--adaptive-fs-2xl); }
+h2 { font-size: var(--adaptive-fs-xl); }
+h3 { font-size: var(--adaptive-fs-lg); }
+h4 { font-size: var(--adaptive-fs-md); }
 
-p { margin: 0 0 8px; }
+p { margin: 0 0 6px; }
 
 /* ── Markdown / list spacing ── */
 .adaptive-markdown ul,
 .adaptive-markdown ol {
-  margin: 4px 0 8px;
+  margin: 2px 0 6px;
   padding-left: 20px;
 }
 
 .adaptive-markdown li {
-  margin-bottom: 2px;
+  margin-bottom: 1px;
+  line-height: 1.5;
 }
 
 .adaptive-markdown li > ul,
