@@ -6,6 +6,7 @@ import { registerPackWithSkills } from '../framework/registry';
 import { createAzurePack } from '../packs/azure';
 import { createGitHubPack } from '../packs/github';
 import { ArchitectureDiagram } from '../framework/components/ArchitectureDiagram';
+import { FilesPanel } from '../framework/components/FilesPanel';
 import { registerAzureDiagramIcons } from '../packs/azure/diagram-icons';
 
 // Register packs and diagram icons
@@ -82,19 +83,35 @@ export function SolutionArchitectApp() {
       width: '100%',
     } as React.CSSProperties,
   },
-    // Left panel: Architecture diagram
+    // Left panel: Architecture diagram + Files
     React.createElement('div', {
       style: {
-        width: '60%',
-        minWidth: '400px',
+        width: '55%',
+        minWidth: '350px',
         height: '100%',
         flexShrink: 0,
+        display: 'flex',
+        flexDirection: 'column',
       } as React.CSSProperties,
     },
-      React.createElement(ArchitectureDiagram, {
-        diagram,
-        title: 'Solution Architecture',
-      })
+      // Diagram (top)
+      React.createElement('div', {
+        style: { flex: 1, minHeight: 0, overflow: 'hidden' } as React.CSSProperties,
+      },
+        React.createElement(ArchitectureDiagram, {
+          diagram,
+          title: 'Solution Architecture',
+        })
+      ),
+      // Files panel (bottom)
+      React.createElement('div', {
+        style: {
+          height: '200px', flexShrink: 0,
+          borderTop: '1px solid #333',
+        } as React.CSSProperties,
+      },
+        React.createElement(FilesPanel)
+      )
     ),
 
     // Right panel: Chat

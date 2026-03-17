@@ -120,6 +120,7 @@ export function SearchableDropdown({
   );
 }
 import { sanitizeUrl } from '../sanitize';
+import { saveArtifact } from '../artifacts';
 import type {
   TextNode, ButtonNode, InputNode, SelectNode, ImageNode,
   ContainerNode, CardNode, ListNode, TableNode, FormNode,
@@ -809,12 +810,19 @@ function AccordionComponent({ node }: AdaptiveComponentProps<AccordionNode>) {
 // ─── Code Block ───
 function CodeBlockComponent({ node }: AdaptiveComponentProps<CodeBlockNode>) {
   const [copied, setCopied] = React.useState(false);
+  const [saved, setSaved] = React.useState(false);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(node.code).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     });
+  };
+
+  const handleSave = () => {
+    saveArtifact(node.code, node.language || '', node.label);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
   };
 
   return React.createElement('div', {
@@ -828,10 +836,16 @@ function CodeBlockComponent({ node }: AdaptiveComponentProps<CodeBlockNode>) {
       },
     },
       React.createElement('span', null, node.label || node.language),
-      React.createElement('button', {
-        onClick: handleCopy,
-        style: { background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer', fontSize: '11px' },
-      }, copied ? '✓ Copied' : 'Copy')
+      React.createElement('div', { style: { display: 'flex', gap: '8px' } },
+        React.createElement('button', {
+          onClick: handleSave,
+          style: { background: 'none', border: 'none', color: saved ? '#22c55e' : '#9ca3af', cursor: 'pointer', fontSize: '11px' },
+        }, saved ? '✓ Saved' : 'Save'),
+        React.createElement('button', {
+          onClick: handleCopy,
+          style: { background: 'none', border: 'none', color: copied ? '#22c55e' : '#9ca3af', cursor: 'pointer', fontSize: '11px' },
+        }, copied ? '✓ Copied' : 'Copy')
+      )
     ),
     React.createElement('pre', {
       style: {
