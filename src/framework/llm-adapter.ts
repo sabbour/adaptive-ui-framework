@@ -138,7 +138,7 @@ TOGGLE & SLIDER:
 
 CONTENT:
 - "accordion": { items: [{label, id, children: AdaptiveNode[]}] } — collapsible sections
-- "codeBlock": { code, language? } — syntax-highlighted code with copy button
+- "codeBlock": { code, language?, label? } — syntax-highlighted code block. The "label" should be a filename (e.g., "main.bicep", "deploy.sh"). Auto-saved as a downloadable file.
 - "link": { label, href, external? } — clickable link
 
 USER INPUT:
@@ -213,7 +213,7 @@ SHOW types (display-only information — NO components here):
 - { type: "markdown", content }
 - { type: "table", columns: [{key, header}], rows: [{...}] }
 - { type: "progress", value, max?, label? }
-- { type: "code", code, language? }
+- { type: "code", code, language?, label? } — label should be a filename (e.g., "main.bicep")
 
 IMPORTANT RULES:
 - Components (azureLogin, azureResourceForm, etc.) go in "ask", NEVER in "show". "show" is only for static display.
