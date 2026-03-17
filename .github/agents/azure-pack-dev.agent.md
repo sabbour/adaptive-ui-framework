@@ -88,7 +88,10 @@ Every pack with API access needs three types of API interaction:
 **ANTI-PATTERNS to avoid:**
 - Using tools to fetch lists for selection (wastes tokens sending the full list through LLM context)
 - Using query components for reads (data loads into state but LLM never sees it → user gets "N items loaded")
-
+**DUAL-MODE requirement:**
+- Intent resolvers only fire in Intent mode. In Adaptive (full-spec) mode, the LLM reads the pack system prompt and emits picker nodes directly in the layout JSON.
+- The pack system prompt MUST include full picker component examples with all props (api, bind, labelKey, valueKey, etc.) so the LLM can generate them in Adaptive mode.
+- Tool function descriptions (the `description` field in the OpenAI tool definition) must NOT mention \"list\" or \"fetch for selection\" \u2014 otherwise the LLM will call the tool instead of emitting a picker component.
 The pack system prompt must clearly document which operations use which type. See `githubPicker`/`azurePicker` as reference.
 
 ### Intent Resolvers
