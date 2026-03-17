@@ -92,7 +92,7 @@ const PastTurn = memo(function PastTurn({ turn }: { turn: ConversationTurn }) {
 function ActiveTurn({ turn }: { turn: ConversationTurn }) {
   const { sendPrompt, state, isLoading } = useAdaptive();
   const [escapeText, setEscapeText] = useState('');
-  const [escapeOpen, setEscapeOpen] = useState(false);
+  const [escapeOpen, setEscapeOpen] = useState(true);
   const [submitted, setSubmitted] = useState(false);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const savedDraftRef = useRef('');
