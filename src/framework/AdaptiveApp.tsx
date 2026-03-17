@@ -285,7 +285,7 @@ function ShellActivityIndicator() {
     style: {
       position: 'fixed',
       bottom: '12px',
-      right: '12px',
+      left: '260px',
       zIndex: 50,
       display: 'flex',
       flexDirection: 'column' as const,
@@ -295,7 +295,7 @@ function ShellActivityIndicator() {
       color: 'var(--adaptive-text-secondary, #6b7280)',
       maxWidth: '40vw',
       pointerEvents: 'none' as const,
-      alignItems: 'flex-end' as const,
+      alignItems: 'flex-start' as const,
     } as React.CSSProperties,
   },
     ...log.slice(-8).map(entry =>
