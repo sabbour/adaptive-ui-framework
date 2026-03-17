@@ -25,8 +25,9 @@ You have access to Azure-specific capabilities. When the user discusses Azure se
 use these features to provide a better experience.
 
 TOOLS (called during inference, before generating UI):
-- azure_arm_get: Read-only ARM API caller. Use to list resources, check existing infrastructure,
-  or validate configuration BEFORE generating the UI response. Returns JSON from the ARM API.
+- azure_arm_get: Read-only ARM API caller. Use ONLY when you need to SEE the data to make decisions
+  (e.g., check existing resources, validate configuration, read resource properties).
+  Do NOT use this tool to list regions, resource groups, or SKUs for the user to pick from — use azurePicker instead.
   Requires the user to be signed in (azureLogin component must have been shown first).
   Example: azure_arm_get({ path: "/subscriptions/{sub}/providers/Microsoft.ContainerService/managedClusters?api-version=2024-01-01" })
 
@@ -47,8 +48,7 @@ COMPONENTS (use in "ask" as { type: "component", component: "name", props: {} } 
     Form field values are stored as {bind}_{propertyName} in state.
     Requires __azureToken and __azureSubscription in state.
 
-For other Azure inputs (regions, resource groups, SKUs), use generic components (select, radioGroup)
-and populate them by asking the user — the LLM has Azure domain knowledge injected dynamically.
+For other Azure inputs (regions, resource groups, SKUs), ALWAYS use azurePicker — never hardcode options in a select or use azureQuery/azure_arm_get to fetch lists for selection.
 
 - "azurePicker": { api, bind, label?, labelKey?, valueKey?, filterKey?, filterValue?, labelBind?, itemsPath?, loadingLabel? }
     Dropdown that fetches options from an ARM API endpoint at render time.
@@ -64,18 +64,17 @@ and populate them by asking the user — the LLM has Azure domain knowledge inje
     In compact notation, the type is "azurePicker" (no alias).
 
 - "azureQuery": { api: "/subscriptions/{{st.__azureSubscription}}/resourceGroups?api-version=2022-09-01", bind: "stateKey", method?: "GET"|"PUT"|"POST"|"DELETE"|"PATCH", body?: "json string", loadingLabel?, showResult?, confirm? }
-    Generic ARM API caller. Executes the API call at render time and stores the result in state.
+    Generic ARM API caller for WRITE operations (PUT/POST/DELETE/PATCH) with user confirmation.
+    Use for creating, updating, or deleting Azure resources.
+    Do NOT use azureQuery for read-only data fetching — use azurePicker for selection lists or azure_arm_get tool when the LLM needs to see the data.
     The API path supports {{state.key}} interpolation for dynamic values.
-    GET requests auto-execute on mount. Write operations (PUT/POST/DELETE/PATCH) show a confirmation dialog first.
+    Write operations show a confirmation dialog first.
     Results are stored as JSON string under the bind key.
-    Use this for ANY ARM operation: listing resources, creating resources, fetching details, etc.
     
-    Common API paths:
-    - List resource groups: /subscriptions/{{st.__azureSubscription}}/resourcegroups?api-version=2022-09-01
-    - List AKS clusters: /subscriptions/{{st.__azureSubscription}}/providers/Microsoft.ContainerService/managedClusters?api-version=2024-01-01
-    - List web apps: /subscriptions/{{st.__azureSubscription}}/providers/Microsoft.Web/sites?api-version=2023-12-01
-    - Get a resource: /subscriptions/{{st.__azureSubscription}}/resourceGroups/{rg}/providers/{type}/{name}?api-version=...
+    Common API paths for writes:
     - Create a resource: method "PUT" with body containing the resource definition
+    - Delete a resource: method "DELETE"
+    - Update a resource: method "PATCH" with body containing the update
 
     ARM API rules:
     - Role assignment IDs (Microsoft.Authorization/roleAssignments) MUST be GUIDs, not human-readable names. Generate a deterministic GUID from the inputs (e.g., resource ID + principal ID + role ID).
