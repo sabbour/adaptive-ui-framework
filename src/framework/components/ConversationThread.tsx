@@ -291,7 +291,7 @@ export function ConversationThread({ turns, isLoading, error, tokenUsage, lastRe
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [turns.length, isLoading]);
+  }, [turns.length, turns[turns.length - 1]?.id, turns[turns.length - 1]?.userMessage, isLoading]);
 
   const showReset = turns.length > 1 || (turns.length === 1 && turns[0].userMessage);
 
@@ -349,6 +349,9 @@ export function ConversationThread({ turns, isLoading, error, tokenUsage, lastRe
         }, 'The LLM ran out of output tokens. Try resetting the chat or switch to Intent mode for smaller payloads.')
       )
     ),
+
+    // Scroll anchor — placed after conversation content, before toolbar/debug
+    React.createElement('div', { ref: bottomRef }),
 
     // Reset session button + token counter
     React.createElement('div', {
@@ -655,8 +658,6 @@ export function ConversationThread({ turns, isLoading, error, tokenUsage, lastRe
         )
           : [React.createElement('span', { key: 'empty', style: { color: '#555' } }, 'No ARM requests yet')]
       )
-    ),
-
-    React.createElement('div', { ref: bottomRef })
+    )
   );
 }
