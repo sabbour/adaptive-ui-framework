@@ -2,6 +2,11 @@ import React from 'react';
 import { AdaptiveApp } from '../framework';
 import type { AdaptiveUISpec } from '../framework/schema';
 import { registerApp } from '../framework/app-registry';
+import { registerPackWithSkills } from '../framework/registry';
+import { createTravelDataPack } from '../packs/travel-data';
+
+// Register travel data pack (weather, currency, country info)
+registerPackWithSkills(createTravelDataPack());
 
 // ─── Travel Planning Agent ───
 // A non-technical demo that showcases Adaptive UI for consumer scenarios.
