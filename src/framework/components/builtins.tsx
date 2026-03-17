@@ -55,7 +55,7 @@ export function SearchableDropdown({
       onClick: () => { setOpen(!open); setSearch(''); },
       style: {
         width: '100%', padding: '8px 12px', borderRadius: '6px',
-        border: '1px solid #d1d5db', fontSize: '14px',
+        border: '1px solid #d1d5db', fontSize: '15px',
         backgroundColor: '#fff', cursor: 'pointer',
         textAlign: 'left' as const, display: 'flex',
         justifyContent: 'space-between', alignItems: 'center',
@@ -86,7 +86,7 @@ export function SearchableDropdown({
         autoFocus: true,
         style: {
           padding: '8px 12px', border: 'none',
-          borderBottom: '1px solid #e5e7eb', fontSize: '14px',
+          borderBottom: '1px solid #e5e7eb', fontSize: '15px',
           outline: 'none', borderRadius: '6px 6px 0 0',
         },
       }),
@@ -103,7 +103,7 @@ export function SearchableDropdown({
                 key: opt.value,
                 onClick: () => { onChange(opt.value); setOpen(false); setSearch(''); },
                 style: {
-                  padding: '8px 12px', cursor: 'pointer', fontSize: '14px',
+                  padding: '8px 12px', cursor: 'pointer', fontSize: '15px',
                   backgroundColor: opt.value === value ? 'rgba(37, 99, 235, 0.08)' : 'transparent',
                   fontWeight: opt.value === value ? 500 : 400,
                 },
@@ -138,11 +138,11 @@ function TextComponent({ node }: AdaptiveComponentProps<TextNode>) {
   };
   const Tag = variantMap[node.variant ?? 'body'] ?? 'p';
   const variantStyles: Record<string, React.CSSProperties> = {
-    h1: { fontSize: '24px', fontWeight: 700, margin: '0 0 0.4em' },
-    h2: { fontSize: '20px', fontWeight: 600, margin: '0 0 0.3em' },
-    h3: { fontSize: '17px', fontWeight: 600, margin: '0 0 0.2em' },
-    h4: { fontSize: '15px', fontWeight: 600, margin: '0 0 0.15em' },
-    body: { fontSize: '14px', margin: '0 0 0.4em' },
+    h1: { fontSize: '26px', fontWeight: 700, margin: '0 0 0.4em' },
+    h2: { fontSize: '22px', fontWeight: 600, margin: '0 0 0.3em' },
+    h3: { fontSize: '18px', fontWeight: 600, margin: '0 0 0.2em' },
+    h4: { fontSize: '16px', fontWeight: 600, margin: '0 0 0.15em' },
+    body: { fontSize: '15px', margin: '0 0 0.4em' },
     caption: { fontSize: '13px', color: '#6b7280' },
     code: { fontFamily: 'monospace', backgroundColor: '#f4f4f4', padding: '2px 6px', borderRadius: '3px' },
   };
@@ -166,7 +166,7 @@ function ButtonComponent({ node }: AdaptiveComponentProps<ButtonNode>) {
   };
   return React.createElement('button', {
     style: {
-      padding: '10px 20px', borderRadius: '6px', cursor: 'pointer', fontSize: '14px',
+      padding: '10px 20px', borderRadius: '6px', cursor: 'pointer', fontSize: '15px',
       fontWeight: 500, transition: 'opacity 0.2s', marginTop: '4px',
       ...variantStyles[node.variant ?? 'primary'],
       ...node.style,
@@ -192,7 +192,7 @@ function InputComponent({ node }: AdaptiveComponentProps<InputNode>) {
 
   return React.createElement('div', { style: { marginBottom: '12px', ...node.style } as React.CSSProperties },
     node.label && React.createElement('label', {
-      style: { display: 'block', marginBottom: '4px', fontSize: '14px', fontWeight: 500 },
+      style: { display: 'block', marginBottom: '4px', fontSize: '15px', fontWeight: 500 },
     }, node.label),
     React.createElement(Tag, {
       type: isTextarea ? undefined : (node.inputType ?? 'text'),
@@ -203,7 +203,7 @@ function InputComponent({ node }: AdaptiveComponentProps<InputNode>) {
       },
       style: {
         width: '100%', padding: '8px 12px', borderRadius: '6px',
-        border: '1px solid #d1d5db', fontSize: '14px',
+        border: '1px solid #d1d5db', fontSize: '15px',
         boxSizing: 'border-box' as const,
         ...(isTextarea ? { minHeight: '80px', resize: 'vertical' as const } : {}),
       },
@@ -223,7 +223,7 @@ function SelectComponent({ node }: AdaptiveComponentProps<SelectNode>) {
 
   return React.createElement('div', { style: { marginBottom: '12px', ...node.style } as React.CSSProperties },
     node.label && React.createElement('label', {
-      style: { display: 'block', marginBottom: '4px', fontSize: '14px', fontWeight: 500 },
+      style: { display: 'block', marginBottom: '4px', fontSize: '15px', fontWeight: 500 },
     }, node.label),
     React.createElement(SearchableDropdown, {
       options,
@@ -368,7 +368,7 @@ function TableComponent({ node }: AdaptiveComponentProps<TableNode>) {
     style: { overflowX: 'auto' as const, ...node.style } as React.CSSProperties,
   },
     React.createElement('table', {
-      style: { width: '100%', borderCollapse: 'collapse' as const, fontSize: '14px' },
+      style: { width: '100%', borderCollapse: 'collapse' as const, fontSize: '15px' },
       className: node.className,
     },
       React.createElement('thead', null,
@@ -429,7 +429,7 @@ function TabsComponent({ node }: AdaptiveComponentProps<TabsNode>) {
           onClick: () => setActiveTab(tab.id),
           style: {
             padding: '8px 16px', border: 'none', background: 'none', cursor: 'pointer',
-            fontWeight: activeTab === tab.id ? 600 : 400, fontSize: '14px',
+            fontWeight: activeTab === tab.id ? 600 : 400, fontSize: '15px',
             borderBottom: activeTab === tab.id ? '2px solid var(--adaptive-primary, #2563eb)' : '2px solid transparent',
             color: activeTab === tab.id ? 'var(--adaptive-primary, #2563eb)' : '#666',
             marginBottom: '-2px',
@@ -449,7 +449,7 @@ function ProgressComponent({ node }: AdaptiveComponentProps<ProgressNode>) {
 
   return React.createElement('div', { style: { marginBottom: '12px', ...node.style } as React.CSSProperties },
     node.label && React.createElement('div', {
-      style: { fontSize: '14px', marginBottom: '4px', display: 'flex', justifyContent: 'space-between' },
+      style: { fontSize: '15px', marginBottom: '4px', display: 'flex', justifyContent: 'space-between' },
     },
       React.createElement('span', null, node.label),
       React.createElement('span', null, `${Math.round(pct)}%`)
@@ -520,7 +520,7 @@ function ChatInputComponent({ node }: AdaptiveComponentProps<ChatInputNode>) {
       disabled: isLoading,
       style: {
         flex: 1, padding: '10px 14px', borderRadius: '8px',
-        border: '1px solid #d1d5db', fontSize: '14px', outline: 'none',
+        border: '1px solid #d1d5db', fontSize: '15px', outline: 'none',
       },
     }),
     React.createElement('button', {
@@ -529,7 +529,7 @@ function ChatInputComponent({ node }: AdaptiveComponentProps<ChatInputNode>) {
       style: {
         padding: '10px 20px', borderRadius: '8px', border: 'none',
         backgroundColor: 'var(--adaptive-primary, #2563eb)', color: '#fff',
-        cursor: 'pointer', fontSize: '14px', fontWeight: 500,
+        cursor: 'pointer', fontSize: '15px', fontWeight: 500,
         opacity: isLoading || !value.trim() ? 0.5 : 1,
       },
     }, isLoading ? '...' : 'Send')
@@ -541,7 +541,7 @@ function MarkdownComponent({ node }: AdaptiveComponentProps<MarkdownNode>) {
   // Simple markdown: headings, bold, italic, code, links, lists
   const html = simpleMarkdown(node.content);
   return React.createElement('div', {
-    style: { lineHeight: 1.6, fontSize: '14px', ...node.style } as React.CSSProperties,
+    style: { lineHeight: 1.6, fontSize: '15px', ...node.style } as React.CSSProperties,
     className: `adaptive-markdown ${node.className || ''}`,
     dangerouslySetInnerHTML: { __html: html },
   });
@@ -584,7 +584,7 @@ function RadioGroupComponent({ node }: AdaptiveComponentProps<RadioGroupNode>) {
 
   return React.createElement('div', { style: { marginBottom: '12px', ...node.style } as React.CSSProperties },
     node.label && React.createElement('label', {
-      style: { display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: 500 },
+      style: { display: 'block', marginBottom: '8px', fontSize: '15px', fontWeight: 500 },
     }, node.label),
     React.createElement('div', {
       style: { display: 'flex', flexDirection: 'column', gap: '8px' } as React.CSSProperties,
@@ -619,7 +619,7 @@ function RadioGroupComponent({ node }: AdaptiveComponentProps<RadioGroupNode>) {
             } as React.CSSProperties,
           }),
           React.createElement('div', { style: { flex: 1, minWidth: 0 } },
-            React.createElement('div', { style: { fontSize: '14px', fontWeight: 500 } }, opt.label),
+            React.createElement('div', { style: { fontSize: '15px', fontWeight: 500 } }, opt.label),
             opt.description && React.createElement('div', {
               style: { fontSize: '12px', color: '#6b7280', marginTop: '2px' },
             }, opt.description)
@@ -648,7 +648,7 @@ function MultiSelectComponent({ node }: AdaptiveComponentProps<MultiSelectNode>)
 
   return React.createElement('div', { style: { marginBottom: '12px', ...node.style } as React.CSSProperties },
     node.label && React.createElement('label', {
-      style: { display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: 500 },
+      style: { display: 'block', marginBottom: '8px', fontSize: '15px', fontWeight: 500 },
     }, node.label),
     React.createElement('div', {
       style: { display: 'flex', flexDirection: 'column', gap: '8px' } as React.CSSProperties,
@@ -687,7 +687,7 @@ function MultiSelectComponent({ node }: AdaptiveComponentProps<MultiSelectNode>)
             } as React.CSSProperties,
           }, isSelected ? '✓' : ''),
           React.createElement('div', { style: { flex: 1, minWidth: 0 } },
-            React.createElement('div', { style: { fontSize: '14px', fontWeight: 500 } }, opt.label),
+            React.createElement('div', { style: { fontSize: '15px', fontWeight: 500 } }, opt.label),
             opt.description && React.createElement('div', {
               style: { fontSize: '12px', color: '#6b7280', marginTop: '2px' },
             }, opt.description)
@@ -724,7 +724,7 @@ function ToggleComponent({ node }: AdaptiveComponentProps<ToggleNode>) {
       })
     ),
     React.createElement('div', null,
-      node.label && React.createElement('div', { style: { fontSize: '14px', fontWeight: 500 } }, node.label),
+      node.label && React.createElement('div', { style: { fontSize: '15px', fontWeight: 500 } }, node.label),
       node.description && React.createElement('div', { style: { fontSize: '12px', color: '#6b7280' } }, node.description)
     )
   );
@@ -739,7 +739,7 @@ function SliderComponent({ node }: AdaptiveComponentProps<SliderNode>) {
 
   return React.createElement('div', { style: { marginBottom: '12px', ...node.style } as React.CSSProperties },
     node.label && React.createElement('div', {
-      style: { display: 'flex', justifyContent: 'space-between', fontSize: '14px', fontWeight: 500, marginBottom: '6px' },
+      style: { display: 'flex', justifyContent: 'space-between', fontSize: '15px', fontWeight: 500, marginBottom: '6px' },
     },
       React.createElement('span', null, node.label),
       React.createElement('span', { style: { color: 'var(--adaptive-primary, #2563eb)', fontWeight: 600 } }, value)
@@ -807,7 +807,7 @@ function AccordionComponent({ node }: AdaptiveComponentProps<AccordionNode>) {
           style: {
             width: '100%', padding: '10px 0', background: 'none', border: 'none',
             cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            fontSize: '14px', fontWeight: 500, color: 'var(--adaptive-text, #111827)',
+            fontSize: '15px', fontWeight: 500, color: 'var(--adaptive-text, #111827)',
           },
         },
           label,
@@ -815,7 +815,7 @@ function AccordionComponent({ node }: AdaptiveComponentProps<AccordionNode>) {
             style: { transition: 'transform 0.2s', transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)', fontSize: '10px', color: '#9ca3af' },
           }, '▼')
         ),
-        isOpen && React.createElement('div', { style: { paddingBottom: '10px', fontSize: '14px', lineHeight: 1.6 } },
+        isOpen && React.createElement('div', { style: { paddingBottom: '10px', fontSize: '15px', lineHeight: 1.6 } },
           ...item.children.map((child, i) =>
             React.createElement(AdaptiveRenderer, { key: i, node: child })
           )
@@ -886,7 +886,7 @@ function LinkComponent({ node }: AdaptiveComponentProps<LinkNode>) {
     rel: node.external ? 'noopener noreferrer' : undefined,
     style: {
       color: 'var(--adaptive-primary, #2563eb)', textDecoration: 'none',
-      fontSize: '14px', fontWeight: 500, ...node.style,
+      fontSize: '15px', fontWeight: 500, ...node.style,
     } as React.CSSProperties,
   }, node.label, node.external && ' ↗');
 }

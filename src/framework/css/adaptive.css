@@ -21,11 +21,11 @@
   /* ── Type scale ── */
   --adaptive-fs-xs: 12px;   /* badges, meta, timestamps */
   --adaptive-fs-sm: 13px;   /* captions, descriptions, secondary */
-  --adaptive-fs-base: 14px; /* body text, inputs, buttons, list items */
-  --adaptive-fs-md: 15px;   /* emphasis, card titles */
-  --adaptive-fs-lg: 17px;   /* section headings (h3) */
-  --adaptive-fs-xl: 20px;   /* page headings (h2) */
-  --adaptive-fs-2xl: 24px;  /* hero headings (h1) */
+  --adaptive-fs-base: 15px; /* body text, inputs, buttons, list items */
+  --adaptive-fs-md: 16px;   /* emphasis, card titles */
+  --adaptive-fs-lg: 18px;   /* section headings (h3) */
+  --adaptive-fs-xl: 22px;   /* page headings (h2) */
+  --adaptive-fs-2xl: 26px;  /* hero headings (h1) */
 }
 
 /* ── Base Reset ── */
@@ -102,7 +102,7 @@ input[type="date"],
 textarea,
 select {
   font-family: var(--adaptive-font);
-  font-size: 14px;
+  font-size: var(--adaptive-fs-base);
   padding: 10px 12px;
   border: 1px solid var(--adaptive-border);
   border-radius: var(--adaptive-radius);
@@ -131,7 +131,7 @@ textarea {
 
 label {
   display: block;
-  font-size: 14px;
+  font-size: var(--adaptive-fs-base);
   font-weight: 500;
   margin-bottom: 6px;
   color: var(--adaptive-text);
