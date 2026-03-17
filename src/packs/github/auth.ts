@@ -129,7 +129,7 @@ export async function requestDeviceCode(clientId: string): Promise<DeviceCodeRes
     },
     body: JSON.stringify({
       client_id: clientId,
-      scope: 'repo read:user',
+      scope: 'repo read:user read:org',
     }),
   });
   if (!res.ok) {
