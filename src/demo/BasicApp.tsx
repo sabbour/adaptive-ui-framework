@@ -106,7 +106,9 @@ Generate pipeline/GitOps files as codeBlock components just like IaC files.
 ═══ INFRASTRUCTURE AS CODE ═══
 After the architecture is approved, generate deployment artifacts as IaC files.
 
-IMPORTANT: Generate IaC files as codeBlock components with the appropriate language and a descriptive label.
+IMPORTANT: Generate IaC files as codeBlock components with the appropriate language.
+The "label" field MUST be a valid filename (e.g., "main.bicep", "modules/networking.bicep", "deploy.sh", ".github/workflows/deploy.yml").
+Each codeBlock must have a UNIQUE label/filename — duplicate labels will overwrite each other.
 The client auto-saves codeBlock components as downloadable files. Users can review, customize, and deploy them via CLI.
 
 Choose the IaC tool that fits the user's cloud provider and preferences:
@@ -250,15 +252,35 @@ const LANG_EXT: Record<string, string> = {
   hcl: 'tf', terraform: 'tf', helm: 'yaml', xml: 'xml',
 };
 
+const seenFilenames = new Set<string>();
+
 function codeBlockToFilename(block: CodeBlock): string {
   const ext = LANG_EXT[block.language] || block.language || 'txt';
+  let filename: string;
+
   if (block.label) {
-    // Use label as filename if it already looks like a filename
-    if (block.label.includes('.')) return block.label;
-    const base = block.label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+$/, '');
-    return `${base}.${ext}`;
+    // If label already looks like a filename (has extension), use it directly
+    if (block.label.includes('.')) {
+      filename = block.label;
+    } else {
+      const base = block.label.toLowerCase().replace(/[^a-z0-9/]+/g, '-').replace(/-+$/, '');
+      filename = `${base}.${ext}`;
+    }
+  } else {
+    filename = `artifact.${ext}`;
   }
-  return `artifact.${ext}`;
+
+  // Deduplicate filenames within the same spec
+  if (seenFilenames.has(filename)) {
+    let counter = 2;
+    const dotIdx = filename.lastIndexOf('.');
+    const base = dotIdx >= 0 ? filename.slice(0, dotIdx) : filename;
+    const extension = dotIdx >= 0 ? filename.slice(dotIdx) : '';
+    while (seenFilenames.has(`${base}-${counter}${extension}`)) counter++;
+    filename = `${base}-${counter}${extension}`;
+  }
+  seenFilenames.add(filename);
+  return filename;
 }
 
 export function SolutionArchitectApp() {
@@ -292,6 +314,7 @@ export function SolutionArchitectApp() {
     }
 
     // Auto-save code blocks (IaC files) as artifacts
+    seenFilenames.clear();
     const codeBlocks = extractCodeBlocksFromLayout(spec.layout);
     for (const block of codeBlocks) {
       const filename = codeBlockToFilename(block);

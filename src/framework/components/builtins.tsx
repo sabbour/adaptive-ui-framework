@@ -892,7 +892,11 @@ function CodeBlockComponent({ node }: AdaptiveComponentProps<CodeBlockNode>) {
   };
 
   return React.createElement('div', {
-    style: { position: 'relative', marginBottom: '12px', ...node.style } as React.CSSProperties,
+    style: {
+      position: 'relative', marginBottom: '12px',
+      maxWidth: '100%', boxSizing: 'border-box',
+      ...node.style,
+    } as React.CSSProperties,
   },
     (node.language || node.label) && React.createElement('div', {
       style: {
@@ -901,16 +905,18 @@ function CodeBlockComponent({ node }: AdaptiveComponentProps<CodeBlockNode>) {
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
       },
     },
-      React.createElement('span', null, node.label || node.language),
-      React.createElement('div', { style: { display: 'flex', gap: '8px' } },
+      React.createElement('span', {
+        style: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, marginRight: '8px' },
+      }, node.label || node.language),
+      React.createElement('div', { style: { display: 'flex', gap: '8px', flexShrink: 0 } },
         React.createElement('button', {
           onClick: handleSave,
           style: { background: 'none', border: 'none', color: saved ? '#22c55e' : '#9ca3af', cursor: 'pointer', fontSize: '11px' },
-        }, saved ? '✓ Saved' : 'Save'),
+        }, saved ? '\u2713 Saved' : 'Save'),
         React.createElement('button', {
           onClick: handleCopy,
           style: { background: 'none', border: 'none', color: copied ? '#22c55e' : '#9ca3af', cursor: 'pointer', fontSize: '11px' },
-        }, copied ? '✓ Copied' : 'Copy')
+        }, copied ? '\u2713 Copied' : 'Copy')
       )
     ),
     React.createElement('pre', {
@@ -919,6 +925,7 @@ function CodeBlockComponent({ node }: AdaptiveComponentProps<CodeBlockNode>) {
         borderRadius: (node.language || node.label) ? '0 0 8px 8px' : '8px',
         fontSize: '13px', fontFamily: 'monospace', overflowX: 'auto' as const,
         margin: 0, lineHeight: 1.6,
+        maxWidth: '100%', boxSizing: 'border-box',
       },
     },
       React.createElement('code', null, node.code)

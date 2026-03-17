@@ -186,7 +186,7 @@ function ActiveTurn({ turn }: { turn: ConversationTurn }) {
           : React.createElement(React.Fragment, null,
               // Interactive UI
               React.createElement('div', {
-                style: { marginLeft: '38px', marginBottom: '8px' },
+                style: { marginLeft: '38px', marginBottom: '8px', minWidth: 0, overflow: 'hidden' },
               },
                 React.createElement(ActiveTurnUI, { node: turn.agentSpec.layout, onSend: handleSend })
               ),
