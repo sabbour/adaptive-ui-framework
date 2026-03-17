@@ -244,6 +244,7 @@ export function ConversationThread({ turns, isLoading, error, tokenUsage, lastRe
   const [responseOpen, setResponseOpen] = useState(true);
   const [decisionsOpen, setDecisionsOpen] = useState(true);
   const [apiLogOpen, setApiLogOpen] = useState(true);
+  const [expandedRequestId, setExpandedRequestId] = useState<number | null>(null);
   const apiRequests = useSyncExternalStore(subscribeCompleted, getCompletedRequests);
 
   // Track data versions for ping animation
@@ -618,7 +619,9 @@ export function ConversationThread({ turns, isLoading, error, tokenUsage, lastRe
             style: {
               padding: '4px 0',
               borderBottom: i < apiRequests.length - 1 ? '1px solid #333' : 'none',
+              cursor: 'pointer',
             },
+            onClick: () => setExpandedRequestId(prev => prev === req.id ? null : req.id),
           },
             React.createElement('div', {
               style: { display: 'flex', gap: '8px', alignItems: 'center', color: '#d4d4d4' },
@@ -635,28 +638,37 @@ export function ConversationThread({ turns, isLoading, error, tokenUsage, lastRe
                 style: { fontWeight: 600, color: req.method === 'GET' ? '#60a5fa' : '#f59e0b' },
               }, req.method),
               React.createElement('span', {
-                style: { color: '#9ca3af', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const },
+                style: { color: '#9ca3af', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, flex: 1 },
               }, req.url),
               React.createElement('span', {
                 style: { color: '#6b7280', flexShrink: 0 },
-              }, `${req.duration}ms`)
+              }, `${req.duration}ms`),
+              React.createElement('span', {
+                style: { color: '#555', flexShrink: 0, fontSize: '9px' },
+              }, expandedRequestId === req.id ? '\u25BE' : '\u25B8')
             ),
-            !req.ok && req.bodyPreview && React.createElement('div', {
+            expandedRequestId === req.id && req.bodyPreview && React.createElement('div', {
               style: {
-                marginTop: '4px', padding: '4px 8px', borderRadius: '4px',
-                backgroundColor: '#2a1215', color: '#fca5a5',
+                marginTop: '4px', padding: '6px 8px', borderRadius: '4px',
+                backgroundColor: req.ok ? '#1a2332' : '#2a1215',
+                color: req.ok ? '#93c5fd' : '#fca5a5',
                 fontSize: '10px', whiteSpace: 'pre-wrap' as const, wordBreak: 'break-all' as const,
-                maxHeight: '80px', overflow: 'auto',
+                maxHeight: '200px', overflow: 'auto',
+                fontFamily: 'Consolas, "Courier New", monospace',
               },
             }, (() => {
               try {
-                const parsed = JSON.parse(req.bodyPreview!);
-                return parsed?.error?.message ?? req.bodyPreview;
+                return JSON.stringify(JSON.parse(req.bodyPreview!), null, 2);
               } catch { return req.bodyPreview; }
-            })())
+            })()),
+            expandedRequestId === req.id && !req.bodyPreview && React.createElement('div', {
+              style: {
+                marginTop: '4px', padding: '4px 8px', fontSize: '10px', color: '#555',
+              },
+            }, 'No response body captured')
           )
         )
-          : [React.createElement('span', { key: 'empty', style: { color: '#555' } }, 'No ARM requests yet')]
+          : [React.createElement('span', { key: 'empty', style: { color: '#555' } }, 'No requests yet')]
       )
     )
   );

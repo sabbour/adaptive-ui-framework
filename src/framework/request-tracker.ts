@@ -75,7 +75,7 @@ export async function trackedFetch(input: RequestInfo | URL, init?: RequestInit)
         completedLog.push({
           id, method: method.toUpperCase(), url: url.replace(/https?:\/\/[^/]+/, '').split('?')[0],
           status: res.status, duration: Date.now() - start, ok: res.ok,
-          bodyPreview: body.slice(0, 500),
+          bodyPreview: body.slice(0, 2000),
           time: Date.now(),
         });
         notifyCompleted();
