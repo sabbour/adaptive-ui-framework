@@ -13,6 +13,10 @@ import {
 } from '../artifacts';
 import { downloadAllArtifacts, createPullRequest } from './FilesPanel';
 
+// Icons
+import iconArrowDownload from '../icons/fluent/arrow-download.svg?url';
+import iconBranchRequest from '../icons/fluent/branch-request.svg?url';
+
 interface SessionsSidebarProps {
   activeSessionId: string | null;
   onSelectSession: (id: string) => void;
@@ -157,17 +161,19 @@ export function SessionsSidebar({
             title: 'Download all files',
             style: {
               background: 'none', border: '1px solid var(--adaptive-border, #e5e7eb)', borderRadius: '4px',
-              color: 'var(--adaptive-text, #111827)', cursor: 'pointer', fontSize: '10px', padding: '2px 6px',
+              color: 'var(--adaptive-text, #111827)', cursor: 'pointer', padding: '2px 4px',
+              display: 'flex', alignItems: 'center',
             },
-          }, '\u2913'),
+          }, React.createElement('img', { src: iconArrowDownload, alt: 'Download all', width: 14, height: 14, style: { opacity: 0.7 } })),
           React.createElement('button', {
             onClick: () => setShowPR(true),
             title: 'Create pull request on GitHub',
             style: {
               background: 'none', border: '1px solid var(--adaptive-border, #e5e7eb)', borderRadius: '4px',
-              color: 'var(--adaptive-text, #111827)', cursor: 'pointer', fontSize: '10px', padding: '2px 6px',
+              color: 'var(--adaptive-text, #111827)', cursor: 'pointer', padding: '2px 4px',
+              display: 'flex', alignItems: 'center',
             },
-          }, 'PR')
+          }, React.createElement('img', { src: iconBranchRequest, alt: 'Create PR', width: 14, height: 14, style: { opacity: 0.7 } }))
         )
       ),
 
