@@ -546,7 +546,7 @@ function MarkdownComponent({ node }: AdaptiveComponentProps<MarkdownNode>) {
   });
 }
 
-function simpleMarkdown(md: string): string {
+export function simpleMarkdown(md: string): string {
   let html = md
     // Sanitize HTML tags to prevent XSS
     .replace(/&/g, '&amp;')
@@ -820,14 +820,14 @@ function CodeBlockComponent({ node }: AdaptiveComponentProps<CodeBlockNode>) {
   return React.createElement('div', {
     style: { position: 'relative', marginBottom: '12px', ...node.style } as React.CSSProperties,
   },
-    node.language && React.createElement('div', {
+    (node.language || node.label) && React.createElement('div', {
       style: {
         backgroundColor: '#1f2937', color: '#9ca3af', padding: '6px 12px',
         fontSize: '11px', borderRadius: '8px 8px 0 0', fontFamily: 'monospace',
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
       },
     },
-      node.language,
+      React.createElement('span', null, node.label || node.language),
       React.createElement('button', {
         onClick: handleCopy,
         style: { background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer', fontSize: '11px' },
@@ -836,7 +836,7 @@ function CodeBlockComponent({ node }: AdaptiveComponentProps<CodeBlockNode>) {
     React.createElement('pre', {
       style: {
         backgroundColor: '#111827', color: '#e5e7eb', padding: '14px',
-        borderRadius: node.language ? '0 0 8px 8px' : '8px',
+        borderRadius: (node.language || node.label) ? '0 0 8px 8px' : '8px',
         fontSize: '13px', fontFamily: 'monospace', overflowX: 'auto' as const,
         margin: 0, lineHeight: 1.6,
       },

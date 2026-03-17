@@ -52,8 +52,11 @@ export {
   getComponent,
   hasComponent,
   getRegisteredTypes,
+  registerIntentResolver,
+  getIntentResolver,
+  getIntentResolverPrompt,
 } from './registry';
-export type { AdaptiveComponentProps, ComponentPack } from './registry';
+export type { AdaptiveComponentProps, ComponentPack, IntentResolverEntry } from './registry';
 
 // Renderer
 export { AdaptiveRenderer, renderChildren } from './renderer';
@@ -81,8 +84,13 @@ export {
   OpenAIAdapter,
   MockAdapter,
   ADAPTIVE_UI_SYSTEM_PROMPT,
+  INTENT_SYSTEM_PROMPT,
 } from './llm-adapter';
 export type { LLMAdapter, LLMMessage, OpenAIAdapterConfig } from './llm-adapter';
+
+// Intent-based UI resolution
+export { resolveIntent, isAgentIntent } from './intent-resolver';
+export type { AgentIntent, AskIntent, ShowIntent } from './intent-schema';
 
 // App registry & router
 export { registerApp, getApps, getApp } from './app-registry';

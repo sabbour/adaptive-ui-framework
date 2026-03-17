@@ -8,6 +8,7 @@ import { ConversationThread } from './components/ConversationThread';
 import { registerBuiltinComponents } from './components/builtins';
 import { getPackSettingsComponents } from './registry';
 import { getActiveRequests, subscribe as subscribeRequests } from './request-tracker';
+import type { DecisionEntry } from './decision-log';
 
 // Icons
 import iconGear from './icons/commands/gear.svg?url';
@@ -70,6 +71,34 @@ function summarizeSpec(spec: AdaptiveUISpec): string {
   return parts.join('\n');
 }
 
+function summarizeUserSelections(currentState: StateStore): string | null {
+  const displayLabels = new Map<string, string>();
+
+  for (const [key, value] of Object.entries(currentState)) {
+    if (value === '' || value === null || value === undefined) continue;
+    const match = key.match(/^(.*?)(Name|Label|Title|DisplayName)$/);
+    if (!match) continue;
+    const baseKey = match[1];
+    const text = typeof value === 'string' ? value.trim() : String(value);
+    if (text) displayLabels.set(baseKey, text);
+  }
+
+  const parts = Object.entries(currentState)
+    .filter(([key, value]) => value !== '' && value !== null && value !== undefined)
+    .filter(([key]) => !key.startsWith('__'))
+    .filter(([key]) => !/(Name|Label|Title|DisplayName)$/.test(key))
+    .map(([key, value]) => {
+      const displayValue = displayLabels.get(key)
+        ?? (typeof value === 'string' ? value.trim() : String(value));
+      if (!displayValue) return null;
+      if (displayValue.length > 200) return null;
+      return `${key}: ${displayValue}`;
+    })
+    .filter((value): value is string => Boolean(value));
+
+  return parts.length > 0 ? `Selected ${parts.join(', ')}` : null;
+}
+
 // ─── LLM Config persistence ───
 function loadLLMConfig(): { endpoint: string; apiKey: string; model: string } {
   try {
@@ -107,7 +136,7 @@ function SettingsPanel({
   };
 
   return React.createElement('div', {
-    style: { position: 'fixed', top: '12px', right: '12px', zIndex: 1000 },
+    style: { position: 'fixed', top: '6px', right: '12px', zIndex: 1001 },
   },
     open && React.createElement('div', {
       onClick: () => setOpen(false),
@@ -117,18 +146,18 @@ function SettingsPanel({
     React.createElement('button', {
       onClick: () => setOpen((o) => !o),
       style: {
-        width: '36px', height: '36px', borderRadius: '50%',
+        width: '28px', height: '28px', borderRadius: '50%',
         border: 'none', cursor: 'pointer',
         backgroundColor: isConnected ? 'var(--adaptive-primary)' : 'var(--adaptive-border)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         boxShadow: 'var(--adaptive-shadow-md)',
         padding: 0,
       },
-      title: isConnected ? 'Connected to LLM' : 'Configure LLM',
+      title: isConnected ? 'Settings (Connected)' : 'Settings',
     },
       React.createElement('img', {
-        src: isConnected ? iconConnect : iconGear,
-        alt: '', width: 18, height: 18,
+        src: iconGear,
+        alt: '', width: 14, height: 14,
         style: { filter: isConnected ? 'brightness(0) invert(1)' : 'none' },
       })
     ),
@@ -136,7 +165,7 @@ function SettingsPanel({
     open && React.createElement('div', {
       className: 'adaptive-settings-panel',
       style: {
-        position: 'absolute', top: '44px', right: '0',
+        position: 'absolute', top: '36px', right: '0',
       } as React.CSSProperties,
     },
       React.createElement('div', {
@@ -210,47 +239,85 @@ function SettingsPanel({
 
 function ShellActivityIndicator() {
   const activeRequests = useSyncExternalStore(subscribeRequests, getActiveRequests);
-  const isActive = activeRequests.length > 0;
+  const [log, setLog] = useState<Array<{ id: number; method: string; url: string; done: boolean; time: number }>>([]);
+  const prevActiveRef = useRef<Set<number>>(new Set());
+
+  useEffect(() => {
+    const currentIds = new Set(activeRequests.map(r => r.id));
+    const prevIds = prevActiveRef.current;
+
+    // Add new requests
+    for (const req of activeRequests) {
+      if (!prevIds.has(req.id)) {
+        setLog(prev => [...prev, { id: req.id, method: req.method, url: req.url, done: false, time: Date.now() }]);
+      }
+    }
+
+    // Mark completed
+    for (const id of prevIds) {
+      if (!currentIds.has(id)) {
+        setLog(prev => prev.map(e => e.id === id ? { ...e, done: true, time: Date.now() } : e));
+      }
+    }
+
+    prevActiveRef.current = currentIds;
+  }, [activeRequests]);
+
+  // Clean up old entries after fade
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setLog(prev => prev.filter(e => !e.done || Date.now() - e.time < 3000));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  if (log.length === 0) return null;
 
   return React.createElement('div', {
     style: {
-      position: 'fixed',
-      top: '12px',
+      position: 'absolute',
+      bottom: '12px',
       left: '12px',
-      zIndex: 1000,
+      zIndex: 100,
       display: 'flex',
-      alignItems: 'center',
-      gap: '8px',
-      padding: '6px 10px',
-      borderRadius: '999px',
-      backgroundColor: 'rgba(255, 255, 255, 0.92)',
-      border: '1px solid var(--adaptive-border, #e5e7eb)',
-      boxShadow: 'var(--adaptive-shadow-sm)',
-      fontSize: '11px',
-      fontFamily: 'var(--adaptive-font-mono, monospace)',
+      flexDirection: 'column' as const,
+      gap: '2px',
+      fontSize: '10px',
+      fontFamily: 'Consolas, "Courier New", monospace',
       color: 'var(--adaptive-text-secondary, #6b7280)',
-      maxWidth: '48vw',
-      overflow: 'hidden',
-      whiteSpace: 'nowrap',
-      textOverflow: 'ellipsis',
+      maxWidth: '50vw',
+      pointerEvents: 'none' as const,
     } as React.CSSProperties,
-    title: isActive
-      ? activeRequests.map((r) => `${r.method} ${r.url}`).join('\n')
-      : 'No active HTTP requests',
   },
-    React.createElement('div', {
-      style: {
-        width: '7px',
-        height: '7px',
-        borderRadius: '50%',
-        backgroundColor: isActive ? '#F59E0B' : '#9CA3AF',
-        animation: isActive ? 'adaptive-pulse 1s ease-in-out infinite' : 'none',
-        flexShrink: 0,
-      } as React.CSSProperties,
-    }),
-    isActive
-      ? `${activeRequests.length} request${activeRequests.length === 1 ? '' : 's'}: ${activeRequests.map((r) => `${r.method} ${r.url}`).join(' · ')}`
-      : 'HTTP idle'
+    ...log.slice(-8).map(entry =>
+      React.createElement('div', {
+        key: entry.id,
+        style: {
+          padding: '2px 8px',
+          borderRadius: '4px',
+          backgroundColor: entry.done ? 'rgba(220, 252, 231, 0.9)' : 'rgba(255, 255, 255, 0.92)',
+          border: `1px solid ${entry.done ? '#bbf7d0' : '#e5e7eb'}`,
+          color: entry.done ? '#166534' : '#6b7280',
+          opacity: entry.done ? Math.max(0, 1 - (Date.now() - entry.time) / 3000) : 1,
+          transition: 'opacity 2s ease-out',
+          whiteSpace: 'nowrap' as const,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px',
+        } as React.CSSProperties,
+      },
+        React.createElement('span', {
+          style: {
+            width: '5px', height: '5px', borderRadius: '50%', flexShrink: 0,
+            backgroundColor: entry.done ? '#22c55e' : '#F59E0B',
+            animation: entry.done ? 'none' : 'adaptive-pulse 1s ease-in-out infinite',
+          } as React.CSSProperties,
+        }),
+        `${entry.method} ${entry.url}`
+      )
+    )
   );
 }
 
@@ -297,6 +364,9 @@ export interface AdaptiveAppProps {
 
   /** Wrapper style */
   style?: React.CSSProperties;
+
+  /** Use intent-based mode for token-efficient LLM communication */
+  useIntents?: boolean;
 }
 
 let turnCounter = Date.now();
@@ -315,6 +385,7 @@ export function AdaptiveApp({
   settingsComponents,
   className,
   style,
+  useIntents,
 }: AdaptiveAppProps) {
   // ─── Internal adapter management ───
   const [isConnected, setIsConnected] = useState(() => {
@@ -322,6 +393,21 @@ export function AdaptiveApp({
     return !!loadLLMConfig().apiKey.trim();
   });
   const [adapterKey, setAdapterKey] = useState(0);
+  const [intentMode, setIntentMode] = useState(() => {
+    if (useIntents !== undefined) return useIntents;
+    try {
+      return localStorage.getItem('adaptive-ui-intent-mode') === 'true';
+    } catch { return false; }
+  });
+
+  const handleToggleIntentMode = useCallback(() => {
+    setIntentMode(prev => {
+      const next = !prev;
+      try { localStorage.setItem('adaptive-ui-intent-mode', String(next)); } catch {}
+      return next;
+    });
+    setAdapterKey(k => k + 1);
+  }, []);
 
   const adapter: LLMAdapter | null = useMemo(() => {
     if (externalAdapter) return externalAdapter;
@@ -332,8 +418,9 @@ export function AdaptiveApp({
       endpoint: config.endpoint || undefined,
       model: config.model || 'gpt-4o',
       systemPromptOverride,
+      useIntents: intentMode,
     });
-  }, [externalAdapter, isConnected, adapterKey, systemPromptOverride]);
+  }, [externalAdapter, isConnected, adapterKey, systemPromptOverride, intentMode]);
 
   const handleConnect = useCallback((config: { endpoint: string; apiKey: string; model: string }) => {
     saveLLMConfig(config);
@@ -377,6 +464,9 @@ export function AdaptiveApp({
   const [error, setError] = useState<string | null>(null);
   const [tokenUsage, setTokenUsage] = useState({ promptTokens: 0, completionTokens: 0 });
   const [lastRequestUsage, setLastRequestUsage] = useState({ promptTokens: 0, completionTokens: 0 });
+  const [lastRawResponse, setLastRawResponse] = useState<string | null>(null);
+  const [lastRawRequest, setLastRawRequest] = useState<string | null>(null);
+  const [lastDecisionLog, setLastDecisionLog] = useState<DecisionEntry[]>([]);
   const historyRef = useRef<LLMMessage[]>([]);
   const busyRef = useRef(false);
 
@@ -421,13 +511,23 @@ export function AdaptiveApp({
   const currentSpec = turns.length > 0 ? turns[turns.length - 1].agentSpec : null;
 
   const handleSendPrompt = useCallback(
-    async (prompt: string, currentState: StateStore) => {
+    async (prompt: string, currentState: StateStore, userDisplayText?: string | null) => {
       if (busyRef.current || !adapter) return;
       busyRef.current = true;
 
       try {
         setIsLoading(true);
         setError(null);
+        setLastRawResponse(null);
+
+        // Show request preview in debug panel immediately
+        const safeStatePreview = Object.fromEntries(
+          Object.entries(currentState).filter(([k]) => !k.startsWith('__'))
+        );
+        setLastRawRequest(JSON.stringify([
+          ...historyRef.current,
+          { role: 'user', content: `Current state: ${JSON.stringify(safeStatePreview)}\n\nUser request: ${prompt}` },
+        ], null, 2));
 
         // Capture user data from state for the current turn summary
         const userData = { ...currentState };
@@ -437,16 +537,14 @@ export function AdaptiveApp({
           if (prev.length === 0) return prev;
           const updated = [...prev];
           const lastTurn = { ...updated[updated.length - 1] };
-          // Strip sensitive (__-prefixed) state values from the displayed user message
-          let displayPrompt = prompt;
-          for (const [k, v] of Object.entries(currentState)) {
-            if (k.startsWith('__') && typeof v === 'string' && v.length > 0) {
-              displayPrompt = displayPrompt.split(v).join('');
-            }
+          // userDisplayText === string → user typed this, show it
+          // userDisplayText === null → system-generated prompt, derive display from state
+          // userDisplayText === undefined → legacy path, use prompt as display
+          if (userDisplayText === null) {
+            lastTurn.userMessage = summarizeUserSelections(currentState) || 'Continued';
+          } else {
+            lastTurn.userMessage = userDisplayText ?? prompt;
           }
-          // Clean up extra whitespace
-          displayPrompt = displayPrompt.replace(/\s{2,}/g, ' ').trim();
-          lastTurn.userMessage = displayPrompt;
           lastTurn.userData = userData;
           updated[updated.length - 1] = lastTurn;
           return updated;
@@ -459,12 +557,37 @@ export function AdaptiveApp({
         const contextPrompt = `User responded: "${prompt}"\nCurrent collected data: ${JSON.stringify(safeState)}`;
         historyRef.current.push({ role: 'user', content: contextPrompt });
 
-        // Trim history
+        // Trim history (basic cap before the call)
         if (historyRef.current.length > maxHistory) {
           historyRef.current = historyRef.current.slice(-maxHistory);
         }
 
         const result = await adapter.generateUI(prompt, currentState, historyRef.current);
+
+        // Aggressive compaction after the call when prompt tokens are high
+        const lastPromptTokens = result.usage?.promptTokens ?? 0;
+        if (historyRef.current.length > 6 && lastPromptTokens > 80000) {
+          const keep = 4;
+          const oldEntries = historyRef.current.slice(0, -keep);
+          const summary = oldEntries.map(e => e.content.slice(0, 150)).join('\n');
+          historyRef.current = [
+            { role: 'user', content: `[Conversation summary of ${oldEntries.length} earlier messages]\n${summary}` },
+            ...historyRef.current.slice(-keep),
+          ];
+        }
+
+        // Store raw response for debug panel
+        if (result.rawResponse) {
+          setLastRawResponse(result.rawResponse);
+        }
+        // Update request with full actual request (includes system prompt)
+        if (result.rawRequest) {
+          setLastRawRequest(result.rawRequest);
+        }
+        // Store decision log
+        if (result.decisionLog) {
+          setLastDecisionLog(result.decisionLog);
+        }
 
         // Summarize the spec for history instead of storing full JSON (~80% smaller)
         historyRef.current.push({
@@ -547,7 +670,7 @@ export function AdaptiveApp({
           onResetSession: handleResetSession,
           theme,
         },
-          React.createElement(AdaptiveAppInner, { turns, isLoading, error, tokenUsage, lastRequestUsage })
+          React.createElement(AdaptiveAppInner, { turns, isLoading, error, tokenUsage, lastRequestUsage, useIntents: intentMode, onToggleIntentMode: handleToggleIntentMode, lastRawResponse, lastRawRequest, lastDecisionLog })
         )
       : React.createElement('div', {
           style: {
@@ -579,12 +702,22 @@ function AdaptiveAppInner({
   error,
   tokenUsage,
   lastRequestUsage,
+  useIntents,
+  onToggleIntentMode,
+  lastRawResponse,
+  lastRawRequest,
+  lastDecisionLog,
 }: {
   turns: ConversationTurn[];
   isLoading: boolean;
   error: string | null;
   tokenUsage: { promptTokens: number; completionTokens: number };
   lastRequestUsage: { promptTokens: number; completionTokens: number };
+  useIntents: boolean;
+  onToggleIntentMode: () => void;
+  lastRawResponse: string | null;
+  lastRawRequest: string | null;
+  lastDecisionLog: DecisionEntry[];
 }) {
   const { dispatch } = useAdaptive();
 
@@ -597,26 +730,13 @@ function AdaptiveAppInner({
     }
   }, [turns, isLoading, dispatch]);
 
-  if (error) {
-    return React.createElement('div', {
-      style: {
-        padding: '20px', margin: '20px',
-        backgroundColor: '#fef2f2', border: '1px solid #fecaca',
-        borderRadius: '8px', color: '#991b1b',
-      },
-    },
-      React.createElement('strong', null, 'Error: '),
-      error
-    );
-  }
-
-  if (turns.length === 0 && !isLoading) {
+  if (turns.length === 0 && !isLoading && !error) {
     return React.createElement('div', {
       style: { display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px', color: '#6b7280' },
     }, 'No conversation started. Provide an initialSpec to begin.');
   }
 
-  return React.createElement(ConversationThread, { turns, isLoading, tokenUsage, lastRequestUsage });
+  return React.createElement(ConversationThread, { turns, isLoading, error, tokenUsage, lastRequestUsage, useIntents, onToggleIntentMode, lastRawResponse, lastRawRequest, lastDecisionLog });
 }
 
 export default AdaptiveApp;

@@ -190,7 +190,17 @@ Existing mappings to reuse (do NOT duplicate):
 - `vr` → `variant`, `dis` → `disabled`, `oc` → `onClick`, `ch` → `children`
 - `mn` → `min`, `mx` → `max`, `stp` → `step`, `d` → `description`
 
-### Step 5 — Verify
+### Step 5 — Add intent resolver mapping (if applicable)
+
+If the component maps to a semantic intent (e.g., a new input type, display type), add a case in `src/framework/intent-resolver.ts`:
+
+- For input components: add a case in `resolveAsk()` mapping an ask type to the component
+- For display components: add a case in `resolveShow()` mapping a show type to the component
+- Also update `src/framework/intent-schema.ts` to add the new ask/show type to the union
+
+Skip this step if the component is only used via raw `layout` (escape hatch) or via pack `component` ask type.
+
+### Step 6 — Verify
 
 Run `npm run build` to confirm TypeScript compilation passes.
 
@@ -203,4 +213,5 @@ Run `npm run build` to confirm TypeScript compilation passes.
 - [ ] Component registered in `registerBuiltinComponents()`
 - [ ] Compact type alias added to `TYPE_MAP` in `compact.ts`
 - [ ] Any new props added to `KEY_MAP` in `compact.ts`
+- [ ] Intent resolver mapping added in `intent-resolver.ts` (if applicable)
 - [ ] `npm run build` succeeds

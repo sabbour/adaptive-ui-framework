@@ -1,9 +1,42 @@
 import type { AdaptiveUISpec } from './schema';
 import type { StateStore } from './interpolation';
-import { getPackSystemPrompts, resolvePackSkills } from './registry';
-import { expandCompact, COMPACT_PROMPT } from './compact';
+import { getPackSystemPrompts, resolvePackSkills, getIntentResolverPrompt } from './registry';
+import { expandCompact, COMPACT_PROMPT, INTENT_COMPACT_PROMPT } from './compact';
 import { sanitizeSpec } from './sanitize';
 import { trackStart, trackEnd } from './request-tracker';
+import { resolveIntent, isAgentIntent } from './intent-resolver';
+import { resetDecisionLog, logDecision, getDecisionLog, type DecisionEntry } from './decision-log';
+
+// ─── Truncated JSON repair ───
+// When finish_reason=length, the JSON is cut off mid-stream.
+// Try to close open braces/brackets to salvage a partial object.
+function repairTruncatedJson(str: string): unknown | null {
+  // Strip trailing incomplete string values
+  let s = str.replace(/,\s*"[^"]*$/, '').replace(/,\s*$/, '');
+  // Count open vs close braces/brackets
+  let braces = 0;
+  let brackets = 0;
+  let inString = false;
+  let escape = false;
+  for (const ch of s) {
+    if (escape) { escape = false; continue; }
+    if (ch === '\\') { escape = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (ch === '{') braces++;
+    else if (ch === '}') braces--;
+    else if (ch === '[') brackets++;
+    else if (ch === ']') brackets--;
+  }
+  // Close any open structures
+  for (let i = 0; i < brackets; i++) s += ']';
+  for (let i = 0; i < braces; i++) s += '}';
+  try {
+    return JSON.parse(s);
+  } catch {
+    return null;
+  }
+}
 
 // ─── LLM Adapter ───
 // Abstract interface for connecting to any LLM provider.
@@ -22,6 +55,12 @@ export interface TokenUsage {
 export interface GenerateUIResult {
   spec: AdaptiveUISpec;
   usage: TokenUsage;
+  /** Raw JSON string from the LLM (before expansion/resolution) for debugging */
+  rawResponse?: string;
+  /** Raw messages array sent to the LLM for debugging */
+  rawRequest?: string;
+  /** Logical decisions made during parsing/resolution */
+  decisionLog?: DecisionEntry[];
 }
 
 export interface LLMAdapter {
@@ -134,6 +173,61 @@ ESCAPE HATCH / RE-ADAPTATION:
 - If the user's text answers a question, capture that value and advance to the next step
 - If the user asks for a different approach, re-generate the UI but keep any reusable data`;
 
+// ─── Intent-based system prompt (~400 tokens vs ~1,200 for full spec) ───
+export const INTENT_SYSTEM_PROMPT = `You are a conversational agent that drives multi-step workflows by asking questions and presenting choices. Respond ONLY with valid JSON.
+
+Output format:
+{
+  "message": "Natural language explanation of this step",
+  "title": "Step Title",
+  "ask": [ /* fields to collect */ ],
+  "show": [ /* info to display */ ],
+  "next": "Prompt template with {{state.key}} sent when user continues",
+  "state": { /* initial values */ },
+  "diagram": "mermaid block-beta string"
+}
+
+ASK types (collect user input):
+- { type: "choice", key: "stateKey", label?, options: [{label, value, description?}], multiple?: true }
+- { type: "text", key, label?, placeholder? }
+- { type: "number", key, label?, placeholder? }
+- { type: "email", key, label?, placeholder? }
+- { type: "date", key, label? }
+- { type: "textarea", key, label?, placeholder? }
+- { type: "toggle", key, label?, description? }
+- { type: "slider", key, label?, min?, max?, step? }
+- { type: "free-text", placeholder? }
+- { type: "component", component: "componentName", props?: {} }
+
+SHOW types (display-only information — NO components here):
+- { type: "info"|"success"|"warning"|"error", title?, content }
+- { type: "markdown", content }
+- { type: "table", columns: [{key, header}], rows: [{...}] }
+- { type: "progress", value, max?, label? }
+- { type: "code", code, language? }
+
+IMPORTANT RULES:
+- Components (azureLogin, azureResourceForm, etc.) go in "ask", NEVER in "show". "show" is only for static display.
+- "next" must be a factual summary of user selections using {{state.key}} templates, NOT agent prose.
+  GOOD: "User selected region: {{state.region}}, resource group: {{state.rg}}"
+  BAD:  "Great, I'll now set up the resources for you."
+  BAD:  "After sign-in, we'll pick the subscription."
+- If there are no user inputs to summarize (e.g., sign-in step), omit "next" entirely — the framework handles it.
+
+GUIDELINES:
+- Each response = ONE step of the workflow
+- "message" explains what you're asking/showing and why
+- "next" is the prompt template sent when the user clicks Continue — use {{state.key}} to reference collected values. Write it as a factual data summary, not conversational prose.
+- ALWAYS use the full prefix {{state.key}} — NEVER abbreviate
+- NEVER reference keys starting with __ in message or next — those are internal/sensitive
+- Do NOT pre-select or set default values for user-choice fields unless the user explicitly provided them
+- Pack components (azureLogin, azureResourceForm, azureQuery, azurePicker) MUST go in "ask" using { type: "component", component: "name" } — NEVER put them in "show"
+- Prefer the standard ask types first; they are the most reliable
+- If you need a custom control shape, you may emit a component-like ask or raw layout, but include common props such as key/bind, label, options, children, rows/columns, or content so the client can infer a usable fallback
+- When the workflow is complete, show a summary (use show type "markdown" or "table") and omit "ask"
+- If the user responds with free text instead of using controls, parse their text and adapt accordingly
+- ALWAYS preserve previously collected state values`;
+
 // ─── Endpoint normalization ───
 // Handles various endpoint formats:
 // - No endpoint → default OpenAI
@@ -190,6 +284,9 @@ export interface OpenAIAdapterConfig {
   systemPromptSuffix?: string;
   /** Override the default system prompt entirely (pack prompts and suffix are still appended) */
   systemPromptOverride?: string;
+  /** Use intent-based mode: LLM outputs semantic intents, client resolves to UI.
+   *  Reduces input tokens ~40-50% and output tokens ~60%. Default: false. */
+  useIntents?: boolean;
 }
 
 export class OpenAIAdapter implements LLMAdapter {
@@ -204,14 +301,25 @@ export class OpenAIAdapter implements LLMAdapter {
     currentState: StateStore,
     conversationHistory: LLMMessage[]
   ): Promise<GenerateUIResult> {
+    // Start fresh decision log for this request
+    resetDecisionLog();
+
     // Resolve knowledge skills from packs based on the user's prompt
     // Returns only newly-fetched skills (not previously cached ones)
     const newSkills = await resolvePackSkills(prompt);
+    if (newSkills) {
+      logDecision('adapter', `Fetched domain knowledge from pack skills and injected ${newSkills.length} chars of context into this request`);
+    }
 
     const packContext = getPackSystemPrompts();
-    const basePrompt = this.config.systemPromptOverride || ADAPTIVE_UI_SYSTEM_PROMPT;
+    const useIntents = this.config.useIntents ?? false;
+    const basePrompt = this.config.systemPromptOverride
+      || (useIntents ? INTENT_SYSTEM_PROMPT : ADAPTIVE_UI_SYSTEM_PROMPT);
+    const compactPrompt = useIntents ? INTENT_COMPACT_PROMPT : COMPACT_PROMPT;
+    const intentTypes = useIntents ? getIntentResolverPrompt() : '';
     const systemPrompt = basePrompt +
-      '\n\n' + COMPACT_PROMPT +
+      '\n\n' + compactPrompt +
+      (intentTypes || '') +
       (packContext ? '\n\n' + packContext : '') +
       (this.config.systemPromptSuffix ? '\n\n' + this.config.systemPromptSuffix : '');
 
@@ -228,7 +336,9 @@ export class OpenAIAdapter implements LLMAdapter {
 
     messages.push({
       role: 'user',
-      content: `Current state: ${JSON.stringify(currentState)}\n\nUser request: ${prompt}`,
+      content: `Current state: ${JSON.stringify(
+        Object.fromEntries(Object.entries(currentState).filter(([k]) => !k.startsWith('__')))
+      )}\n\nUser request: ${prompt}`,
     });
 
     const { url: endpoint, isAzure } = normalizeEndpoint(this.config.endpoint, this.config.model);
@@ -246,7 +356,7 @@ export class OpenAIAdapter implements LLMAdapter {
     const body: Record<string, unknown> = {
       model: this.config.model ?? 'gpt-4o',
       messages,
-      max_completion_tokens: this.config.maxTokens ?? 4096,
+      max_completion_tokens: this.config.maxTokens ?? 16384,
       response_format: { type: 'json_object' },
     };
 
@@ -277,17 +387,21 @@ export class OpenAIAdapter implements LLMAdapter {
     const data = await response.json();
     const choice = data.choices?.[0];
     const content = choice?.message?.content;
+    const finishReason = choice?.finish_reason ?? 'unknown';
 
     if (!content) {
       // Provide more diagnostic info about why content is empty
-      const reason = choice?.finish_reason ?? 'unknown';
       const refusal = choice?.message?.refusal;
       const filterResult = data.choices?.[0]?.content_filter_results;
-      let detail = `finish_reason=${reason}`;
+      let detail = `finish_reason=${finishReason}`;
       if (refusal) detail += `, refusal: ${refusal}`;
       if (filterResult) detail += `, content_filter: ${JSON.stringify(filterResult)}`;
       if (!data.choices?.length) detail = `no choices in response (model: ${data.model ?? 'unknown'})`;
       throw new Error(`Empty response from LLM (${detail})`);
+    }
+
+    if (finishReason === 'length') {
+      logDecision('adapter', 'Response was truncated (finish_reason=length) — output token limit reached. Will attempt to salvage partial JSON.');
     }
 
     const usage: TokenUsage = {
@@ -322,26 +436,63 @@ export class OpenAIAdapter implements LLMAdapter {
       let fixedStr = jsonStr;
 
       // Remove backticks that the LLM may have embedded in string values
-      // e.g. "diagram": "` mermaid\nblock-beta..." → "diagram": " mermaid\nblock-beta..."
       fixedStr = fixedStr.replace(/`/g, '');
 
       try {
         parsed = JSON.parse(fixedStr);
       } catch {
-        // If JSON parse still fails, wrap the raw text as a markdown spec
-        console.warn('[AdaptiveUI] LLM returned non-JSON response, wrapping as markdown');
-        parsed = {
-          agentMessage: content.slice(0, 200),
-          layout: { type: 'markdown', content },
-        };
+        // If truncated (finish_reason=length), try to repair by closing braces
+        if (finishReason === 'length') {
+          const repaired = repairTruncatedJson(fixedStr);
+          if (repaired) {
+            logDecision('adapter', 'Repaired truncated JSON by closing open braces/brackets');
+            parsed = repaired;
+          } else {
+            logDecision('adapter', 'Could not repair truncated JSON — showing raw text as markdown');
+            parsed = {
+              agentMessage: 'Response was truncated. Try simplifying the conversation or resetting.',
+              layout: { type: 'markdown', content: content.slice(0, 2000) + '\n\n*[truncated]*' },
+            };
+          }
+        } else {
+          // If JSON parse still fails, wrap the raw text as a markdown spec
+          console.warn('[AdaptiveUI] LLM returned non-JSON response, wrapping as markdown');
+          logDecision('adapter', 'LLM returned non-JSON text — wrapping the entire response as a markdown block so it still renders');
+          parsed = {
+            agentMessage: content.slice(0, 200),
+            layout: { type: 'markdown', content },
+          };
+        }
       }
     }
 
     trackEnd(reqId);
 
+    const expanded = expandCompact(parsed);
+    if (JSON.stringify(expanded) !== JSON.stringify(parsed)) {
+      logDecision('adapter', 'LLM used compact shorthand (e.g. "t" for type, "c" for children) — expanded to full property names');
+    }
+
+    // If intent mode is active (or the response looks like an intent), resolve it
+    let spec: AdaptiveUISpec;
+    if (useIntents && isAgentIntent(expanded as Record<string, unknown>)) {
+      logDecision('adapter', 'LLM output looks like an intent (has "message" field, no "agentMessage") — routing through intent resolver to build the UI');
+      spec = resolveIntent(expanded as any);
+    } else {
+      logDecision('adapter', useIntents
+        ? 'Intent mode is on, but LLM returned a full AdaptiveUISpec instead of an intent — using it as-is'
+        : 'Adaptive mode — LLM returned a full UI spec, rendering directly without intent resolution');
+      spec = expanded as AdaptiveUISpec;
+    }
+
+    logDecision('adapter', 'Sanitized the spec (blocked unsafe URLs, stripped script injection vectors)');
+
     return {
-      spec: sanitizeSpec(expandCompact(parsed)) as AdaptiveUISpec,
+      spec: sanitizeSpec(spec) as AdaptiveUISpec,
       usage,
+      rawResponse: content,
+      rawRequest: JSON.stringify(messages, null, 2),
+      decisionLog: getDecisionLog(),
     };
   }
 }
