@@ -8,6 +8,7 @@ import './framework/css/adaptive.css';
 // ─── Register apps ───
 // Import app modules — they self-register via registerApp()
 import './demo/BasicApp';
+import './demo/TravelApp';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   React.createElement(React.StrictMode, null,
