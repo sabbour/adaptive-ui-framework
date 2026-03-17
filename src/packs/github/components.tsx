@@ -7,15 +7,28 @@ import { SearchableDropdown } from '../../framework/components/builtins';
 import { getArtifacts, subscribeArtifacts } from '../../framework/artifacts';
 import { createPullRequest } from '../../framework/components/FilesPanel';
 import {
-  getStoredToken, getStoredClientId,
+  getStoredToken, getStoredClientId, getStoredUser,
+  getStoredOrg, storeOrg, getStoredRepo, storeRepo,
   requestDeviceCode, pollForToken,
 } from './auth';
 
 // ─── Helpers ───
 
 function useGitHubToken(): string | undefined {
-  const { state } = useAdaptive();
-  return (state.__githubToken as string) || undefined;
+  const { state, dispatch } = useAdaptive();
+  const stateToken = (state.__githubToken as string) || undefined;
+
+  // Fall back to localStorage if state doesn't have the token yet
+  useEffect(() => {
+    if (!stateToken) {
+      const stored = getStoredToken();
+      if (stored) {
+        dispatch({ type: 'SET', key: '__githubToken', value: stored });
+      }
+    }
+  }, [stateToken, dispatch]);
+
+  return stateToken || getStoredToken() || undefined;
 }
 
 function LoadingSpinner({ label }: { label: string }) {
@@ -609,6 +622,9 @@ export function GitHubPicker({ node }: AdaptiveComponentProps<GitHubPickerNode>)
         if (node.labelBind && selected) {
           dispatch({ type: 'SET', key: node.labelBind, value: selected.label });
         }
+        // Persist org/repo selections across sessions
+        if (node.bind === 'githubOrg') storeOrg(val);
+        if (node.bind === 'githubRepo') storeRepo(val);
       },
       placeholder: `\u2014 Select (${options.length} available) \u2014`,
     })
@@ -625,6 +641,10 @@ interface GitHubCreatePRNode extends AdaptiveNodeBase {
   title?: string;
   /** Base branch (default: "main") */
   baseBranch?: string;
+  /** Owner (org or user) — falls back to state.githubOrg or __githubUser */
+  owner?: string;
+  /** Repository name — falls back to state.githubRepo */
+  repo?: string;
 }
 
 export function GitHubCreatePR({ node }: AdaptiveComponentProps<GitHubCreatePRNode>) {
@@ -636,8 +656,10 @@ export function GitHubCreatePR({ node }: AdaptiveComponentProps<GitHubCreatePRNo
   const [done, setDone] = useState(false);
   const [prUrl, setPrUrl] = useState<string | null>(null);
 
-  const owner = (state.githubOrg as string) || (state.__githubUser as string) || '';
-  const repo = (state.githubRepo as string) || '';
+  // Resolve owner/repo from: node props > state > localStorage > __githubUser
+  const owner = node.owner || (state.githubOrg as string) || getStoredOrg()
+    || (state.__githubUser as string) || getStoredUser() || '';
+  const repo = node.repo || (state.githubRepo as string) || getStoredRepo() || '';
   const baseBranch = node.baseBranch || 'main';
   const prTitle = node.title || 'Add generated infrastructure files';
 

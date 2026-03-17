@@ -63,13 +63,13 @@ COMPONENTS (use in "ask" as { type: "component", component: "name", props: {} } 
     Displays a rich repo card with name, description, language, stars, forks, and issue count.
     The repo prop supports {{state.key}} interpolation.
 
-- "githubCreatePR": { title?, baseBranch? }
+- "githubCreatePR": { title?, baseBranch?, owner?, repo? }
     Creates a pull request with all generated code files (artifacts).
     Shows the list of files to be committed, lets the user confirm, creates a new branch,
     commits all files, and opens the PR. Auto-opens the PR URL in a new tab.
-    Requires __githubToken and githubOrg/githubRepo in state.
+    Reads owner/repo from props first, then from state (githubOrg/githubRepo), then from __githubUser.
     Use this component when the user wants to commit generated files to their repository.
-    Example: { type: "githubCreatePR", title: "Add blog infrastructure", baseBranch: "main" }
+    Example: { type: "githubCreatePR", title: "Add blog infrastructure", baseBranch: "main", owner: "sabbour", repo: "my-blog" }
 
 When the user mentions a GitHub repo or workflow:
 1. If __githubToken is not set, show githubLogin component first

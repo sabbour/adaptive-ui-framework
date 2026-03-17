@@ -22,6 +22,8 @@ const STORAGE_TOKEN = 'adaptive-ui-github-token';
 const STORAGE_USER = 'adaptive-ui-github-user';
 const STORAGE_CLIENT_ID = 'adaptive-ui-github-client-id';
 const STORAGE_CORS_PROXY = 'adaptive-ui-github-cors-proxy';
+const STORAGE_ORG = 'adaptive-ui-github-org';
+const STORAGE_REPO = 'adaptive-ui-github-repo';
 
 let cachedToken: string | null = null;
 let cachedUser: string | null = null;
@@ -72,6 +74,30 @@ export function storeCorsProxy(proxy: string): void {
   try {
     if (proxy) localStorage.setItem(STORAGE_CORS_PROXY, proxy);
     else localStorage.removeItem(STORAGE_CORS_PROXY);
+  } catch {}
+}
+
+// ─── Org/Repo persistence (survives across sessions) ───
+
+export function getStoredOrg(): string {
+  try { return localStorage.getItem(STORAGE_ORG) || ''; } catch { return ''; }
+}
+
+export function storeOrg(org: string): void {
+  try {
+    if (org) localStorage.setItem(STORAGE_ORG, org);
+    else localStorage.removeItem(STORAGE_ORG);
+  } catch {}
+}
+
+export function getStoredRepo(): string {
+  try { return localStorage.getItem(STORAGE_REPO) || ''; } catch { return ''; }
+}
+
+export function storeRepo(repo: string): void {
+  try {
+    if (repo) localStorage.setItem(STORAGE_REPO, repo);
+    else localStorage.removeItem(STORAGE_REPO);
   } catch {}
 }
 
