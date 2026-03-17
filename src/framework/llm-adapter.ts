@@ -511,11 +511,20 @@ export class OpenAIAdapter implements LLMAdapter {
       // Try to fix common LLM JSON issues before giving up
       let fixedStr = jsonStr;
 
+      // Fix unescaped newlines inside JSON string values.
+      // LLMs often emit raw line breaks inside "code":"..." fields
+      // (e.g. Bicep templates) instead of \\n escapes.
+      fixedStr = fixedStr.replace(
+        /"(?:[^"\\]|\\.)*"/g,
+        (match) => match.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t')
+      );
+
       // Remove backticks that the LLM may have embedded in string values
       fixedStr = fixedStr.replace(/`/g, '');
 
       try {
         parsed = JSON.parse(fixedStr);
+        logDecision('adapter', 'Repaired LLM JSON by escaping raw newlines inside string values');
       } catch {
         // If truncated (finish_reason=length), try to repair by closing braces
         if (finishReason === 'length') {

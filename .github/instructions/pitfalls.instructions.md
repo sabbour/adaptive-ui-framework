@@ -48,3 +48,10 @@ description: "Common pitfalls and conventions learned from iterative development
 - `max_completion_tokens` defaults to 16384. Diagrams can consume 300-500 output tokens per response.
 - Only include diagrams when the architecture changes — not on every step.
 - History is auto-compacted when prompt tokens exceed 80k.
+
+## System Prompt Design
+
+- **Base prompts must be cloud-agnostic.** Never hardcode provider-specific services (Key Vault, Log Analytics, `az deployment group create`, VNet, managed identity) in the architect or framework system prompts. Use generic terms (vault service, centralized logging, workload identity, virtual network, CLI deployment).
+- **Provider-specific guidance belongs in pack system prompts.** Azure-specific IaC (Bicep), CI/CD (Azure Pipelines, Flux on AKS), diagram icons, and deployment commands go in the Azure pack's `AZURE_SYSTEM_PROMPT`. Same principle for any future AWS/GCP packs.
+- **Always include deployment pipelines.** An architecture without a CI/CD pipeline or GitOps workflow is incomplete. The architect prompt must mandate pipeline generation alongside IaC — never leave deployment as an exercise for the reader.
+- **Think like a real architect.** Discovery should cover delivery concerns (Git workflow, environment strategy, approval gates) not just infrastructure. Deliverables include pipeline YAML, Dockerfiles, environment configs, and rollback procedures — not just IaC files.

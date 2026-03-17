@@ -72,6 +72,7 @@ function summarizeSpec(spec: AdaptiveUISpec): string {
 }
 
 function summarizeUserSelections(currentState: StateStore): string | null {
+  const SENSITIVE_RE = /password|secret|token|apiKey|credential|connectionString/i;
   const displayLabels = new Map<string, string>();
 
   for (const [key, value] of Object.entries(currentState)) {
@@ -86,6 +87,7 @@ function summarizeUserSelections(currentState: StateStore): string | null {
   const parts = Object.entries(currentState)
     .filter(([key, value]) => value !== '' && value !== null && value !== undefined)
     .filter(([key]) => !key.startsWith('__'))
+    .filter(([key]) => !SENSITIVE_RE.test(key))
     .filter(([key]) => !/(Name|Label|Title|DisplayName)$/.test(key))
     .map(([key, value]) => {
       const displayValue = displayLabels.get(key)
