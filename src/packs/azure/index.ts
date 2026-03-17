@@ -86,7 +86,40 @@ When the user mentions deploying an Azure resource:
 1. If __azureToken is not set, show azureLogin component first
 2. Use azurePicker for resource group and region selection (NEVER hardcode these in a select)
 3. Use azureResourceForm for resource-specific configuration
-4. Show a summary and confirm`;
+4. Show a summary and confirm
+
+AZURE INFRASTRUCTURE AS CODE:
+When generating IaC for Azure, use Bicep (.bicep) unless the user explicitly requests Terraform.
+
+Bicep file structure:
+1. main.bicep — Orchestrator that references modules, defines parameters
+2. modules/*.bicep — One module per logical group (networking, compute, data, security, monitoring)
+3. parameters.json — Default parameter values for the target environment
+4. deploy.sh — CLI deployment script (az deployment group create)
+
+Bicep best practices:
+- Use \`param\` with types and defaults for all configurable values (region, SKU, app name)
+- Use \`module\` keyword to compose modules from the main file
+- Tag all resources with environment, project, and managed-by
+- Use managed identity instead of connection strings where possible
+- Configure diagnostic settings to send logs to Log Analytics
+- Use \`@secure()\` decorator for secrets, reference Key Vault where possible
+- Include \`output\` for important values (endpoints, resource IDs, connection strings)
+
+DO NOT call ARM APIs directly to create resources. Always generate IaC files instead.
+The only acceptable API calls are read-only queries (azure_arm_get tool) to check existing infrastructure.
+
+AZURE CI/CD:
+- If the user prefers Azure DevOps, generate azure-pipelines.yml instead of GitHub Actions
+- For AKS workloads, prefer GitOps with Flux v2 (Azure supports Flux as a first-party AKS extension)
+- Use Azure federated credentials (OIDC) for pipeline-to-Azure authentication — no stored secrets
+
+AZURE ARCHITECTURE DIAGRAM ICONS:
+When generating diagrams, prefix node labels with %%icon:ICON_NAME%% using these icons:
+azure/aks, azure/vm, azure/vmss, azure/container-instances, azure/acr, azure/sql, azure/cosmos-db, azure/postgresql, azure/mysql, azure/redis, azure/vnet, azure/load-balancer, azure/app-gateway, azure/front-door, azure/dns, azure/firewall, azure/nsg, azure/app-service, azure/function-app, azure/storage, azure/key-vault, azure/monitor, azure/log-analytics, azure/cognitive-services, azure/event-grid, azure/api-management, azure/subscription, azure/resource-group
+
+Working diagram example:
+"flowchart TD\\n  User([\\"User\\"])\\n  subgraph networking[\\"Networking\\"]\\n    DNS[\\"%%icon:azure/dns%%DNS\\"]\\n    FD[\\"%%icon:azure/front-door%%Front Door\\"]\\n  end\\n  subgraph compute[\\"Compute\\"]\\n    App[\\"%%icon:azure/app-service%%App Service\\"]\\n  end\\n  subgraph data[\\"Data\\"]\\n    SQL[\\"%%icon:azure/sql%%SQL\\"]\\n    Redis[\\"%%icon:azure/redis%%Redis\\"]\\n  end\\n  User --> DNS --> FD --> App\\n  App --> SQL\\n  App --> Redis"`;
 
 export function createAzurePack(): ComponentPack {
   return {
