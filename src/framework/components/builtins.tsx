@@ -166,8 +166,8 @@ function ButtonComponent({ node }: AdaptiveComponentProps<ButtonNode>) {
   };
   return React.createElement('button', {
     style: {
-      padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontSize: '14px',
-      fontWeight: 500, transition: 'opacity 0.2s',
+      padding: '10px 20px', borderRadius: '6px', cursor: 'pointer', fontSize: '14px',
+      fontWeight: 500, transition: 'opacity 0.2s', marginTop: '4px',
       ...variantStyles[node.variant ?? 'primary'],
       ...node.style,
     } as React.CSSProperties,
@@ -250,7 +250,7 @@ function ImageComponent({ node }: AdaptiveComponentProps<ImageNode>) {
 // ─── Container ───
 function ContainerComponent({ node }: AdaptiveComponentProps<ContainerNode>) {
   return React.createElement('div', {
-    style: node.style as React.CSSProperties,
+    style: { display: 'flex', flexDirection: 'column', gap: '4px', ...node.style } as React.CSSProperties,
     className: node.className,
   }, ...renderChildren(node.children));
 }
@@ -618,7 +618,7 @@ function RadioGroupComponent({ node }: AdaptiveComponentProps<RadioGroupNode>) {
               boxSizing: 'border-box',
             } as React.CSSProperties,
           }),
-          React.createElement('div', null,
+          React.createElement('div', { style: { flex: 1, minWidth: 0 } },
             React.createElement('div', { style: { fontSize: '14px', fontWeight: 500 } }, opt.label),
             opt.description && React.createElement('div', {
               style: { fontSize: '12px', color: '#6b7280', marginTop: '2px' },
@@ -686,7 +686,7 @@ function MultiSelectComponent({ node }: AdaptiveComponentProps<MultiSelectNode>)
               boxSizing: 'border-box',
             } as React.CSSProperties,
           }, isSelected ? '✓' : ''),
-          React.createElement('div', null,
+          React.createElement('div', { style: { flex: 1, minWidth: 0 } },
             React.createElement('div', { style: { fontSize: '14px', fontWeight: 500 } }, opt.label),
             opt.description && React.createElement('div', {
               style: { fontSize: '12px', color: '#6b7280', marginTop: '2px' },
