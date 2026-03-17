@@ -1,5 +1,6 @@
 import type { ComponentPack } from '../../framework/registry';
-import { GitHubLogin, GitHubQuery, GitHubRepoInfo } from './components';
+import type { AdaptiveNode } from '../../framework/schema';
+import { GitHubLogin, GitHubQuery, GitHubRepoInfo, GitHubPicker } from './components';
 import { GitHubSettings } from './GitHubSettings';
 import { getStoredToken } from './auth';
 import { trackedFetch } from '../../framework/request-tracker';
@@ -64,14 +65,26 @@ COMPONENTS (use in "ask" as { type: "component", component: "name", props: {} } 
     Do NOT use githubQuery for read-only data fetching — use the github_api_get tool instead.
     Write operations show a confirmation dialog. Results are stored in state under the bind key.
 
+- "githubPicker": { api, bind, label?, labelKey?, valueKey?, descriptionKey?, labelBind?, loadingLabel?, includePersonal? }
+    Dropdown that fetches options from a GitHub API endpoint at render time (client-side).
+    Use this for ANY GitHub list that should come from the API (orgs, repos, branches, etc.).
+    DO NOT use github_api_get tool for data that just needs to be shown in a picker — use githubPicker instead.
+    Auto-paginates up to 300 items.
+    
+    Examples:
+    - Orgs (with personal account): { type: "githubPicker", api: "/user/orgs", bind: "githubOrg", label: "GitHub account", labelKey: "login", valueKey: "login", includePersonal: true, loadingLabel: "Loading organizations..." }
+    - Repos for an org: { type: "githubPicker", api: "/orgs/{{state.githubOrg}}/repos?sort=updated", bind: "githubRepo", label: "Repository", labelKey: "name", valueKey: "name", descriptionKey: "description", loadingLabel: "Loading repositories..." }
+    - Repos for personal account: { type: "githubPicker", api: "/user/repos?sort=updated&type=owner", bind: "githubRepo", label: "Repository", labelKey: "name", valueKey: "name", descriptionKey: "description" }
+    - Branches: { type: "githubPicker", api: "/repos/{{state.githubOrg}}/{{state.githubRepo}}/branches", bind: "branch", label: "Branch", labelKey: "name", valueKey: "name" }
+
 - "githubRepoInfo": { repo: "owner/repo" }
     Displays a rich repo card with name, description, language, stars, forks, and issue count.
     The repo prop supports {{state.key}} interpolation.
 
 When the user mentions a GitHub repo or workflow:
 1. If __githubToken is not set, show githubLogin component first
-2. Use the github_api_get TOOL to read data (repos, issues, PRs, branches) — you'll see the results and can build proper UI
-3. Present results using standard components (select for choices, table for lists, markdown for details)
+2. For PICKING from a list (orgs, repos, branches), use githubPicker component — data is fetched client-side, no tokens wasted
+3. Use the github_api_get TOOL only when the LLM needs to SEE the data to make decisions (e.g., check if a file exists, read workflow config)
 4. For write operations (create issue, comment, etc.), use githubQuery component with confirm`;
 
 export function createGitHubPack(): ComponentPack {
@@ -82,6 +95,7 @@ export function createGitHubPack(): ComponentPack {
       githubLogin: GitHubLogin,
       githubQuery: GitHubQuery,
       githubRepoInfo: GitHubRepoInfo,
+      githubPicker: GitHubPicker,
     },
     systemPrompt: GITHUB_SYSTEM_PROMPT,
     settingsComponent: GitHubSettings,
@@ -133,8 +147,28 @@ export function createGitHubPack(): ComponentPack {
               allData = firstData;
             }
 
+            // Slim down array responses to essential fields (GitHub API returns ~5KB per item)
+            if (Array.isArray(allData)) {
+              allData = (allData as any[]).map(item => {
+                // Repos
+                if (item.full_name && item.html_url) {
+                  return { full_name: item.full_name, name: item.name, description: item.description, language: item.language, visibility: item.visibility, default_branch: item.default_branch, updated_at: item.updated_at };
+                }
+                // Orgs
+                if (item.login && item.url && !item.full_name) {
+                  return { login: item.login, description: item.description, avatar_url: item.avatar_url };
+                }
+                // Issues/PRs
+                if (item.number !== undefined && item.title) {
+                  return { number: item.number, title: item.title, state: item.state, user: item.user?.login, labels: item.labels?.map((l: any) => l.name), created_at: item.created_at, html_url: item.html_url };
+                }
+                // Fallback: return as-is
+                return item;
+              });
+            }
+
             const text = JSON.stringify(allData, null, 2);
-            let result = text.length > 12000 ? text.slice(0, 12000) + '\n[truncated]' : text;
+            let result = text.length > 30000 ? text.slice(0, 30000) + '\n[truncated]' : text;
 
             // When listing orgs, remind the LLM to show an org picker before fetching repos
             if (path.match(/^\/user\/orgs\b/i)) {
@@ -148,5 +182,40 @@ export function createGitHubPack(): ComponentPack {
         },
       },
     ],
+    intentResolvers: {
+      'github-orgs': {
+        description: 'Pick a GitHub org or personal account',
+        props: 'key, label?',
+        resolve: (ask) => ({
+          type: 'githubPicker',
+          api: '/user/orgs',
+          bind: (ask.key ?? ask.bind) as string,
+          label: (ask.label as string) ?? 'GitHub account',
+          labelKey: 'login',
+          valueKey: 'login',
+          includePersonal: true,
+          loadingLabel: 'Loading organizations...',
+        } as unknown as AdaptiveNode),
+      },
+      'github-repos': {
+        description: 'Pick a GitHub repository (requires githubOrg in state)',
+        props: 'key, label?, org?',
+        resolve: (ask) => {
+          const org = (ask.org as string) || '{{state.githubOrg}}';
+          // If the selected org matches the user's personal account, use /user/repos
+          // The component will interpolate {{state.githubOrg}} at render time
+          return {
+            type: 'githubPicker',
+            api: `/orgs/${org}/repos?sort=updated`,
+            bind: (ask.key ?? ask.bind) as string,
+            label: (ask.label as string) ?? 'Repository',
+            labelKey: 'name',
+            valueKey: 'name',
+            descriptionKey: 'description',
+            loadingLabel: 'Loading repositories...',
+          } as unknown as AdaptiveNode;
+        },
+      },
+    },
   };
 }

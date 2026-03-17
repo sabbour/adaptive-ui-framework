@@ -3,6 +3,7 @@ import type { AdaptiveComponentProps } from '../../framework/registry';
 import type { AdaptiveNodeBase } from '../../framework/schema';
 import { useAdaptive } from '../../framework/context';
 import { trackedFetch } from '../../framework/request-tracker';
+import { SearchableDropdown } from '../../framework/components/builtins';
 import {
   getStoredToken, getStoredClientId,
   requestDeviceCode, pollForToken,
@@ -469,5 +470,145 @@ export function GitHubRepoInfo({ node }: AdaptiveComponentProps<GitHubRepoInfoNo
       React.createElement('span', null, `\uD83C\uDF74 ${repo.forks_count.toLocaleString()}`),
       repo.open_issues_count > 0 && React.createElement('span', null, `\u26A0 ${repo.open_issues_count} issues`)
     )
+  );
+}
+
+// ═══════════════════════════════════════
+// GitHub Picker (fetch API data → searchable dropdown, client-side)
+// ═══════════════════════════════════════
+
+/** Parse GitHub Link header for next page URL */
+function parseNextLink(header: string | null): string | null {
+  if (!header) return null;
+  const m = header.match(/<([^>]+)>;\s*rel="next"/);
+  return m ? m[1] : null;
+}
+
+interface GitHubPickerNode extends AdaptiveNodeBase {
+  type: 'githubPicker';
+  /** GitHub API path (e.g. "/user/orgs"). Supports {{state.key}} interpolation. */
+  api: string;
+  /** State key to store the selected value */
+  bind: string;
+  /** Optional state key to store the selected label */
+  labelBind?: string;
+  /** Label shown above the dropdown */
+  label?: string;
+  /** Key to use as the option label (default: "name") */
+  labelKey?: string;
+  /** Key to use as the option value (default: "login" for orgs, "name" for repos) */
+  valueKey?: string;
+  /** Optional description key shown below each option label */
+  descriptionKey?: string;
+  /** Loading label */
+  loadingLabel?: string;
+  /** Whether to include a "Personal account" option (for org pickers) */
+  includePersonal?: boolean;
+}
+
+export function GitHubPicker({ node }: AdaptiveComponentProps<GitHubPickerNode>) {
+  const token = useGitHubToken();
+  const { state, dispatch } = useAdaptive();
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [options, setOptions] = useState<Array<{ label: string; value: string; description?: string }>>([]);
+
+  const api = node.api.replace(/\{\{(?:state|st)\.(.+?)\}\}/g, (_m, key) => {
+    const val = state[key];
+    return val != null ? String(val) : '';
+  });
+
+  useEffect(() => {
+    if (!token || !api) return;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        // Fetch with auto-pagination (up to 300 items)
+        const headers = { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json' };
+        const url = api.startsWith('http') ? api : `https://api.github.com${api}`;
+        // Add per_page=100 if not already specified
+        const fetchUrl = url.includes('per_page') ? url : url + (url.includes('?') ? '&' : '?') + 'per_page=100';
+
+        const allItems: any[] = [];
+        let nextUrl: string | null = fetchUrl;
+
+        while (nextUrl && allItems.length < 300) {
+          const res = await trackedFetch(nextUrl, { headers });
+          if (!res.ok) throw new Error(`GitHub API: ${res.status}`);
+          const data = await res.json();
+          if (Array.isArray(data)) {
+            allItems.push(...data);
+          } else {
+            allItems.push(data);
+            break;
+          }
+          nextUrl = parseNextLink(res.headers.get('link'));
+        }
+
+        if (cancelled) return;
+
+        const labelKey = node.labelKey ?? 'name';
+        const valueKey = node.valueKey ?? 'login';
+        const descKey = node.descriptionKey;
+
+        const mapped = allItems.map(item => ({
+          label: String(item[labelKey] ?? item.name ?? item.login ?? ''),
+          value: String(item[valueKey] ?? ''),
+          description: descKey ? String(item[descKey] ?? '') : undefined,
+        })).sort((a, b) => a.label.localeCompare(b.label));
+
+        // Optionally prepend personal account
+        if (node.includePersonal) {
+          const username = state.__githubUser as string;
+          if (username) {
+            mapped.unshift({ label: `${username} (personal)`, value: username, description: undefined });
+          }
+        }
+
+        setOptions(mapped);
+        setLoading(false);
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : 'Failed to fetch');
+          setLoading(false);
+        }
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [token, api]);
+
+  if (!token) {
+    return React.createElement(Banner, { message: 'Connect to GitHub first.', type: 'warning' });
+  }
+
+  if (loading) {
+    return React.createElement(LoadingSpinner, { label: node.loadingLabel ?? 'Loading...' });
+  }
+
+  if (error) {
+    return React.createElement(Banner, { message: error, type: 'error' });
+  }
+
+  return React.createElement('div', { style: { marginBottom: '12px', ...node.style } as React.CSSProperties },
+    node.label && React.createElement('label', {
+      style: { display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' },
+    }, node.label),
+    React.createElement(SearchableDropdown, {
+      options,
+      value: (state[node.bind] as string) ?? '',
+      onChange: (val: string) => {
+        const selected = options.find(o => o.value === val);
+        dispatch({ type: 'SET', key: node.bind, value: val });
+        if (node.labelBind && selected) {
+          dispatch({ type: 'SET', key: node.labelBind, value: selected.label });
+        }
+      },
+      placeholder: `\u2014 Select (${options.length} available) \u2014`,
+    })
   );
 }
