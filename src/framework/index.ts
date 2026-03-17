@@ -96,6 +96,10 @@ export type { ToolDefinition, ToolCall, ToolResult } from './tools';
 export { saveArtifact, removeArtifact, clearArtifacts, getArtifacts, subscribeArtifacts, downloadArtifact } from './artifacts';
 export type { Artifact } from './artifacts';
 
+// Session management
+export { getSessions, subscribeSessions, saveSession, loadSession, deleteSession, generateSessionId } from './session-manager';
+export type { Session } from './session-manager';
+
 // Intent-based UI resolution
 export { resolveIntent, isAgentIntent } from './intent-resolver';
 export type { AgentIntent, AskIntent, ShowIntent } from './intent-schema';
