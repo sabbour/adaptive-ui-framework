@@ -8,6 +8,7 @@ import { ConversationThread } from './components/ConversationThread';
 import { registerBuiltinComponents } from './components/builtins';
 import { getPackSettingsComponents } from './registry';
 import { getActiveRequests, subscribe as subscribeRequests } from './request-tracker';
+import { logDecision } from './decision-log';
 import type { DecisionEntry } from './decision-log';
 
 // Icons
@@ -471,6 +472,7 @@ export function AdaptiveApp({
   const [error, setError] = useState<string | null>(null);
   const [tokenUsage, setTokenUsage] = useState({ promptTokens: 0, completionTokens: 0 });
   const [lastRequestUsage, setLastRequestUsage] = useState({ promptTokens: 0, completionTokens: 0 });
+  const lastPromptTokensRef = useRef(0); // Track actual prompt tokens for compaction trigger
   const [lastRawResponse, setLastRawResponse] = useState<string | null>(null);
   const [lastRawRequest, setLastRawRequest] = useState<string | null>(null);
   const [lastDecisionLog, setLastDecisionLog] = useState<DecisionEntry[]>([]);
@@ -569,19 +571,53 @@ export function AdaptiveApp({
           historyRef.current = historyRef.current.slice(-maxHistory);
         }
 
-        const result = await adapter.generateUI(prompt, currentState, historyRef.current);
+        // ─── Pre-call context compaction ───
+        // Use actual prompt tokens from the previous LLM call to decide when to compact.
+        // Triggers when >100k tokens were used, indicating the context is getting large.
+        // Falls back to char-based estimation for the first call.
+        const COMPACT_THRESHOLD = 100000; // Compact when previous call used >100k prompt tokens
+        const KEEP_RECENT = 6; // Keep last 6 messages verbatim for recency
 
-        // Aggressive compaction after the call when prompt tokens are high
-        const lastPromptTokens = result.usage?.promptTokens ?? 0;
-        if (historyRef.current.length > 6 && lastPromptTokens > 80000) {
-          const keep = 4;
-          const oldEntries = historyRef.current.slice(0, -keep);
-          const summary = oldEntries.map(e => e.content.slice(0, 150)).join('\n');
-          historyRef.current = [
-            { role: 'user', content: `[Conversation summary of ${oldEntries.length} earlier messages]\n${summary}` },
-            ...historyRef.current.slice(-keep),
-          ];
+        const prevPromptTokens = lastPromptTokensRef.current;
+        // Also estimate from chars for first-call safety (~3 chars per token is more accurate)
+        const historyCharCount = historyRef.current.reduce((sum, m) => sum + m.content.length, 0);
+        const estimatedTokens = Math.ceil(historyCharCount / 3);
+        const shouldCompact = (prevPromptTokens > COMPACT_THRESHOLD) ||
+          (prevPromptTokens === 0 && estimatedTokens > COMPACT_THRESHOLD);
+
+        if (historyRef.current.length > KEEP_RECENT && shouldCompact) {
+          const oldEntries = historyRef.current.slice(0, -KEEP_RECENT);
+          const recentEntries = historyRef.current.slice(-KEEP_RECENT);
+
+          try {
+            if (adapter.summarizeHistory) {
+              const summaryText = await adapter.summarizeHistory(oldEntries);
+              if (summaryText.length > 50) {
+                historyRef.current = [
+                  { role: 'user', content: `[Conversation summary — ${oldEntries.length} earlier messages compacted]\n${summaryText}` },
+                  ...recentEntries,
+                ];
+                logDecision('compaction', `Summarized ${oldEntries.length} old messages (prev request: ${prevPromptTokens.toLocaleString()} prompt tokens) into ${summaryText.length} char summary. Kept ${KEEP_RECENT} recent messages.`);
+              }
+            } else {
+              // Adapter doesn't support summarization — basic truncation fallback
+              const summary = oldEntries.map(e => e.content.slice(0, 150)).join('\n');
+              historyRef.current = [
+                { role: 'user', content: `[Conversation summary of ${oldEntries.length} earlier messages]\n${summary}` },
+                ...recentEntries,
+              ];
+            }
+          } catch {
+            // Fallback: simple truncation if summarization fails
+            const summary = oldEntries.map(e => e.content.slice(0, 150)).join('\n');
+            historyRef.current = [
+              { role: 'user', content: `[Conversation summary of ${oldEntries.length} earlier messages]\n${summary}` },
+              ...recentEntries,
+            ];
+          }
         }
+
+        const result = await adapter.generateUI(prompt, currentState, historyRef.current);
 
         // Store raw response for debug panel
         if (result.rawResponse) {
@@ -608,6 +644,7 @@ export function AdaptiveApp({
           completionTokens: result.usage.completionTokens,
         };
         setLastRequestUsage(requestUsage);
+        lastPromptTokensRef.current = requestUsage.promptTokens;
         setTokenUsage(prev => ({
           promptTokens: prev.promptTokens + requestUsage.promptTokens,
           completionTokens: prev.completionTokens + requestUsage.completionTokens,

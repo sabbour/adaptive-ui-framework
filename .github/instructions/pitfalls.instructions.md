@@ -42,6 +42,7 @@ description: "Common pitfalls and conventions learned from iterative development
 - **Tools** = read-only queries the LLM calls during inference (before generating UI). Run in the adapter loop.
 - **Components** = interactive UI the user sees and interacts with. Run in the browser.
 - Write operations (PUT/POST/DELETE) should always be components with user confirmation, never tools.
+- **Pack system prompts must clearly separate tools from components.** When the LLM needs to READ data to present it (list repos, show issues, fetch resource groups), the pack prompt must direct it to use the tool — not a query component. Query components store results in state but the LLM never sees that data; it just renders "N items loaded". The pack prompt should explicitly say "Do NOT use [queryComponent] for read-only data fetching — use the [tool] instead."
 
 ## Token Management
 
