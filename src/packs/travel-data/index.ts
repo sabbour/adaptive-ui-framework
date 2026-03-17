@@ -11,34 +11,19 @@ import { trackedFetch } from '../../framework/request-tracker';
 const TRAVEL_DATA_PROMPT = `
 TRAVEL DATA PACK:
 
-You have access to real-time travel data tools. Use them to give accurate, data-backed advice.
+Real-time travel data tools. Use for accurate, data-backed advice.
 
-TOOLS (called during inference):
-- get_weather: Get current weather and 3-day forecast for any city.
-  Use when discussing packing, activities, or best time to visit.
-  Example: get_weather({ city: "Paris" })
-  Returns: temperature, conditions, humidity, wind, and 3-day forecast.
+TOOLS:
+- get_weather: Current weather + 3-day forecast for any city. Use for packing/activity advice.
+- get_exchange_rate: Live currency rates. Use for budget/price discussions.
+- get_country_info: Country facts (capital, languages, currency, timezone, driving side). Use when destination is picked.
 
-- get_exchange_rate: Get live currency exchange rates.
-  Use when discussing budget, prices, or cost comparisons.
-  Example: get_exchange_rate({ from: "USD", to: "EUR" })
-  Returns: exchange rate and conversion info.
-
-- get_country_info: Get practical travel info about a country.
-  Use when discussing destinations — languages, currency, timezone, population, region.
-  Example: get_country_info({ country: "Japan" })
-  Returns: capital, languages, currency, timezone, calling code, driving side, etc.
-
-WHEN TO USE TOOLS:
-- ALWAYS check weather when recommending activities or packing lists
-- ALWAYS check exchange rates when discussing budget or prices
-- ALWAYS check country info when the user picks a destination (for currency, language, timezone)
-- Do NOT guess weather, exchange rates, or country facts — use the tools
-
-PRESENTING DATA:
-- Weave tool results naturally into your advice: "The forecast for Day 2 shows rain (14°C), so I'd swap the hike for the covered market tour"
-- Include exchange rate context in budget tables: "Your $150/day budget = ~€138 at today's rate"
-- Mention practical country info: "Japan drives on the left, and tipping is actually considered rude"
+RULES:
+- ALWAYS check weather for activities/packing, exchange rates for budget, country info for new destinations.
+- Never guess weather, rates, or country facts — use the tools.
+- Weave results naturally: "Forecast shows rain (14°C) on Day 2, swap hike for covered market"
+- Include rates in budgets: "$150/day ≈ €138 at today's rate"
+- Mention practical info: "Japan drives on the left, tipping is considered rude"
 `;
 
 /** Slim down weather response to essential fields */

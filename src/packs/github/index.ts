@@ -22,61 +22,32 @@ function parseLinkNext(linkHeader: string | null): string | null {
 const GITHUB_SYSTEM_PROMPT = `
 GITHUB PACK:
 
-You have access to GitHub-specific capabilities. When the user discusses GitHub repos,
-issues, PRs, or workflows, use these features.
+TOOLS (inference-time, LLM sees results):
+- github_api_get: Read-only GitHub API. Use ONLY when you need data to reason about (check files, read configs). NOT for selection lists. Requires sign-in.
 
-TOOLS (called during inference, before generating UI):
-- github_api_get: Read-only GitHub API caller. Use ONLY when you need to SEE the data to make decisions
-  (e.g., check if a file exists, read workflow config, verify repo structure).
-  Do NOT use this tool to list repos, orgs, or branches for the user to pick from — use githubPicker instead.
-  Requires the user to be signed in (githubLogin component must have been shown first).
-  Example: github_api_get({ path: "/repos/owner/repo/contents/.github/workflows" })
-  Example: github_api_get({ path: "/repos/owner/repo/branches" })
+COMPONENTS (use in "ask" as {type:"component",component:"name",props:{}}):
 
-COMPONENTS (use in "ask" as { type: "component", component: "name", props: {} } — NEVER in "show"):
-- "githubLogin": { title?, description? }
-    GitHub sign-in card. Shows a "Sign in with GitHub" button that opens an OAuth Device Flow.
-    On success, sets __githubToken and __githubUser in state.
-    If already signed in, shows a green confirmation with the username and avatar.
-    Use this FIRST whenever GitHub API access is needed and __githubToken is not set.
-    This is a self-managed component — do NOT include a "next" prompt for sign-in steps.
+githubLogin — {title?,description?}
+  Sign-in via OAuth Device Flow. Sets __githubToken + __githubUser. Shows green confirmation if already signed in. Self-managed — omit "next". Show FIRST when GitHub needed.
 
-- "githubQuery": { api, bind, method?, body?, loadingLabel?, showResult?, confirm? }
-    Generic GitHub API caller for WRITE operations (POST, PUT, PATCH, DELETE).
-    Use ONLY for mutations that need user confirmation (create issue, comment, etc.).
-    Do NOT use githubQuery for read-only data fetching — use the github_api_get tool instead.
-    Write operations show a confirmation dialog. Results are stored in state under the bind key.
+githubQuery — {api,bind,method?,body?,loadingLabel?,showResult?,confirm?}
+  GitHub API caller for WRITES (POST/PUT/PATCH/DELETE) with user confirmation. NOT for reads.
 
-- "githubPicker": { api, bind, label?, labelKey?, valueKey?, descriptionKey?, labelBind?, loadingLabel?, includePersonal? }
-    Dropdown that fetches options from a GitHub API endpoint at render time (client-side).
-    Use this for ANY GitHub list that should come from the API (orgs, repos, branches, etc.).
-    DO NOT use github_api_get tool for data that just needs to be shown in a picker — use githubPicker instead.
-    Auto-paginates up to 300 items.
-    
-    Examples:
-    - Orgs (with personal account): { type: "githubPicker", api: "/user/orgs", bind: "githubOrg", label: "GitHub account", labelKey: "login", valueKey: "login", includePersonal: true, loadingLabel: "Loading organizations..." }
-    - Repos for an org: { type: "githubPicker", api: "/orgs/{{state.githubOrg}}/repos?sort=updated", bind: "githubRepo", label: "Repository", labelKey: "name", valueKey: "name", descriptionKey: "description", loadingLabel: "Loading repositories..." }
-    - Repos for personal account: { type: "githubPicker", api: "/user/repos?sort=updated&type=owner", bind: "githubRepo", label: "Repository", labelKey: "name", valueKey: "name", descriptionKey: "description" }
-    - Branches: { type: "githubPicker", api: "/repos/{{state.githubOrg}}/{{state.githubRepo}}/branches", bind: "branch", label: "Branch", labelKey: "name", valueKey: "name" }
+githubPicker — {api,bind,label?,labelKey?,valueKey?,descriptionKey?,labelBind?,loadingLabel?,includePersonal?}
+  Dropdown fetching from GitHub API at render time. Auto-paginates (up to 300). ALWAYS use for orgs/repos/branches — never use github_api_get for selection lists.
+  Examples:
+  - Orgs: {type:"githubPicker", api:"/user/orgs", bind:"githubOrg", label:"GitHub account", labelKey:"login", valueKey:"login", includePersonal:true}
+  - Repos: {type:"githubPicker", api:"/orgs/{{state.githubOrg}}/repos?sort=updated", bind:"githubRepo", label:"Repository", labelKey:"name", valueKey:"name", descriptionKey:"description"}
+  - Personal repos: {type:"githubPicker", api:"/user/repos?sort=updated&type=owner", bind:"githubRepo", label:"Repository", labelKey:"name", valueKey:"name"}
+  - Branches: {type:"githubPicker", api:"/repos/{{state.githubOrg}}/{{state.githubRepo}}/branches", bind:"branch", label:"Branch", labelKey:"name", valueKey:"name"}
 
-- "githubRepoInfo": { repo: "owner/repo" }
-    Displays a rich repo card with name, description, language, stars, forks, and issue count.
-    The repo prop supports {{state.key}} interpolation.
+githubRepoInfo — {repo:"owner/repo"}
+  Rich repo card (name, description, language, stars, forks, issues). Supports {{state.key}} in repo prop.
 
-- "githubCreatePR": { title?, baseBranch?, owner?, repo? }
-    Creates a pull request with all generated code files (artifacts).
-    Shows the list of files to be committed, lets the user confirm, creates a new branch,
-    commits all files, and opens the PR. Auto-opens the PR URL in a new tab.
-    Reads owner/repo from props first, then from state (githubOrg/githubRepo), then from __githubUser.
-    Use this component when the user wants to commit generated files to their repository.
-    Example: { type: "githubCreatePR", title: "Add blog infrastructure", baseBranch: "main", owner: "sabbour", repo: "my-blog" }
+githubCreatePR — {title?,baseBranch?,owner?,repo?}
+  Creates PR with all generated artifacts. Shows file list, confirms, creates branch, commits, opens PR URL. Reads owner/repo from props → state (githubOrg/githubRepo) → __githubUser.
 
-When the user mentions a GitHub repo or workflow:
-1. If __githubToken is not set, show githubLogin component first
-2. For PICKING from a list (orgs, repos, branches), use githubPicker component — data is fetched client-side, no tokens wasted
-3. Use the github_api_get TOOL only when the LLM needs to SEE the data to make decisions (e.g., check if a file exists, read workflow config)
-4. For write operations (create issue, comment, etc.), use githubQuery component with confirm
-5. To create a pull request with generated files, use the githubCreatePR component`;
+Flow: 1) githubLogin if no token → 2) githubPicker for org/repo/branch → 3) github_api_get tool for reads LLM needs → 4) githubQuery for writes → 5) githubCreatePR for committing files`;
 
 export function createGitHubPack(): ComponentPack {
   return {
