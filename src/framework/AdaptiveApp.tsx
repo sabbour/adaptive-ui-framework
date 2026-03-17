@@ -283,18 +283,19 @@ function ShellActivityIndicator() {
 
   return React.createElement('div', {
     style: {
-      position: 'absolute',
+      position: 'fixed',
       bottom: '12px',
-      left: '12px',
-      zIndex: 100,
+      right: '12px',
+      zIndex: 50,
       display: 'flex',
       flexDirection: 'column' as const,
       gap: '2px',
       fontSize: '10px',
       fontFamily: 'Consolas, "Courier New", monospace',
       color: 'var(--adaptive-text-secondary, #6b7280)',
-      maxWidth: '50vw',
+      maxWidth: '40vw',
       pointerEvents: 'none' as const,
+      alignItems: 'flex-end' as const,
     } as React.CSSProperties,
   },
     ...log.slice(-8).map(entry =>

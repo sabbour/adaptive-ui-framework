@@ -49,11 +49,19 @@ Always generate: pipeline YAML or GitOps manifests, Dockerfile if needed, env pr
 ═══ IaC ═══
 Generate as codeBlock components. label = filename (e.g., "main.bicep"). Unique labels — duplicates overwrite. Auto-saved as downloadable files.
 
-Tool choice: Azure→Bicep (preferred)/Terraform, AWS→Terraform/CloudFormation, GCP→Terraform, Multi-cloud→Terraform. Follow user preference.
+Use the IaC tool that fits the user's cloud provider and preferences (the active cloud pack provides guidance). Follow user preference.
 
 Best practices: parameterize values with defaults, modularize (networking/compute/data/security/monitoring), tag resources, workload identity over connection strings, diagnostic settings, vault for secrets, output endpoints/IDs, include deploy script.
 
 Do NOT call cloud APIs to create resources — generate IaC only. Read-only queries are OK.
+
+CRITICAL — DESIGN-TO-CODE COHERENCE:
+Before generating IaC, review the architecture you proposed and the diagram you generated. The IaC MUST match exactly:
+- Every service in the diagram MUST have a corresponding resource in the IaC. If the diagram shows 3 services, the IaC must provision all 3.
+- Resource types must match the design exactly. Do NOT substitute a different service than what was proposed (e.g., don't swap a container platform for a PaaS app service, or swap one database engine for another).
+- Connections shown in the diagram (arrows between services) must be reflected in IaC via networking rules, connection strings, role assignments, or environment variables.
+- If the design included monitoring, secrets, or networking components, generate IaC for those too — not just the compute and data tiers.
+- When generating multiple modules, list the services each module covers so the user can verify completeness.
 
 ═══ DIAGRAM ═══
 Include "diagram" when proposing/changing architecture. Omit on login/selection/confirmation steps.
@@ -225,6 +233,7 @@ export function SolutionArchitectApp() {
 
   // Resizable panel widths
   const [sidebarWidth, setSidebarWidth] = useState(240);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [chatWidth, setChatWidth] = useState(480);
 
   const handleSidebarResize = useCallback((delta: number) => {
@@ -341,7 +350,11 @@ export function SolutionArchitectApp() {
   },
     // Left: Sessions sidebar with files
     React.createElement('div', {
-      style: { width: `${sidebarWidth}px`, flexShrink: 0, height: '100%', overflow: 'hidden' } as React.CSSProperties,
+      style: {
+        width: sidebarCollapsed ? '36px' : `${sidebarWidth}px`,
+        flexShrink: 0, height: '100%', overflow: 'hidden',
+        transition: 'width 0.15s ease',
+      } as React.CSSProperties,
     },
       React.createElement(SessionsSidebar, {
         activeSessionId: sessionId,
@@ -351,11 +364,13 @@ export function SolutionArchitectApp() {
         selectedFileId,
         onSelectFile: setSelectedFileId,
         onCreatePR: handleCreatePR,
+        collapsed: sidebarCollapsed,
+        onToggleCollapse: setSidebarCollapsed,
       })
     ),
 
-    // Resize handle: sidebar ↔ center
-    React.createElement(ResizeHandle, { direction: 'vertical', onResize: handleSidebarResize }),
+    // Resize handle: sidebar ↔ center (hidden when collapsed)
+    !sidebarCollapsed && React.createElement(ResizeHandle, { direction: 'vertical', onResize: handleSidebarResize }),
 
     // Center: File viewer / editor
     React.createElement('div', {

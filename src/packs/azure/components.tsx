@@ -8,6 +8,10 @@ import { azureLogin, getActiveAccount } from './auth';
 import { getAzureIconUrl } from './icon-resolver';
 import { fetchSubscriptions } from './arm-introspection';
 import { SearchableDropdown } from '../../framework/components/builtins';
+
+// Icons
+import iconAzureA from './icons/Other/Azure A.svg?url';
+import iconMicrosoft from './icons/microsoft-logo.svg?url';
 import { trackedFetch } from '../../framework/request-tracker';
 
 // ─── Helpers ───
@@ -231,7 +235,7 @@ export function AzureLogin({ node }: AdaptiveComponentProps<AzureLoginNode>) {
         opacity: loading ? 0.7 : 1,
         display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
       },
-    }, loading ? 'Signing in...' : 'Sign in with Microsoft')
+    }, loading ? 'Signing in...' : React.createElement(React.Fragment, null, React.createElement('img', { src: iconMicrosoft, alt: '', width: 18, height: 18 }), 'Sign in with Microsoft'))
   );
 }
 
@@ -558,7 +562,7 @@ export function AzureQuery({ node }: AdaptiveComponentProps<AzureQueryNode>) {
           border: '1px solid var(--adaptive-border)', background: 'var(--adaptive-surface)',
           fontSize: '12px', cursor: 'pointer',
         },
-      }, 'Retry')
+      }, React.createElement('img', { src: iconAzureA, alt: '', width: 12, height: 12 }), 'Retry')
     );
   }
 
@@ -602,7 +606,7 @@ export function AzureQuery({ node }: AdaptiveComponentProps<AzureQueryNode>) {
             border: 'none', backgroundColor: 'var(--adaptive-primary)', color: '#fff',
             fontSize: '13px', fontWeight: 500,
           },
-        }, `Execute ${method}`),
+        }, React.createElement('img', { src: iconAzureA, alt: '', width: 14, height: 14, style: { filter: 'brightness(0) invert(1)' } }), `Execute ${method}`),
         React.createElement('button', {
           onClick: () => dispatch({ type: 'SET', key: `${node.bind}_cancelled`, value: 'true' }),
           style: {

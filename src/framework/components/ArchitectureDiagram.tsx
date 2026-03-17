@@ -1,5 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import mermaid from 'mermaid';
+import elkLayouts from '@mermaid-js/layout-elk';
+
+// Register ELK layout engine for better node distribution
+mermaid.registerLayoutLoaders(elkLayouts);
 
 // Initialize mermaid with a polished, modern look
 mermaid.initialize({
@@ -17,7 +21,7 @@ mermaid.initialize({
     secondaryBorderColor: '#CBD5E1',
     tertiaryColor: '#FFFFFF',
     // Typography
-    fontSize: '14px',
+    fontSize: '16px',
     fontFamily: '"Segoe UI", "Segoe UI Semibold", "Segoe UI Light", system-ui, -apple-system, sans-serif',
     // Background
     background: '#FFFFFF',
@@ -30,11 +34,12 @@ mermaid.initialize({
   },
   flowchart: {
     htmlLabels: true,
-    curve: 'linear',
-    padding: 20,
-    nodeSpacing: 60,
-    rankSpacing: 70,
-    useMaxWidth: true,
+    curve: 'basis',
+    padding: 24,
+    nodeSpacing: 80,
+    rankSpacing: 90,
+    useMaxWidth: false,
+    defaultRenderer: 'elk',
   },
   securityLevel: 'loose',
 });
@@ -118,7 +123,7 @@ export function ArchitectureDiagram({ diagram, title }: ArchitectureDiagramProps
             const placeholder = `%%icon:${name}%%`;
             if (enrichedSvg.includes(placeholder)) {
               enrichedSvg = enrichedSvg.split(placeholder).join(
-                `<img src="${url}" width="24" height="24" style="vertical-align:middle;margin-right:6px;" />`
+                `<img src="${url}" width="28" height="28" style="vertical-align:middle;margin-right:8px;flex-shrink:0;" />`
               );
             }
           });
@@ -141,23 +146,42 @@ export function ArchitectureDiagram({ diagram, title }: ArchitectureDiagramProps
               rx: 12 !important;
               ry: 12 !important;
               stroke-dasharray: none !important;
-              fill: #F8FAFC !important;
-              stroke: #CBD5E1 !important;
-              stroke-width: 1.5 !important;
+              fill: #F1F5F9 !important;
+              stroke: #94A3B8 !important;
+              stroke-width: 2 !important;
             }
             .architecture-diagram-svg .cluster .nodeLabel,
-            .architecture-diagram-svg .cluster-label .nodeLabel {
-              font-family: 'Segoe UI Semibold', 'Segoe UI', system-ui, sans-serif;
-              font-weight: 600;
-              font-size: 11px;
-              fill: #64748B;
-              text-transform: uppercase;
-              letter-spacing: 0.05em;
-              background: rgba(248, 250, 252, 0.9);
-              padding: 1px 6px;
-              border-radius: 3px;
+            .architecture-diagram-svg .cluster-label .nodeLabel,
+            .architecture-diagram-svg .cluster-label span,
+            .architecture-diagram-svg .cluster-label p,
+            .architecture-diagram-svg .cluster-label div,
+            .architecture-diagram-svg [class*="cluster"] .label span,
+            .architecture-diagram-svg [class*="cluster"] .label div {
+              font-family: 'Segoe UI Semibold', 'Segoe UI', system-ui, sans-serif !important;
+              font-weight: 700 !important;
+              font-size: 14px !important;
+              fill: #1E293B !important;
+              color: #1E293B !important;
+              text-transform: uppercase !important;
+              letter-spacing: 0.08em !important;
+              visibility: visible !important;
+              opacity: 1 !important;
+              background: #E2E8F0 !important;
+              padding: 4px 12px !important;
+              border-radius: 6px !important;
             }
             .architecture-diagram-svg .cluster-label {
+              visibility: visible !important;
+              opacity: 1 !important;
+              overflow: visible !important;
+            }
+            .architecture-diagram-svg .cluster-label foreignObject {
+              overflow: visible !important;
+            }
+            .architecture-diagram-svg .cluster-label foreignObject div {
+              overflow: visible !important;
+              white-space: nowrap !important;
+              width: auto !important;
             }
             .architecture-diagram-svg .edgePath .path {
               stroke-width: 1.5;
@@ -168,7 +192,7 @@ export function ArchitectureDiagram({ diagram, title }: ArchitectureDiagramProps
             }
             .architecture-diagram-svg .edgeLabel {
               font-family: 'Segoe UI Light', 'Segoe UI', system-ui, sans-serif;
-              font-size: 11px;
+              font-size: 13px;
               background-color: #fff;
               padding: 2px 6px;
               border-radius: 4px;
@@ -176,7 +200,7 @@ export function ArchitectureDiagram({ diagram, title }: ArchitectureDiagramProps
             .architecture-diagram-svg .nodeLabel {
               font-family: 'Segoe UI', system-ui, sans-serif;
               font-weight: 500;
-              font-size: 13px;
+              font-size: 22px;
               text-align: center;
             }
             .architecture-diagram-svg .label foreignObject div {
@@ -184,7 +208,11 @@ export function ArchitectureDiagram({ diagram, title }: ArchitectureDiagramProps
               align-items: center;
               justify-content: center;
               text-align: center;
-              line-height: 1.4;
+              line-height: 1.3;
+              gap: 0;
+            }
+            .architecture-diagram-svg .label foreignObject div img {
+              flex-shrink: 0;
             }
             .architecture-diagram-svg .label foreignObject {
               text-align: center;
@@ -197,6 +225,78 @@ export function ArchitectureDiagram({ diagram, title }: ArchitectureDiagramProps
           enrichedSvg = diagramCSS + enrichedSvg;
 
           setSvgContent(enrichedSvg);
+
+          // Auto-fit: calculate scale to fit the diagram in the container
+          requestAnimationFrame(() => {
+            if (!containerRef.current) return;
+            // Force cluster labels visible (ELK renderer sometimes hides them)
+            const clusterLabels = containerRef.current.querySelectorAll('.cluster-label, [class*="cluster"] .label');
+            // Replace broken foreignObject labels with clean SVG text
+            const diagramSvg = containerRef.current.querySelector('svg');
+            if (diagramSvg) {
+              const clusters = diagramSvg.querySelectorAll('g.cluster, g[class*="cluster"]');
+              clusters.forEach((cluster) => {
+                const rect = cluster.querySelector(':scope > rect');
+                const labelEl = cluster.querySelector('.cluster-label');
+                if (!rect || !labelEl) return;
+
+                // Extract text content
+                const text = (labelEl.textContent || '').trim();
+                if (!text) return;
+
+                // Get rect position
+                const rx = parseFloat(rect.getAttribute('x') || '0');
+                const ry = parseFloat(rect.getAttribute('y') || '0');
+                const rw = parseFloat(rect.getAttribute('width') || '0');
+
+                // Hide the original broken label
+                (labelEl as HTMLElement).style.display = 'none';
+
+                // Create a new SVG text element centered at top of rect
+                const svgText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                svgText.setAttribute('x', String(rx + rw / 2));
+                svgText.setAttribute('y', String(ry + 20));
+                svgText.setAttribute('text-anchor', 'middle');
+                svgText.setAttribute('dominant-baseline', 'middle');
+                svgText.setAttribute('font-family', "'Segoe UI Semibold', 'Segoe UI', system-ui, sans-serif");
+                svgText.setAttribute('font-weight', '700');
+                svgText.setAttribute('font-size', '14');
+                svgText.setAttribute('fill', '#1E293B');
+                svgText.setAttribute('letter-spacing', '0.08em');
+                svgText.textContent = text.toUpperCase();
+
+                // Add a background rect behind the text
+                const bbox = { width: text.length * 9 + 24, height: 24 }; // estimate
+                const bgRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                bgRect.setAttribute('x', String(rx + rw / 2 - bbox.width / 2));
+                bgRect.setAttribute('y', String(ry + 20 - bbox.height / 2));
+                bgRect.setAttribute('width', String(bbox.width));
+                bgRect.setAttribute('height', String(bbox.height));
+                bgRect.setAttribute('rx', '6');
+                bgRect.setAttribute('fill', '#E2E8F0');
+                bgRect.setAttribute('stroke', '#CBD5E1');
+                bgRect.setAttribute('stroke-width', '1');
+
+                cluster.appendChild(bgRect);
+                cluster.appendChild(svgText);
+              });
+            }
+            const containerRect = containerRef.current.getBoundingClientRect();
+            const svgEl = containerRef.current.querySelector('svg');
+            if (!svgEl) return;
+            const svgWidth = svgEl.getAttribute('width') ? parseFloat(svgEl.getAttribute('width')!) : svgEl.getBoundingClientRect().width;
+            const svgHeight = svgEl.getAttribute('height') ? parseFloat(svgEl.getAttribute('height')!) : svgEl.getBoundingClientRect().height;
+            if (svgWidth > 0 && svgHeight > 0) {
+              const padding = 48;
+              const availW = containerRect.width - padding;
+              const availH = containerRect.height - padding;
+              const fitScale = Math.min(availW / svgWidth, availH / svgHeight, 1.5);
+              if (fitScale > 0 && fitScale < 10) {
+                setScale(fitScale);
+                setTranslate({ x: 0, y: 0 });
+              }
+            }
+          });
         }
       } catch (e) {
         if (!cancelled) {

@@ -12,6 +12,57 @@ export function downloadAllArtifacts(artifacts: Artifact[]) {
   }
 }
 
+/** Commit artifacts to an existing PR branch */
+export async function updatePullRequestBranch(
+  artifacts: Artifact[],
+  token: string,
+  owner: string,
+  repo: string,
+  branchName: string,
+  commitMessage: string,
+  onProgress?: (msg: string) => void
+): Promise<void> {
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    Accept: 'application/vnd.github+json',
+    'Content-Type': 'application/json',
+  };
+  const api = (path: string, opts?: RequestInit) =>
+    fetch(`https://api.github.com${path}`, { ...opts, headers });
+
+  for (let i = 0; i < artifacts.length; i++) {
+    const artifact = artifacts[i];
+    onProgress?.(`Updating ${artifact.filename} (${i + 1}/${artifacts.length})...`);
+
+    let sha: string | undefined;
+    try {
+      const checkRes = await api(
+        `/repos/${owner}/${repo}/contents/${artifact.filename}?ref=${branchName}`
+      );
+      if (checkRes.ok) {
+        const existing = await checkRes.json();
+        sha = existing.sha;
+      }
+    } catch { /* file doesn't exist yet */ }
+
+    const body: Record<string, unknown> = {
+      message: `${commitMessage}: ${artifact.filename}`,
+      content: btoa(unescape(encodeURIComponent(artifact.content))),
+      branch: branchName,
+    };
+    if (sha) body.sha = sha;
+
+    const res = await api(`/repos/${owner}/${repo}/contents/${artifact.filename}`, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(`Failed to update ${artifact.filename}: ${(err as any)?.message || res.status}`);
+    }
+  }
+}
+
 /** Create a PR with artifacts committed to a new branch */
 export async function createPullRequest(
   artifacts: Artifact[],
@@ -21,7 +72,7 @@ export async function createPullRequest(
   baseBranch: string,
   commitMessage: string,
   onProgress?: (msg: string) => void
-): Promise<string> {
+): Promise<{ url: string; branchName: string }> {
   const headers = {
     Authorization: `Bearer ${token}`,
     Accept: 'application/vnd.github+json',
@@ -99,7 +150,7 @@ export async function createPullRequest(
     throw new Error(`Failed to create PR: ${(err as any)?.message || prRes.status}`);
   }
   const prData = await prRes.json();
-  return prData.html_url;
+  return { url: prData.html_url, branchName };
 }
 
 export function FilesPanel() {
@@ -269,10 +320,10 @@ export function FilesPanel() {
             setCommitting(true);
             setCommitStatus(null);
             try {
-              const prUrl = await createPullRequest(artifacts, token, owner, repo, commitBranch, commitMsg, setCommitStatus);
-              setCommitStatus(`\u2713 PR created: ${prUrl}`);
+              const result = await createPullRequest(artifacts, token, owner, repo, commitBranch, commitMsg, setCommitStatus);
+              setCommitStatus(`\u2713 PR created: ${result.url}`);
               // Open PR in new tab
-              window.open(prUrl, '_blank', 'noopener,noreferrer');
+              window.open(result.url, '_blank', 'noopener,noreferrer');
             } catch (err) {
               setCommitStatus(`Error: ${err instanceof Error ? err.message : String(err)}`);
             } finally {

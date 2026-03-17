@@ -8,7 +8,7 @@ import {
   type Session,
 } from '../session-manager';
 import {
-  getArtifacts, subscribeArtifacts, removeArtifact, downloadArtifact,
+  getArtifacts, subscribeArtifacts, removeArtifact, downloadArtifact, clearArtifacts,
   type Artifact,
 } from '../artifacts';
 import { downloadAllArtifacts } from './FilesPanel';
@@ -16,6 +16,10 @@ import { downloadAllArtifacts } from './FilesPanel';
 // Icons
 import iconArrowDownload from '../icons/fluent/arrow-download.svg?url';
 import iconBranchRequest from '../icons/fluent/branch-request.svg?url';
+import iconDelete from '../icons/fluent/delete.svg?url';
+import iconChatAdd from '../icons/fluent/chat-add.svg?url';
+import iconChevronLeft from '../icons/fluent/chevron-left.svg?url';
+import iconChevronRight from '../icons/fluent/chevron-right.svg?url';
 
 interface SessionsSidebarProps {
   activeSessionId: string | null;
@@ -27,16 +31,28 @@ interface SessionsSidebarProps {
   onSelectFile: (id: string | null) => void;
   /** Called when user clicks the PR button — should send a prompt into the conversation */
   onCreatePR?: () => void;
+  /** Controlled collapsed state. If omitted, uses internal state. */
+  collapsed?: boolean;
+  /** Called when collapsed state changes. */
+  onToggleCollapse?: (collapsed: boolean) => void;
 }
 
 export function SessionsSidebar({
   activeSessionId, onSelectSession, onNewSession,
   onDeleteSession,
   selectedFileId, onSelectFile, onCreatePR,
+  collapsed: controlledCollapsed, onToggleCollapse,
 }: SessionsSidebarProps) {
   const sessions = useSyncExternalStore(subscribeSessions, getSessions);
   const artifacts = useSyncExternalStore(subscribeArtifacts, getArtifacts);
-  const [collapsed, setCollapsed] = useState(false);
+  const [internalCollapsed, setInternalCollapsed] = useState(false);
+  const [confirmClearFiles, setConfirmClearFiles] = useState(false);
+
+  const collapsed = controlledCollapsed !== undefined ? controlledCollapsed : internalCollapsed;
+  const setCollapsed = (val: boolean) => {
+    if (onToggleCollapse) onToggleCollapse(val);
+    else setInternalCollapsed(val);
+  };
 
   if (collapsed) {
     return React.createElement('div', {
@@ -53,21 +69,20 @@ export function SessionsSidebar({
         title: 'Expand sessions',
         style: {
           background: 'none', border: 'none', cursor: 'pointer',
-          fontSize: '14px', color: 'var(--adaptive-text-secondary, #6b7280)',
           padding: '4px',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
         },
-      }, '\u25B6'),
+      }, React.createElement('img', { src: iconChevronRight, alt: 'Expand', width: 14, height: 14, style: { opacity: 0.6 } })),
       React.createElement('button', {
         onClick: onNewSession,
         title: 'New session',
         style: {
           background: 'none', border: '1px solid var(--adaptive-border, #e5e7eb)',
           borderRadius: '4px', cursor: 'pointer',
-          fontSize: '14px', color: 'var(--adaptive-text-secondary, #6b7280)',
           width: '24px', height: '24px',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         },
-      }, '+')
+      }, React.createElement('img', { src: iconChatAdd, alt: 'New session', width: 14, height: 14, style: { opacity: 0.6 } }))
     );
   }
 
@@ -89,7 +104,7 @@ export function SessionsSidebar({
       },
     },
       React.createElement('span', {
-        style: { fontSize: '13px', fontWeight: 600, color: 'var(--adaptive-text, #111827)' },
+        style: { fontSize: '14px', fontWeight: 600, color: 'var(--adaptive-text, #111827)' },
       }, 'Sessions'),
       React.createElement('div', { style: { display: 'flex', gap: '4px' } },
         React.createElement('button', {
@@ -98,20 +113,19 @@ export function SessionsSidebar({
           style: {
             background: 'none', border: '1px solid var(--adaptive-border, #e5e7eb)',
             borderRadius: '4px', cursor: 'pointer',
-            fontSize: '13px', color: 'var(--adaptive-text-secondary, #6b7280)',
             width: '22px', height: '22px',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           },
-        }, '+'),
+        }, React.createElement('img', { src: iconChatAdd, alt: 'New session', width: 13, height: 13, style: { opacity: 0.6 } })),
         React.createElement('button', {
           onClick: () => setCollapsed(true),
           title: 'Collapse',
           style: {
             background: 'none', border: 'none', cursor: 'pointer',
-            fontSize: '12px', color: 'var(--adaptive-text-secondary, #6b7280)',
             padding: '2px',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
           },
-        }, '\u25C0')
+        }, React.createElement('img', { src: iconChevronLeft, alt: 'Collapse', width: 13, height: 13, style: { opacity: 0.6 } }))
       )
     ),
 
@@ -121,7 +135,7 @@ export function SessionsSidebar({
     },
       sessions.length === 0
         ? React.createElement('div', {
-            style: { padding: '16px 10px', fontSize: '13px', color: 'var(--adaptive-text-secondary, #6b7280)', textAlign: 'center' as const },
+            style: { padding: '16px 10px', fontSize: '14px', color: 'var(--adaptive-text-secondary, #6b7280)', textAlign: 'center' as const },
           }, 'No saved sessions')
         : sessions.map((session) =>
             React.createElement(SessionItem, {
@@ -160,7 +174,7 @@ export function SessionsSidebar({
         },
       },
         React.createElement('span', {
-          style: { fontSize: '13px', fontWeight: 600, color: 'var(--adaptive-text, #111827)' },
+          style: { fontSize: '14px', fontWeight: 600, color: 'var(--adaptive-text, #111827)' },
         }, `Files (${artifacts.length})`),
         artifacts.length > 0 && React.createElement('div', { style: { display: 'flex', gap: '4px' } },
           React.createElement('button', {
@@ -182,7 +196,46 @@ export function SessionsSidebar({
               display: 'flex', alignItems: 'center',
               opacity: onCreatePR ? 1 : 0.4,
             },
-          }, React.createElement('img', { src: iconBranchRequest, alt: 'Create PR', width: 14, height: 14, style: { opacity: 0.7 } }))
+          }, React.createElement('img', { src: iconBranchRequest, alt: 'Create PR', width: 14, height: 14, style: { opacity: 0.7 } })),
+          React.createElement('button', {
+            onClick: () => setConfirmClearFiles(true),
+            title: 'Delete all files',
+            style: {
+              background: 'none', border: '1px solid var(--adaptive-border, #e5e7eb)', borderRadius: '4px',
+              color: 'var(--adaptive-text, #111827)', cursor: 'pointer', padding: '2px 4px',
+              display: 'flex', alignItems: 'center',
+            },
+          }, React.createElement('img', { src: iconDelete, alt: 'Delete all', width: 14, height: 14, style: { opacity: 0.7 } }))
+        )
+      ),
+
+      // Bulk delete confirmation
+      confirmClearFiles && React.createElement('div', {
+        style: {
+          padding: '8px 12px',
+          backgroundColor: 'rgba(239, 68, 68, 0.06)',
+          borderBottom: '1px solid var(--adaptive-border, #e5e7eb)',
+        },
+      },
+        React.createElement('div', {
+          style: { fontSize: '14px', color: 'var(--adaptive-text, #111827)', marginBottom: '6px' },
+        }, `Delete all ${artifacts.length} files?`),
+        React.createElement('div', { style: { display: 'flex', gap: '6px' } },
+          React.createElement('button', {
+            onClick: () => { clearArtifacts(); setConfirmClearFiles(false); if (selectedFileId) onSelectFile(null); },
+            style: {
+              background: '#ef4444', border: 'none', borderRadius: '4px',
+              color: '#fff', cursor: 'pointer', fontSize: '14px', padding: '3px 8px',
+              fontWeight: 600,
+            },
+          }, 'Delete All'),
+          React.createElement('button', {
+            onClick: () => setConfirmClearFiles(false),
+            style: {
+              background: 'none', border: '1px solid var(--adaptive-border, #e5e7eb)', borderRadius: '4px',
+              color: 'var(--adaptive-text, #111827)', cursor: 'pointer', fontSize: '14px', padding: '3px 8px',
+            },
+          }, 'Cancel')
         )
       ),
 
@@ -192,7 +245,7 @@ export function SessionsSidebar({
       },
         artifacts.length === 0
           ? React.createElement('div', {
-              style: { padding: '12px 10px', fontSize: '13px', color: 'var(--adaptive-text-secondary, #6b7280)', textAlign: 'center' as const },
+              style: { padding: '12px 10px', fontSize: '14px', color: 'var(--adaptive-text-secondary, #6b7280)', textAlign: 'center' as const },
             }, 'No files yet')
           : artifacts.map((artifact) =>
               React.createElement(FileItem, {
@@ -244,14 +297,14 @@ function SessionItem({
       } as React.CSSProperties,
     },
       React.createElement('div', {
-        style: { fontSize: '12px', color: 'var(--adaptive-text, #111827)', marginBottom: '8px' },
+        style: { fontSize: '14px', color: 'var(--adaptive-text, #111827)', marginBottom: '8px' },
       }, `Delete "${session.name}"? This will remove the session and all its files.`),
       React.createElement('div', { style: { display: 'flex', gap: '6px' } },
         React.createElement('button', {
           onClick: (e: React.MouseEvent) => { e.stopPropagation(); onDelete(); setConfirmingDelete(false); },
           style: {
             background: '#ef4444', border: 'none', borderRadius: '4px',
-            color: '#fff', cursor: 'pointer', fontSize: '11px', padding: '4px 10px',
+            color: '#fff', cursor: 'pointer', fontSize: '14px', padding: '4px 10px',
             fontWeight: 600,
           },
         }, 'Delete'),
@@ -259,7 +312,7 @@ function SessionItem({
           onClick: (e: React.MouseEvent) => { e.stopPropagation(); setConfirmingDelete(false); },
           style: {
             background: 'none', border: '1px solid var(--adaptive-border, #e5e7eb)', borderRadius: '4px',
-            color: 'var(--adaptive-text, #111827)', cursor: 'pointer', fontSize: '11px', padding: '4px 10px',
+            color: 'var(--adaptive-text, #111827)', cursor: 'pointer', fontSize: '14px', padding: '4px 10px',
           },
         }, 'Cancel')
       )
@@ -289,7 +342,7 @@ function SessionItem({
             onClick: (e: React.MouseEvent) => e.stopPropagation(),
             autoFocus: true,
             style: {
-              fontSize: '13px', fontWeight: 500, width: '100%',
+              fontSize: '14px', fontWeight: 500, width: '100%',
               padding: '2px 4px', border: '1px solid var(--adaptive-primary, #2563eb)',
               borderRadius: '4px', outline: 'none',
               background: 'var(--adaptive-surface, #fff)',
@@ -299,13 +352,13 @@ function SessionItem({
         : React.createElement('div', {
             onDoubleClick: (e: React.MouseEvent) => { e.stopPropagation(); setDraft(session.name); setEditing(true); },
             style: {
-              fontSize: '13px', fontWeight: isActive ? 600 : 400,
+              fontSize: '14px', fontWeight: isActive ? 600 : 400,
               color: 'var(--adaptive-text, #111827)',
               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const,
             },
           }, session.name),
       React.createElement('div', {
-        style: { fontSize: '11px', color: 'var(--adaptive-text-secondary, #6b7280)', marginTop: '2px' },
+        style: { fontSize: '14px', color: 'var(--adaptive-text-secondary, #6b7280)', marginTop: '2px' },
       }, `${session.turnCount} turns \u00B7 ${timeAgo}`)
     ),
     React.createElement('button', {
@@ -313,7 +366,7 @@ function SessionItem({
       title: 'Delete session',
       style: {
         background: 'none', border: 'none', cursor: 'pointer',
-        fontSize: '11px', color: 'var(--adaptive-text-secondary, #6b7280)',
+        fontSize: '14px', color: 'var(--adaptive-text-secondary, #6b7280)',
         padding: '0 2px', flexShrink: 0, marginLeft: '4px',
         opacity: 0.5,
       },
@@ -330,9 +383,42 @@ function FileItem({
   onRemove: () => void;
   onDownload: () => void;
 }) {
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const icon = artifact.filename.endsWith('.mmd') ? '\uD83D\uDCC8'
     : artifact.filename.endsWith('.md') ? '\uD83D\uDCC4'
     : '\uD83D\uDCBE';
+
+  if (confirmingDelete) {
+    return React.createElement('div', {
+      style: {
+        padding: '8px 12px',
+        backgroundColor: 'rgba(239, 68, 68, 0.06)',
+        borderLeft: '3px solid #ef4444',
+        borderBottom: '1px solid var(--adaptive-border, #e5e7eb)',
+      } as React.CSSProperties,
+    },
+      React.createElement('div', {
+        style: { fontSize: '14px', color: 'var(--adaptive-text, #111827)', marginBottom: '6px' },
+      }, `Delete "${artifact.filename}"?`),
+      React.createElement('div', { style: { display: 'flex', gap: '6px' } },
+        React.createElement('button', {
+          onClick: (e: React.MouseEvent) => { e.stopPropagation(); onRemove(); setConfirmingDelete(false); },
+          style: {
+            background: '#ef4444', border: 'none', borderRadius: '4px',
+            color: '#fff', cursor: 'pointer', fontSize: '14px', padding: '3px 8px',
+            fontWeight: 600,
+          },
+        }, 'Delete'),
+        React.createElement('button', {
+          onClick: (e: React.MouseEvent) => { e.stopPropagation(); setConfirmingDelete(false); },
+          style: {
+            background: 'none', border: '1px solid var(--adaptive-border, #e5e7eb)', borderRadius: '4px',
+            color: 'var(--adaptive-text, #111827)', cursor: 'pointer', fontSize: '14px', padding: '3px 8px',
+          },
+        }, 'Cancel')
+      )
+    );
+  }
 
   return React.createElement('div', {
     onClick: onSelect,
@@ -342,14 +428,14 @@ function FileItem({
       borderLeft: isSelected ? '3px solid var(--adaptive-primary, #2563eb)' : '3px solid transparent',
       borderBottom: '1px solid var(--adaptive-border, #e5e7eb)',
       display: 'flex', alignItems: 'center', gap: '6px',
-      fontSize: '13px',
+      fontSize: '14px',
     } as React.CSSProperties,
   },
     React.createElement('span', { style: { fontSize: '14px', flexShrink: 0 } }, icon),
     React.createElement('div', {
       style: {
         flex: 1, minWidth: 0,
-        fontFamily: 'monospace', fontSize: '13px',
+        fontFamily: 'monospace', fontSize: '14px',
         color: 'var(--adaptive-text, #111827)',
         overflow: 'hidden', textOverflow: 'ellipsis',
         whiteSpace: 'nowrap' as const,
@@ -363,18 +449,20 @@ function FileItem({
         onClick: onDownload,
         title: 'Download',
         style: {
-          background: 'none', border: 'none', color: 'var(--adaptive-text-secondary, #6b7280)',
-          cursor: 'pointer', fontSize: '11px', padding: '2px', opacity: 0.6,
+          background: 'none', border: 'none',
+          cursor: 'pointer', padding: '2px',
+          display: 'flex', alignItems: 'center',
         },
-      }, '\u2913'),
+      }, React.createElement('img', { src: iconArrowDownload, alt: 'Download', width: 13, height: 13, style: { opacity: 0.5 } })),
       React.createElement('button', {
-        onClick: onRemove,
-        title: 'Remove',
+        onClick: () => setConfirmingDelete(true),
+        title: 'Delete file',
         style: {
-          background: 'none', border: 'none', color: 'var(--adaptive-text-secondary, #6b7280)',
-          cursor: 'pointer', fontSize: '11px', padding: '2px', opacity: 0.6,
+          background: 'none', border: 'none',
+          cursor: 'pointer', padding: '2px',
+          display: 'flex', alignItems: 'center',
         },
-      }, '\u2715')
+      }, React.createElement('img', { src: iconDelete, alt: 'Delete', width: 13, height: 13, style: { opacity: 0.5 } }))
     )
   );
 }

@@ -5,7 +5,11 @@ import { useAdaptive } from '../../framework/context';
 import { trackedFetch } from '../../framework/request-tracker';
 import { SearchableDropdown } from '../../framework/components/builtins';
 import { getArtifacts, subscribeArtifacts } from '../../framework/artifacts';
-import { createPullRequest } from '../../framework/components/FilesPanel';
+import { createPullRequest, updatePullRequestBranch } from '../../framework/components/FilesPanel';
+
+// Icons
+import iconGitHubWhite from './icons/GitHub_Invertocat_White.svg?url';
+import iconGitHubBlack from './icons/GitHub_Invertocat_Black.svg?url';
 import {
   getStoredToken, getStoredClientId, getStoredUser,
   getStoredOrg, storeOrg, getStoredRepo, storeRepo,
@@ -239,7 +243,7 @@ export function GitHubLogin({ node }: AdaptiveComponentProps<GitHubLoginNode>) {
         display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
         marginTop: error ? '8px' : '0',
       },
-    }, 'Sign in with GitHub')
+    }, React.createElement('img', { src: iconGitHubWhite, alt: '', width: 18, height: 18 }), 'Sign in with GitHub')
   );
 }
 
@@ -350,7 +354,7 @@ export function GitHubQuery({ node }: AdaptiveComponentProps<GitHubQueryNode>) {
           border: '1px solid #d1d5db', background: '#fff',
           fontSize: '12px', cursor: 'pointer',
         },
-      }, 'Retry')
+      }, React.createElement('img', { src: iconGitHubBlack, alt: '', width: 12, height: 12 }), 'Retry')
     );
   }
 
@@ -376,7 +380,7 @@ export function GitHubQuery({ node }: AdaptiveComponentProps<GitHubQueryNode>) {
             border: 'none', backgroundColor: '#24292e', color: '#fff',
             fontSize: '13px', fontWeight: 500, cursor: 'pointer',
           },
-        }, `Execute ${method}`),
+        }, React.createElement('img', { src: iconGitHubWhite, alt: '', width: 14, height: 14 }), `Execute ${method}`),
         React.createElement('button', {
           onClick: () => dispatch({ type: 'SET', key: `${node.bind}_cancelled`, value: 'true' }),
           style: {
@@ -648,7 +652,7 @@ interface GitHubCreatePRNode extends AdaptiveNodeBase {
 }
 
 export function GitHubCreatePR({ node }: AdaptiveComponentProps<GitHubCreatePRNode>) {
-  const { state, sendPrompt } = useAdaptive();
+  const { state, dispatch, sendPrompt } = useAdaptive();
   const token = useGitHubToken();
   const artifacts = useSyncExternalStore(subscribeArtifacts, getArtifacts);
   const [status, setStatus] = useState<string | null>(null);
@@ -663,6 +667,14 @@ export function GitHubCreatePR({ node }: AdaptiveComponentProps<GitHubCreatePRNo
   const [detectedBranch, setDetectedBranch] = useState<string | null>(null);
   const baseBranch = node.baseBranch || detectedBranch || 'main';
   const prTitle = node.title || 'Add generated infrastructure files';
+
+  // Check for an existing PR on the same repo
+  const existingBranch = (state.__githubPRBranch as string) || '';
+  const existingPrUrl = (state.__githubPRUrl as string) || '';
+  const existingOwner = (state.__githubPROwner as string) || '';
+  const existingRepo = (state.__githubPRRepo as string) || '';
+  const hasExistingPR = !!(existingBranch && existingPrUrl
+    && existingOwner === owner && existingRepo === repo);
 
   // Auto-detect default branch from repo
   useEffect(() => {
@@ -683,11 +695,32 @@ export function GitHubCreatePR({ node }: AdaptiveComponentProps<GitHubCreatePRNo
     setBusy(true);
     setStatus(null);
     try {
-      const url = await createPullRequest(codeArtifacts, token, owner, repo, baseBranch, prTitle, setStatus);
-      setPrUrl(url);
+      const result = await createPullRequest(codeArtifacts, token, owner, repo, baseBranch, prTitle, setStatus);
+      setPrUrl(result.url);
       setDone(true);
       setStatus(`\u2713 Pull request created successfully`);
-      window.open(url, '_blank', 'noopener,noreferrer');
+      // Store branch info so files can be updated on the same PR later
+      dispatch({ type: 'SET', key: '__githubPRBranch', value: result.branchName });
+      dispatch({ type: 'SET', key: '__githubPRUrl', value: result.url });
+      dispatch({ type: 'SET', key: '__githubPROwner', value: owner });
+      dispatch({ type: 'SET', key: '__githubPRRepo', value: repo });
+      window.open(result.url, '_blank', 'noopener,noreferrer');
+    } catch (err) {
+      setStatus(`Error: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleUpdate = async () => {
+    if (!token || !owner || !repo || !existingBranch || codeArtifacts.length === 0) return;
+    setBusy(true);
+    setStatus(null);
+    try {
+      await updatePullRequestBranch(codeArtifacts, token, owner, repo, existingBranch, 'Update files', setStatus);
+      setPrUrl(existingPrUrl);
+      setDone(true);
+      setStatus('\u2713 Pull request updated successfully');
     } catch (err) {
       setStatus(`Error: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
@@ -708,6 +741,7 @@ export function GitHubCreatePR({ node }: AdaptiveComponentProps<GitHubCreatePRNo
   }
 
   if (done && prUrl) {
+    const isUpdate = prUrl === existingPrUrl;
     return React.createElement('div', {
       style: {
         padding: '16px', borderRadius: '10px',
@@ -716,13 +750,16 @@ export function GitHubCreatePR({ node }: AdaptiveComponentProps<GitHubCreatePRNo
       } as React.CSSProperties,
     },
       React.createElement('div', { style: { fontSize: '14px', fontWeight: 500, color: '#166534', marginBottom: '8px' } },
-        '\u2713 Pull request created'),
+        isUpdate ? '\u2713 Pull request updated' : '\u2713 Pull request created'),
       React.createElement('a', {
         href: prUrl, target: '_blank', rel: 'noopener noreferrer',
         style: { fontSize: '13px', color: '#2563eb', textDecoration: 'none', wordBreak: 'break-all' as const },
       }, prUrl),
       React.createElement('button', {
-        onClick: () => sendPrompt(`Pull request created: ${prUrl}`, null),
+        onClick: () => sendPrompt(
+          isUpdate ? `Pull request updated: ${prUrl}` : `Pull request created: ${prUrl}`,
+          null
+        ),
         style: {
           marginTop: '12px', width: '100%', padding: '10px',
           borderRadius: '8px', border: 'none',
@@ -741,9 +778,22 @@ export function GitHubCreatePR({ node }: AdaptiveComponentProps<GitHubCreatePRNo
     } as React.CSSProperties,
   },
     React.createElement('div', { style: { fontSize: '15px', fontWeight: 600, marginBottom: '8px' } },
-      `Create Pull Request to ${owner}/${repo}`),
+      hasExistingPR
+        ? `Update Pull Request on ${owner}/${repo}`
+        : `Create Pull Request to ${owner}/${repo}`),
+    hasExistingPR && React.createElement('div', {
+      style: { fontSize: '12px', color: '#2563eb', marginBottom: '8px' },
+    },
+      'Existing PR: ',
+      React.createElement('a', {
+        href: existingPrUrl, target: '_blank', rel: 'noopener noreferrer',
+        style: { color: '#2563eb', textDecoration: 'none' },
+      }, existingPrUrl)
+    ),
     React.createElement('div', { style: { fontSize: '13px', color: '#6b7280', marginBottom: '12px' } },
-      `${codeArtifacts.length} file${codeArtifacts.length > 1 ? 's' : ''} will be committed to a new branch based on "${baseBranch}"`),
+      hasExistingPR
+        ? `${codeArtifacts.length} file${codeArtifacts.length > 1 ? 's' : ''} will be committed to branch "${existingBranch}"`
+        : `${codeArtifacts.length} file${codeArtifacts.length > 1 ? 's' : ''} will be committed to a new branch based on "${baseBranch}"`),
     React.createElement('div', {
       style: { fontSize: '12px', color: '#6b7280', marginBottom: '12px', fontFamily: 'monospace' },
     },
@@ -756,8 +806,9 @@ export function GitHubCreatePR({ node }: AdaptiveComponentProps<GitHubCreatePRNo
         color: status.startsWith('Error') ? '#dc2626' : '#1e40af',
       },
     }, status),
-    React.createElement('button', {
-      onClick: handleCreate,
+    // Update existing PR button (primary when PR exists)
+    hasExistingPR && React.createElement('button', {
+      onClick: handleUpdate,
       disabled: busy,
       style: {
         width: '100%', padding: '10px', borderRadius: '8px',
@@ -766,7 +817,23 @@ export function GitHubCreatePR({ node }: AdaptiveComponentProps<GitHubCreatePRNo
         backgroundColor: '#24292e', color: '#fff',
         opacity: busy ? 0.7 : 1,
         display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+        marginBottom: '8px',
       },
-    }, busy ? 'Creating pull request...' : 'Create Pull Request')
+    }, busy ? 'Updating pull request...' : React.createElement(React.Fragment, null, React.createElement('img', { src: iconGitHubWhite, alt: '', width: 18, height: 18 }), 'Update Pull Request')),
+    // Create new PR button (secondary when PR exists, primary otherwise)
+    React.createElement('button', {
+      onClick: handleCreate,
+      disabled: busy,
+      style: {
+        width: '100%', padding: '10px', borderRadius: '8px',
+        border: hasExistingPR ? '1px solid #d1d5db' : 'none',
+        fontSize: '14px', fontWeight: 500,
+        cursor: busy ? 'wait' : 'pointer',
+        backgroundColor: hasExistingPR ? '#fff' : '#24292e',
+        color: hasExistingPR ? '#374151' : '#fff',
+        opacity: busy ? 0.7 : 1,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+      },
+    }, busy && !hasExistingPR ? 'Creating pull request...' : React.createElement(React.Fragment, null, React.createElement('img', { src: hasExistingPR ? iconGitHubBlack : iconGitHubWhite, alt: '', width: 18, height: 18 }), hasExistingPR ? 'Create New Pull Request' : 'Create Pull Request'))
   );
 }

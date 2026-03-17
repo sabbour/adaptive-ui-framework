@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, memo, useSyncExternalStore } from 'react';
+import React, { useCallback, useEffect, useRef, useState, memo, useSyncExternalStore } from 'react';
 import type { ConversationTurn } from '../schema';
 import type { DecisionEntry } from '../decision-log';
 import { AdaptiveRenderer } from '../renderer';
@@ -58,14 +58,23 @@ const PastTurn = memo(function PastTurn({ turn }: { turn: ConversationTurn }) {
           React.createElement(AgentAvatar),
           React.createElement('div', {
             style: {
-              padding: '8px 14px', borderRadius: '4px 16px 16px 16px',
+              padding: '8px 14px', borderRadius: 'var(--adaptive-radius, 8px)',
               backgroundColor: 'var(--adaptive-surface, #fff)',
-              border: '1px solid #e5e7eb', fontSize: '15px', lineHeight: '1.6', maxWidth: '80%',
+              border: '1px solid #e5e7eb', fontSize: '15px', lineHeight: '1.6', flex: 1, minWidth: 0,
             } as React.CSSProperties,
             dangerouslySetInnerHTML: { __html: simpleMarkdown(turn.agentSpec.agentMessage) },
           })
         ),
 
+        // Past turn layout (disabled — shows what was presented)
+        turn.agentSpec.layout && React.createElement('div', {
+          style: {
+            marginLeft: '38px', marginBottom: '8px', minWidth: 0, overflow: 'hidden',
+            opacity: 0.5, pointerEvents: 'none' as const, userSelect: 'none' as const,
+          },
+        },
+          React.createElement(ActiveTurnUI, { node: turn.agentSpec.layout, onSend: () => {} })
+        ),
 
       )
     ),
@@ -111,12 +120,7 @@ function hasChatInput(node: any): boolean {
 
 function ActiveTurn({ turn }: { turn: ConversationTurn }) {
   const { sendPrompt, state, isLoading } = useAdaptive();
-  const [escapeText, setEscapeText] = useState('');
-  const layoutHasChatInput = hasChatInput(turn.agentSpec.layout);
-  const [escapeOpen, setEscapeOpen] = useState(!layoutHasChatInput);
   const [submitted, setSubmitted] = useState(false);
-  const [historyIndex, setHistoryIndex] = useState(-1);
-  const savedDraftRef = useRef('');
 
   // Collapse if submitted locally OR if a prompt was sent via another path (e.g. chatInput)
   const isCollapsed = submitted || !!turn.userMessage || isLoading;
@@ -125,61 +129,6 @@ function ActiveTurn({ turn }: { turn: ConversationTurn }) {
   const handleSend = (text: string) => {
     setSubmitted(true);
     sendPrompt(text);
-  };
-
-  const handleEscapeSend = () => {
-    const text = escapeText.trim();
-    if (!text) return;
-    // Add to shared prompt history
-    if (promptHistory.length === 0 || promptHistory[promptHistory.length - 1] !== text) {
-      promptHistory.push(text);
-      if (promptHistory.length > MAX_PROMPT_HISTORY) promptHistory.shift();
-    }
-    setEscapeText('');
-    setEscapeOpen(false);
-    setHistoryIndex(-1);
-    savedDraftRef.current = '';
-    handleSend(text);
-  };
-
-  const handleEscapeKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleEscapeSend();
-      return;
-    }
-    if (e.key === 'Escape') {
-      setEscapeOpen(false);
-      setEscapeText('');
-      setHistoryIndex(-1);
-      return;
-    }
-    if (e.key === 'ArrowUp') {
-      if (promptHistory.length === 0) return;
-      e.preventDefault();
-      if (historyIndex === -1) {
-        savedDraftRef.current = escapeText;
-      }
-      const newIndex = historyIndex === -1
-        ? promptHistory.length - 1
-        : Math.max(0, historyIndex - 1);
-      setHistoryIndex(newIndex);
-      setEscapeText(promptHistory[newIndex]);
-      return;
-    }
-    if (e.key === 'ArrowDown') {
-      if (historyIndex === -1) return;
-      e.preventDefault();
-      if (historyIndex >= promptHistory.length - 1) {
-        setHistoryIndex(-1);
-        setEscapeText(savedDraftRef.current);
-      } else {
-        const newIndex = historyIndex + 1;
-        setHistoryIndex(newIndex);
-        setEscapeText(promptHistory[newIndex]);
-      }
-      return;
-    }
   };
 
   return React.createElement('div', { style: { marginBottom: '8px' } },
@@ -193,71 +142,23 @@ function ActiveTurn({ turn }: { turn: ConversationTurn }) {
           React.createElement(AgentAvatar),
           React.createElement('div', {
             style: {
-              padding: '8px 14px', borderRadius: '4px 16px 16px 16px',
+              padding: '8px 14px', borderRadius: 'var(--adaptive-radius, 8px)',
               backgroundColor: 'var(--adaptive-surface, #fff)',
-              border: '1px solid #e5e7eb', fontSize: '15px', lineHeight: '1.6', maxWidth: '80%',
+              border: '1px solid #e5e7eb', fontSize: '15px', lineHeight: '1.6', flex: 1, minWidth: 0,
             } as React.CSSProperties,
             dangerouslySetInnerHTML: { __html: simpleMarkdown(turn.agentSpec.agentMessage) },
           })
         ),
 
-        // ── Collapsed (after submit) or interactive UI ──
-        isCollapsed
-          ? null
-          : React.createElement(React.Fragment, null,
-              // Interactive UI
-              React.createElement('div', {
-                style: { marginLeft: '38px', marginBottom: '8px', minWidth: 0, overflow: 'hidden' },
-              },
-                React.createElement(ActiveTurnUI, { node: turn.agentSpec.layout, onSend: handleSend })
-              ),
-
-              // Escape hatch (hidden if layout already has a chatInput)
-              !layoutHasChatInput && React.createElement('div', {
-                style: { marginLeft: '38px', marginTop: '12px' },
-              },
-                !escapeOpen
-                  ? React.createElement('button', {
-                      onClick: () => setEscapeOpen(true),
-                      style: {
-                        background: 'none', border: 'none', cursor: 'pointer',
-                        fontSize: '13px', color: 'var(--adaptive-text-secondary)', padding: '4px 0',
-                        display: 'flex', alignItems: 'center', gap: '4px',
-                      },
-                    },
-                      React.createElement('img', { src: iconCommentEdit, alt: '', width: 14, height: 14, style: { opacity: 0.5 } }),
-                      ' Type instead...'
-                    )
-                  : React.createElement('div', {
-                      style: { display: 'flex', gap: '8px', alignItems: 'flex-end' },
-                    },
-                      React.createElement('textarea', {
-                        value: escapeText,
-                        onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => { setEscapeText(e.target.value); setHistoryIndex(-1); },
-                        onKeyDown: handleEscapeKeyDown,
-                        placeholder: "Can't fill the form? Describe what you need instead...",
-                        rows: 2, autoFocus: true,
-                        style: {
-                          flex: 1, padding: '8px 10px', borderRadius: '8px',
-                          fontSize: '15px', fontFamily: 'inherit', minHeight: '40px',
-                        },
-                      }),
-                      React.createElement('button', {
-                        onClick: handleEscapeSend,
-                        disabled: !escapeText.trim(),
-                        style: {
-                          padding: '8px 14px', borderRadius: 'var(--adaptive-radius)',
-                          border: 'none', fontSize: '15px', fontWeight: 500,
-                          cursor: escapeText.trim() ? 'pointer' : 'default',
-                          backgroundColor: 'var(--adaptive-primary)',
-                          color: '#fff',
-                          opacity: escapeText.trim() ? 1 : 0.5,
-                          flexShrink: 0, alignSelf: 'flex-end',
-                        },
-                      }, 'Send')
-                    )
-              )
-            )
+        // ── Interactive UI (disabled after submit) ──
+        React.createElement('div', {
+          style: {
+            marginLeft: '38px', marginBottom: '8px', minWidth: 0, overflow: 'hidden',
+            ...(isCollapsed ? { opacity: 0.5, pointerEvents: 'none' as const, userSelect: 'none' as const } : {}),
+          },
+        },
+          React.createElement(ActiveTurnUI, { node: turn.agentSpec.layout, onSend: handleSend })
+        )
       )
     ),
 
@@ -298,9 +199,68 @@ interface ConversationThreadProps {
 }
 
 export function ConversationThread({ turns, isLoading, error, tokenUsage, lastRequestUsage, useIntents, onToggleIntentMode, lastRawResponse, lastRawRequest, lastDecisionLog }: ConversationThreadProps) {
-  const { resetSession } = useAdaptive();
+  const { resetSession, sendPrompt } = useAdaptive();
   const bottomRef = useRef<HTMLDivElement>(null);
+  const latestTurnRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [showDebug, setShowDebug] = useState(false);
+  const [isScrolledUp, setIsScrolledUp] = useState(false);
+  const [hasNewMessage, setHasNewMessage] = useState(false);
+
+  // Escape hatch state (lifted from ActiveTurn so it can render in the fixed bottom bar)
+  const [escapeText, setEscapeText] = useState('');
+  const [escapeHistoryIndex, setEscapeHistoryIndex] = useState(-1);
+  const escapeDraftRef = useRef('');
+
+  const latestTurn = turns.length > 0 ? turns[turns.length - 1] : null;
+  const latestIsCollapsed = !latestTurn || !!latestTurn.userMessage || isLoading;
+  const latestHasChatInput = latestTurn ? hasChatInput(latestTurn.agentSpec.layout) : true;
+  const showEscapeHatch = !latestIsCollapsed;
+
+  const handleEscapeSend = () => {
+    const text = escapeText.trim();
+    if (!text) return;
+    if (promptHistory.length === 0 || promptHistory[promptHistory.length - 1] !== text) {
+      promptHistory.push(text);
+      if (promptHistory.length > MAX_PROMPT_HISTORY) promptHistory.shift();
+    }
+    setEscapeText('');
+    setEscapeHistoryIndex(-1);
+    escapeDraftRef.current = '';
+    sendPrompt(text);
+  };
+
+  const handleEscapeKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleEscapeSend();
+      return;
+    }
+    if (e.key === 'ArrowUp') {
+      if (promptHistory.length === 0) return;
+      e.preventDefault();
+      if (escapeHistoryIndex === -1) escapeDraftRef.current = escapeText;
+      const newIndex = escapeHistoryIndex === -1
+        ? promptHistory.length - 1
+        : Math.max(0, escapeHistoryIndex - 1);
+      setEscapeHistoryIndex(newIndex);
+      setEscapeText(promptHistory[newIndex]);
+      return;
+    }
+    if (e.key === 'ArrowDown') {
+      if (escapeHistoryIndex === -1) return;
+      e.preventDefault();
+      const newIndex = escapeHistoryIndex + 1;
+      if (newIndex >= promptHistory.length) {
+        setEscapeHistoryIndex(-1);
+        setEscapeText(escapeDraftRef.current);
+      } else {
+        setEscapeHistoryIndex(newIndex);
+        setEscapeText(promptHistory[newIndex]);
+      }
+      return;
+    }
+  };
   const [requestOpen, setRequestOpen] = useState(false);
   const [responseOpen, setResponseOpen] = useState(true);
   const [decisionsOpen, setDecisionsOpen] = useState(true);
@@ -351,28 +311,71 @@ export function ConversationThread({ turns, isLoading, error, tokenUsage, lastRe
     prevApiRef.current = apiRequests.length;
   }, [apiRequests]);
 
+  const prevTurnCountRef = useRef(turns.length);
   useEffect(() => {
+    const newTurnArrived = turns.length > prevTurnCountRef.current;
+    prevTurnCountRef.current = turns.length;
+
+    if (newTurnArrived) {
+      if (isScrolledUp) {
+        // User is scrolled up — show indicator instead of auto-scrolling
+        setHasNewMessage(true);
+      } else if (latestTurnRef.current) {
+        // At bottom — scroll to the TOP of the new response
+        latestTurnRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    } else if (isLoading) {
+      // User just sent a message / loading — scroll to bottom to show typing indicator
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [turns.length, turns[turns.length - 1]?.id, isLoading, isScrolledUp]);
+
+  // Track scroll position to detect if user scrolled away from bottom
+  useEffect(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    const handleScroll = () => {
+      const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+      setIsScrolledUp(!atBottom);
+      if (atBottom) setHasNewMessage(false);
+    };
+    el.addEventListener('scroll', handleScroll, { passive: true });
+    return () => el.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  const scrollToLatest = useCallback(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [turns.length, turns[turns.length - 1]?.id, turns[turns.length - 1]?.userMessage, isLoading]);
+    setHasNewMessage(false);
+  }, []);
 
   const showReset = turns.length > 1 || (turns.length === 1 && turns[0].userMessage);
 
   return React.createElement('div', {
     style: {
-      display: 'flex', flexDirection: 'column', gap: '0',
-      flex: 1, minHeight: 0, overflowY: 'auto', padding: '24px 0',
+      display: 'flex', flexDirection: 'column',
+      flex: 1, minHeight: 0, overflow: 'hidden',
     } as React.CSSProperties,
   },
+    // ─── Scrollable conversation area ───
+    React.createElement('div', {
+      ref: scrollContainerRef,
+      style: {
+        flex: 1, minHeight: 0, overflowY: 'auto', padding: '24px 0',
+        position: 'relative' as const,
+      } as React.CSSProperties,
+    },
     // Past turns (memoized)
     ...turns.slice(0, -1).map((turn) =>
       React.createElement(PastTurn, { key: turn.id, turn })
     ),
 
     // Active turn
-    turns.length > 0 && React.createElement(ActiveTurn, {
-      key: turns[turns.length - 1].id,
-      turn: turns[turns.length - 1],
-    }),
+    turns.length > 0 && React.createElement('div', { ref: latestTurnRef },
+      React.createElement(ActiveTurn, {
+        key: turns[turns.length - 1].id,
+        turn: turns[turns.length - 1],
+      })
+    ),
 
     // Loading indicator
     isLoading && React.createElement('div', {
@@ -407,32 +410,110 @@ export function ConversationThread({ turns, isLoading, error, tokenUsage, lastRe
         React.createElement('strong', null, 'Error: '),
         error,
         error.includes('finish_reason=length') && React.createElement('div', {
-          style: { marginTop: '6px', fontSize: '12px', color: '#b91c1c' },
+          style: { marginTop: '6px', fontSize: '13px', color: '#b91c1c' },
         }, 'The LLM ran out of output tokens. Try resetting the chat or switch to Intent mode for smaller payloads.')
       )
     ),
 
     // Scroll anchor — placed after conversation content, before toolbar/debug
     React.createElement('div', { ref: bottomRef }),
+    ), // end scrollable conversation area
 
+    // Scroll to latest button (shown when scrolled up)
+    isScrolledUp && React.createElement('div', {
+      style: {
+        display: 'flex', justifyContent: 'center',
+        position: 'relative' as const,
+        marginTop: '-40px',
+        zIndex: 5,
+        pointerEvents: 'none' as const,
+      },
+    },
+      React.createElement('button', {
+        onClick: scrollToLatest,
+        style: {
+          display: 'inline-flex', alignItems: 'center', gap: '6px',
+          padding: '6px 16px',
+          borderRadius: '20px',
+          border: 'none',
+          backgroundColor: hasNewMessage ? 'var(--adaptive-primary, #2563eb)' : 'rgba(0,0,0,0.7)',
+          color: '#fff',
+          fontSize: '13px', fontWeight: 500,
+          cursor: 'pointer',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+          pointerEvents: 'auto' as const,
+          animation: hasNewMessage ? 'adaptive-pulse 1.5s ease-in-out infinite' : 'none',
+        },
+      },
+        hasNewMessage ? 'New message \u2193' : 'Scroll to latest \u2193'
+      )
+    ),
+
+    // ─── Fixed bottom bar ───
+    React.createElement('div', {
+      style: {
+        flexShrink: 0,
+        borderTop: '1px solid var(--adaptive-border, #e5e7eb)',
+        backgroundColor: 'var(--adaptive-bg, #f5f5f5)',
+      } as React.CSSProperties,
+    },
+
+    // Escape hatch textarea (shown when active turn has no chatInput)
+    showEscapeHatch && React.createElement('div', {
+      style: {
+        display: 'flex', gap: '8px', alignItems: 'flex-end',
+        padding: '8px 24px',
+      },
+    },
+      React.createElement('textarea', {
+        value: escapeText,
+        onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => { setEscapeText(e.target.value); setEscapeHistoryIndex(-1); },
+        onKeyDown: handleEscapeKeyDown,
+        placeholder: 'Describe what you want instead...',
+        rows: 2,
+        style: {
+          flex: 1, padding: '8px 10px', borderRadius: '8px',
+          fontSize: '14px', fontFamily: 'inherit', minHeight: '36px',
+          border: '1px solid var(--adaptive-border, #e5e7eb)',
+          resize: 'vertical' as const,
+        },
+      }),
+      React.createElement('button', {
+        onClick: handleEscapeSend,
+        disabled: !escapeText.trim(),
+        style: {
+          padding: '8px 14px', borderRadius: 'var(--adaptive-radius, 8px)',
+          border: 'none', fontSize: '14px', fontWeight: 500,
+          cursor: escapeText.trim() ? 'pointer' : 'default',
+          backgroundColor: 'var(--adaptive-primary, #2563eb)',
+          color: '#fff',
+          opacity: escapeText.trim() ? 1 : 0.5,
+          flexShrink: 0, alignSelf: 'flex-end',
+        },
+      }, 'Send')
+    ),
     // Reset session button + token counter
     React.createElement('div', {
-      style: { display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '12px', padding: '8px 24px 0' },
+      style: {
+        display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px',
+        padding: '8px 24px 0', flexWrap: 'wrap' as const,
+      },
     },
       showReset && React.createElement('button', {
         onClick: resetSession,
         title: 'Reset chat session',
         style: {
-          display: 'flex', alignItems: 'center', gap: '4px',
+          display: 'inline-flex', alignItems: 'center', gap: '5px',
           background: 'none', border: '1px solid var(--adaptive-border, #e5e7eb)',
-          borderRadius: 'var(--adaptive-radius, 8px)', padding: '4px 10px',
+          borderRadius: '16px', padding: '3px 12px 3px 8px',
           fontSize: '13px', color: 'var(--adaptive-text-secondary, #6b7280)',
-          cursor: 'pointer',
+          cursor: 'pointer', whiteSpace: 'nowrap' as const,
+          lineHeight: '1.4',
         },
       },
         React.createElement('img', {
-          src: iconArrowReset, alt: '', width: 14, height: 14,
-          style: { opacity: 0.6 },
+          src: iconArrowReset, alt: '', width: 13, height: 13,
+          style: { opacity: 0.5 },
         }),
         'New chat'
       ),
@@ -440,7 +521,7 @@ export function ConversationThread({ turns, isLoading, error, tokenUsage, lastRe
         ? React.createElement('span', {
             title: `Last request — Input: ${lastRequestUsage.promptTokens.toLocaleString()} / Output: ${lastRequestUsage.completionTokens.toLocaleString()}\nTotal — Input: ${tokenUsage.promptTokens.toLocaleString()} / Output: ${tokenUsage.completionTokens.toLocaleString()}`,
             style: {
-              fontSize: '11px', color: 'var(--adaptive-text-secondary, #6b7280)',
+              fontSize: '12px', color: 'var(--adaptive-text-secondary, #6b7280)',
               fontFamily: 'monospace', whiteSpace: 'nowrap',
             },
           },
@@ -452,7 +533,7 @@ export function ConversationThread({ turns, isLoading, error, tokenUsage, lastRe
           )
         : React.createElement('span', {
             style: {
-              fontSize: '11px', color: 'var(--adaptive-text-secondary, #6b7280)',
+              fontSize: '12px', color: 'var(--adaptive-text-secondary, #6b7280)',
               fontFamily: 'monospace', whiteSpace: 'nowrap',
             },
           }, '▲ 0  ▼ 0 │ Σ 0 / 0'),
@@ -474,7 +555,7 @@ export function ConversationThread({ turns, isLoading, error, tokenUsage, lastRe
           ? 'Intent mode: LLM outputs semantic intents, client resolves to UI. Click to switch to Adaptive mode.'
           : 'Adaptive mode: LLM outputs full UI specs directly. Click to switch to Intent mode.',
         style: {
-          fontSize: '10px', fontWeight: 500,
+          fontSize: '11px', fontWeight: 500,
           padding: '2px 6px', borderRadius: '4px',
           backgroundColor: useIntents ? '#eff6ff' : '#f3e8ff',
           color: useIntents ? '#2563eb' : '#7c3aed',
@@ -486,7 +567,7 @@ export function ConversationThread({ turns, isLoading, error, tokenUsage, lastRe
       React.createElement('button', {
         onClick: () => setShowDebug(d => !d),
         style: {
-          fontSize: '10px', fontWeight: 500,
+          fontSize: '11px', fontWeight: 500,
           padding: '2px 6px', borderRadius: '4px',
           backgroundColor: showDebug ? '#fef2f2' : '#f9fafb',
           color: showDebug ? '#dc2626' : '#6b7280',
@@ -732,5 +813,6 @@ export function ConversationThread({ turns, isLoading, error, tokenUsage, lastRe
           : [React.createElement('span', { key: 'empty', style: { color: '#555' } }, 'No requests yet')]
       )
     )
+    ) // end fixed bottom bar
   );
 }
