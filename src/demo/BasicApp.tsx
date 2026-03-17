@@ -7,6 +7,7 @@ import { createAzurePack } from '../packs/azure';
 import { createGitHubPack } from '../packs/github';
 import { SessionsSidebar } from '../framework/components/SessionsSidebar';
 import { FileViewer, FileViewerPlaceholder } from '../framework/components/FileViewer';
+import { ResizeHandle } from '../framework/components/ResizeHandle';
 import { generateSessionId, saveSession } from '../framework/session-manager';
 import { upsertArtifact, getArtifacts, subscribeArtifacts } from '../framework/artifacts';
 import { registerAzureDiagramIcons } from '../packs/azure/diagram-icons';
@@ -64,6 +65,47 @@ const initialSpec: AdaptiveUISpec = {
   diagram: 'flowchart TD\n  User(["User"])\n  App["Your Application"]\n  Cloud["Cloud Provider"]\n  User --> App --> Cloud',
 };
 
+// ─── Mermaid extraction ───
+// In Adaptive (full-spec) mode the LLM sometimes embeds the architecture
+// diagram as a markdown text node instead of using the top-level `diagram`
+// field. Walk the layout tree and extract the first Mermaid flowchart found.
+const MERMAID_RE = /^(flowchart\s+(TD|TB|BT|LR|RL)\b)/;
+
+function extractMermaidFromLayout(node: any): string | null {
+  if (!node) return null;
+  // Check markdown or text nodes
+  if ((node.type === 'markdown' || node.type === 'md' || node.type === 'text' || node.type === 'tx') && typeof node.content === 'string') {
+    if (MERMAID_RE.test(node.content.trim())) return node.content.trim();
+  }
+  // Also check the compact `c` key used before expansion
+  if (typeof node.c === 'string' && MERMAID_RE.test(node.c.trim())) return node.c.trim();
+  // Recurse children
+  const kids: any[] = node.children || node.ch || [];
+  for (const child of kids) {
+    const found = extractMermaidFromLayout(child);
+    if (found) return found;
+  }
+  // Recurse list items
+  if (Array.isArray(node.items)) {
+    for (const item of node.items) {
+      const found = extractMermaidFromLayout(item);
+      if (found) return found;
+    }
+  }
+  // Recurse tabs
+  if (Array.isArray(node.tabs)) {
+    for (const tab of node.tabs) {
+      if (tab.children) {
+        for (const child of tab.children) {
+          const found = extractMermaidFromLayout(child);
+          if (found) return found;
+        }
+      }
+    }
+  }
+  return null;
+}
+
 export function SolutionArchitectApp() {
   const [sessionId, setSessionId] = useState(() => {
     try {
@@ -75,10 +117,24 @@ export function SolutionArchitectApp() {
   const artifacts = useSyncExternalStore(subscribeArtifacts, getArtifacts);
   const selectedArtifact = selectedFileId ? artifacts.find((a) => a.id === selectedFileId) || null : null;
 
+  // Resizable panel widths
+  const [sidebarWidth, setSidebarWidth] = useState(240);
+  const [chatWidth, setChatWidth] = useState(480);
+
+  const handleSidebarResize = useCallback((delta: number) => {
+    setSidebarWidth((w) => Math.max(160, Math.min(400, w + delta)));
+  }, []);
+  const handleChatResize = useCallback((delta: number) => {
+    setChatWidth((w) => Math.max(320, Math.min(700, w - delta)));
+  }, []);
+
   const handleSpecChange = useCallback((spec: AdaptiveUISpec) => {
-    // Auto-save/update architecture diagram as an artifact
-    if (spec.diagram) {
-      const art = upsertArtifact('architecture.mmd', spec.diagram, 'mermaid', 'Solution Architecture');
+    // Auto-save/update architecture diagram as an artifact.
+    // The diagram may come from the top-level `diagram` field (intent mode)
+    // or embedded as a markdown node in the layout (adaptive/full-spec mode).
+    const diagram = spec.diagram || extractMermaidFromLayout(spec.layout);
+    if (diagram) {
+      const art = upsertArtifact('architecture.mmd', diagram, 'mermaid', 'Solution Architecture');
       // Auto-select the diagram artifact when it's first created
       setSelectedFileId((prev) => prev || art.id);
     }
@@ -132,13 +188,20 @@ export function SolutionArchitectApp() {
     } as React.CSSProperties,
   },
     // Left: Sessions sidebar with files
-    React.createElement(SessionsSidebar, {
-      activeSessionId: sessionId,
-      onSelectSession: handleSelectSession,
-      onNewSession: handleNewSession,
-      selectedFileId,
-      onSelectFile: setSelectedFileId,
-    }),
+    React.createElement('div', {
+      style: { width: `${sidebarWidth}px`, flexShrink: 0, height: '100%' } as React.CSSProperties,
+    },
+      React.createElement(SessionsSidebar, {
+        activeSessionId: sessionId,
+        onSelectSession: handleSelectSession,
+        onNewSession: handleNewSession,
+        selectedFileId,
+        onSelectFile: setSelectedFileId,
+      })
+    ),
+
+    // Resize handle: sidebar ↔ center
+    React.createElement(ResizeHandle, { direction: 'vertical', onResize: handleSidebarResize }),
 
     // Center: File viewer / editor
     React.createElement('div', {
@@ -147,7 +210,6 @@ export function SolutionArchitectApp() {
         minWidth: 0,
         height: '100%',
         overflow: 'hidden',
-        borderRight: '1px solid var(--adaptive-border, #e5e7eb)',
       } as React.CSSProperties,
     },
       selectedArtifact
@@ -155,10 +217,13 @@ export function SolutionArchitectApp() {
         : React.createElement(FileViewerPlaceholder)
     ),
 
+    // Resize handle: center ↔ chat
+    React.createElement(ResizeHandle, { direction: 'vertical', onResize: handleChatResize }),
+
     // Right: Chat
     React.createElement('div', {
       style: {
-        width: '420px',
+        width: `${chatWidth}px`,
         flexShrink: 0,
         height: '100%',
         overflow: 'hidden',

@@ -23,7 +23,7 @@ export function FileViewer({ artifact }: FileViewerProps) {
     // Header bar with filename + actions
     React.createElement('div', {
       style: {
-        padding: '8px 16px',
+        padding: '10px 16px',
         borderBottom: '1px solid var(--adaptive-border, #e5e7eb)',
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         flexShrink: 0,
@@ -35,7 +35,7 @@ export function FileViewer({ artifact }: FileViewerProps) {
       },
         React.createElement('span', {
           style: {
-            fontSize: '11px', fontWeight: 600,
+            fontSize: '12px', fontWeight: 600,
             backgroundColor: 'var(--adaptive-primary, #2563eb)',
             color: '#fff',
             padding: '2px 8px', borderRadius: '4px',
@@ -45,7 +45,7 @@ export function FileViewer({ artifact }: FileViewerProps) {
         }, isMermaid ? 'Diagram' : artifact.language || 'File'),
         React.createElement('span', {
           style: {
-            fontSize: '13px', fontWeight: 500,
+            fontSize: '14px', fontWeight: 500,
             color: 'var(--adaptive-text, #111827)',
             fontFamily: 'monospace',
           },
@@ -58,16 +58,16 @@ export function FileViewer({ artifact }: FileViewerProps) {
           onClick: () => { navigator.clipboard.writeText(artifact.content); },
           style: {
             background: 'none', border: '1px solid var(--adaptive-border, #e5e7eb)',
-            borderRadius: '6px', cursor: 'pointer', fontSize: '12px',
-            padding: '4px 10px', color: 'var(--adaptive-text, #111827)',
+            borderRadius: '6px', cursor: 'pointer', fontSize: '13px',
+            padding: '5px 12px', color: 'var(--adaptive-text, #111827)',
           },
         }, 'Copy'),
         React.createElement('button', {
           onClick: () => downloadArtifact(artifact),
           style: {
             background: 'none', border: '1px solid var(--adaptive-border, #e5e7eb)',
-            borderRadius: '6px', cursor: 'pointer', fontSize: '12px',
-            padding: '4px 10px', color: 'var(--adaptive-text, #111827)',
+            borderRadius: '6px', cursor: 'pointer', fontSize: '13px',
+            padding: '5px 12px', color: 'var(--adaptive-text, #111827)',
           },
         }, 'Download')
       )
@@ -86,7 +86,7 @@ export function FileViewer({ artifact }: FileViewerProps) {
       : React.createElement('pre', {
           style: {
             flex: 1, margin: 0, padding: '16px',
-            fontSize: '13px',
+            fontSize: '14px',
             fontFamily: 'Consolas, "Courier New", monospace',
             overflow: 'auto', lineHeight: 1.6,
             color: 'var(--adaptive-text, #111827)',
@@ -113,10 +113,10 @@ export function FileViewerPlaceholder() {
         style: { fontSize: '40px', marginBottom: '12px', opacity: 0.5 },
       }, '\uD83D\uDCC4'),
       React.createElement('div', {
-        style: { fontWeight: 500, marginBottom: '4px' },
+        style: { fontWeight: 500, marginBottom: '6px', fontSize: '15px' },
       }, 'No file selected'),
       React.createElement('div', {
-        style: { fontSize: '12px' },
+        style: { fontSize: '13px', color: 'var(--adaptive-text-secondary, #6b7280)' },
       }, 'Select a file from the sidebar to view its contents')
     )
   );

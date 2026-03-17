@@ -177,7 +177,7 @@ function SettingsPanel({
         }, '● Connected')
       ),
 
-      React.createElement('label', { style: { display: 'block', fontSize: '12px', fontWeight: 500, marginBottom: '4px' } }, 'Endpoint'),
+      React.createElement('label', { style: { display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '4px' } }, 'Endpoint'),
       React.createElement('input', {
         type: 'text', value: config.endpoint,
         onChange: (e: React.ChangeEvent<HTMLInputElement>) => setConfig((c) => ({ ...c, endpoint: e.target.value })),
@@ -207,7 +207,7 @@ function SettingsPanel({
         disabled: !isConnected && !config.apiKey.trim(),
         style: {
           width: '100%', padding: '8px', borderRadius: 'var(--adaptive-radius)', border: 'none',
-          fontSize: '13px', fontWeight: 500, cursor: 'pointer',
+          fontSize: '14px', fontWeight: 500, cursor: 'pointer',
           backgroundColor: isConnected ? 'var(--adaptive-surface)' : 'var(--adaptive-primary)',
           color: isConnected ? 'var(--adaptive-text)' : '#fff',
           boxShadow: isConnected ? 'inset 0 0 0 1px var(--adaptive-border)' : 'none',
@@ -215,7 +215,7 @@ function SettingsPanel({
       }, isConnected ? 'Disconnect' : 'Connect'),
 
       !isConnected && React.createElement('p', {
-        style: { fontSize: '11px', color: 'var(--adaptive-text-secondary)', margin: '10px 0 0', lineHeight: 1.4 },
+        style: { fontSize: '12px', color: 'var(--adaptive-text-secondary)', margin: '10px 0 0', lineHeight: 1.4 },
       }, 'Works with any OpenAI-compatible API. Leave endpoint blank for default OpenAI.'),
 
       // Pack settings
@@ -685,7 +685,7 @@ export function AdaptiveApp({
               style: { width: '48px', height: '48px', marginBottom: '16px', opacity: 0.6 },
             }),
             React.createElement('div', { style: { fontWeight: 500, marginBottom: '8px' } }, 'Connect an LLM to get started'),
-            React.createElement('div', { style: { fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' } },
+            React.createElement('div', { style: { fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' } },
               'Click the ',
               React.createElement('img', { src: iconGear, alt: 'settings', width: 14, height: 14, style: { verticalAlign: 'middle' } }),
               ' button in the top-right corner'

@@ -60,7 +60,7 @@ const PastTurn = memo(function PastTurn({ turn }: { turn: ConversationTurn }) {
             style: {
               padding: '8px 14px', borderRadius: '4px 16px 16px 16px',
               backgroundColor: 'var(--adaptive-surface, #fff)',
-              border: '1px solid #e5e7eb', fontSize: '14px', lineHeight: '1.6', maxWidth: '80%',
+              border: '1px solid #e5e7eb', fontSize: '15px', lineHeight: '1.6', maxWidth: '80%',
             } as React.CSSProperties,
             dangerouslySetInnerHTML: { __html: simpleMarkdown(turn.agentSpec.agentMessage) },
           })
@@ -79,7 +79,7 @@ const PastTurn = memo(function PastTurn({ turn }: { turn: ConversationTurn }) {
           maxWidth: '70%', padding: '10px 16px',
           borderRadius: '16px 16px 4px 16px',
           backgroundColor: 'var(--adaptive-primary, #2563eb)',
-          color: '#fff', fontSize: '14px', lineHeight: '1.5',
+          color: '#fff', fontSize: '15px', lineHeight: '1.5',
         } as React.CSSProperties,
       }, turn.userMessage)
     )
@@ -125,7 +125,7 @@ function ActiveTurn({ turn }: { turn: ConversationTurn }) {
             style: {
               padding: '8px 14px', borderRadius: '4px 16px 16px 16px',
               backgroundColor: 'var(--adaptive-surface, #fff)',
-              border: '1px solid #e5e7eb', fontSize: '14px', lineHeight: '1.6', maxWidth: '80%',
+              border: '1px solid #e5e7eb', fontSize: '15px', lineHeight: '1.6', maxWidth: '80%',
             } as React.CSSProperties,
             dangerouslySetInnerHTML: { __html: simpleMarkdown(turn.agentSpec.agentMessage) },
           })
@@ -151,7 +151,7 @@ function ActiveTurn({ turn }: { turn: ConversationTurn }) {
                       onClick: () => setEscapeOpen(true),
                       style: {
                         background: 'none', border: 'none', cursor: 'pointer',
-                        fontSize: '12px', color: 'var(--adaptive-text-secondary)', padding: '4px 0',
+                        fontSize: '13px', color: 'var(--adaptive-text-secondary)', padding: '4px 0',
                         display: 'flex', alignItems: 'center', gap: '4px',
                       },
                     },
@@ -178,7 +178,7 @@ function ActiveTurn({ turn }: { turn: ConversationTurn }) {
                         rows: 2, autoFocus: true,
                         style: {
                           flex: 1, padding: '8px 10px', borderRadius: '8px',
-                          fontSize: '13px', fontFamily: 'inherit', minHeight: '40px',
+                          fontSize: '14px', fontFamily: 'inherit', minHeight: '40px',
                         },
                       }),
                       React.createElement('button', {
@@ -186,7 +186,7 @@ function ActiveTurn({ turn }: { turn: ConversationTurn }) {
                         disabled: !escapeText.trim(),
                         style: {
                           padding: '8px 14px', borderRadius: 'var(--adaptive-radius)',
-                          border: 'none', fontSize: '13px', fontWeight: 500,
+                          border: 'none', fontSize: '14px', fontWeight: 500,
                           cursor: escapeText.trim() ? 'pointer' : 'default',
                           backgroundColor: 'var(--adaptive-primary)',
                           color: '#fff',
@@ -209,7 +209,7 @@ function ActiveTurn({ turn }: { turn: ConversationTurn }) {
           maxWidth: '70%', padding: '10px 16px',
           borderRadius: '16px 16px 4px 16px',
           backgroundColor: 'var(--adaptive-primary, #2563eb)',
-          color: '#fff', fontSize: '14px', lineHeight: '1.5',
+          color: '#fff', fontSize: '15px', lineHeight: '1.5',
         } as React.CSSProperties,
       }, turn.userMessage)
     )
@@ -336,7 +336,7 @@ export function ConversationThread({ turns, isLoading, error, tokenUsage, lastRe
       style: {
         margin: '8px 24px', padding: '12px 16px', borderRadius: '8px',
         backgroundColor: '#fef2f2', border: '1px solid #fecaca',
-        color: '#991b1b', fontSize: '13px',
+        color: '#991b1b', fontSize: '14px',
         display: 'flex', alignItems: 'flex-start', gap: '8px',
       },
     },
@@ -361,7 +361,7 @@ export function ConversationThread({ turns, isLoading, error, tokenUsage, lastRe
           display: 'flex', alignItems: 'center', gap: '4px',
           background: 'none', border: '1px solid var(--adaptive-border, #e5e7eb)',
           borderRadius: 'var(--adaptive-radius, 8px)', padding: '4px 10px',
-          fontSize: '12px', color: 'var(--adaptive-text-secondary, #6b7280)',
+          fontSize: '13px', color: 'var(--adaptive-text-secondary, #6b7280)',
           cursor: 'pointer',
         },
       },
