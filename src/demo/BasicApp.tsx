@@ -1,14 +1,14 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useSyncExternalStore } from 'react';
 import { AdaptiveApp } from '../framework';
 import type { AdaptiveUISpec } from '../framework/schema';
 import { registerApp } from '../framework/app-registry';
 import { registerPackWithSkills } from '../framework/registry';
 import { createAzurePack } from '../packs/azure';
 import { createGitHubPack } from '../packs/github';
-import { ArchitectureDiagram } from '../framework/components/ArchitectureDiagram';
-import { FilesPanel } from '../framework/components/FilesPanel';
 import { SessionsSidebar } from '../framework/components/SessionsSidebar';
-import { generateSessionId, saveSession, loadSession } from '../framework/session-manager';
+import { FileViewer, FileViewerPlaceholder } from '../framework/components/FileViewer';
+import { generateSessionId, saveSession } from '../framework/session-manager';
+import { upsertArtifact, getArtifacts, subscribeArtifacts } from '../framework/artifacts';
 import { registerAzureDiagramIcons } from '../packs/azure/diagram-icons';
 
 // Register packs and diagram icons
@@ -61,7 +61,7 @@ const initialSpec: AdaptiveUISpec = {
     type: 'chatInput',
     placeholder: 'Describe your application or architecture needs...',
   },
-  diagram: 'block-beta\n  columns 1\n  User(["User"]):1\n  space:1\n  App["Your Application"]:1\n  space:1\n  Cloud["Cloud Provider"]:1\n  User -- "requests" --> App\n  App -- "deploys to" --> Cloud',
+  diagram: 'flowchart TD\n  User(["User"])\n  App["Your Application"]\n  Cloud["Cloud Provider"]\n  User --> App --> Cloud',
 };
 
 export function SolutionArchitectApp() {
@@ -71,16 +71,16 @@ export function SolutionArchitectApp() {
     } catch { return generateSessionId(); }
   });
 
-  const [diagram, setDiagram] = useState(() => {
-    try {
-      return sessionStorage.getItem('adaptive-ui-diagram') || initialSpec.diagram || '';
-    } catch { return initialSpec.diagram || ''; }
-  });
+  const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
+  const artifacts = useSyncExternalStore(subscribeArtifacts, getArtifacts);
+  const selectedArtifact = selectedFileId ? artifacts.find((a) => a.id === selectedFileId) || null : null;
 
   const handleSpecChange = useCallback((spec: AdaptiveUISpec) => {
+    // Auto-save/update architecture diagram as an artifact
     if (spec.diagram) {
-      setDiagram(spec.diagram);
-      try { sessionStorage.setItem('adaptive-ui-diagram', spec.diagram); } catch {}
+      const art = upsertArtifact('architecture.mmd', spec.diagram, 'mermaid', 'Solution Architecture');
+      // Auto-select the diagram artifact when it's first created
+      setSelectedFileId((prev) => prev || art.id);
     }
   }, []);
 
@@ -100,11 +100,10 @@ export function SolutionArchitectApp() {
     const newId = generateSessionId();
     setSessionId(newId);
     try { localStorage.setItem('adaptive-ui-active-session', newId); } catch {}
-    setDiagram('');
-    try { sessionStorage.removeItem('adaptive-ui-diagram'); } catch {}
 
     // Save the new session immediately so it shows in the sidebar
     saveSession(newId, 'New session', []);
+    setSelectedFileId(null);
   }, [sessionId]);
 
   const handleSelectSession = useCallback((id: string) => {
@@ -112,12 +111,10 @@ export function SolutionArchitectApp() {
     try { localStorage.setItem('adaptive-ui-active-session', id); } catch {}
   }, []);
 
-  // Auto-save session name from first user message
+  // Auto-save session name from spec changes
   const handleSpecChangeWithSave = useCallback((spec: AdaptiveUISpec) => {
     handleSpecChange(spec);
-    // Save session with a name derived from the agent message
     const name = spec.title || spec.agentMessage?.slice(0, 50) || 'Untitled session';
-    // We'll save from the persisted turns
     try {
       const raw = localStorage.getItem(`adaptive-ui-turns-${sessionId}`);
       if (raw) {
@@ -134,48 +131,35 @@ export function SolutionArchitectApp() {
       width: '100%',
     } as React.CSSProperties,
   },
-    // Sessions sidebar
+    // Left: Sessions sidebar with files
     React.createElement(SessionsSidebar, {
       activeSessionId: sessionId,
       onSelectSession: handleSelectSession,
       onNewSession: handleNewSession,
+      selectedFileId,
+      onSelectFile: setSelectedFileId,
     }),
 
-    // Left panel: Architecture diagram + Files
-    React.createElement('div', {
-      style: {
-        width: '55%',
-        minWidth: '350px',
-        height: '100%',
-        flexShrink: 0,
-        display: 'flex',
-        flexDirection: 'column',
-      } as React.CSSProperties,
-    },
-      // Diagram (top)
-      React.createElement('div', {
-        style: { flex: 1, minHeight: 0, overflow: 'hidden' } as React.CSSProperties,
-      },
-        React.createElement(ArchitectureDiagram, {
-          diagram,
-          title: 'Solution Architecture',
-        })
-      ),
-      // Files panel (bottom)
-      React.createElement('div', {
-        style: {
-          height: '200px', flexShrink: 0,
-          borderTop: '1px solid #333',
-        } as React.CSSProperties,
-      },
-        React.createElement(FilesPanel)
-      )
-    ),
-
-    // Right panel: Chat
+    // Center: File viewer / editor
     React.createElement('div', {
       style: {
         flex: 1,
+        minWidth: 0,
+        height: '100%',
+        overflow: 'hidden',
+        borderRight: '1px solid var(--adaptive-border, #e5e7eb)',
+      } as React.CSSProperties,
+    },
+      selectedArtifact
+        ? React.createElement(FileViewer, { artifact: selectedArtifact })
+        : React.createElement(FileViewerPlaceholder)
+    ),
+
+    // Right: Chat
+    React.createElement('div', {
+      style: {
+        width: '420px',
+        flexShrink: 0,
         height: '100%',
         overflow: 'hidden',
         display: 'flex',

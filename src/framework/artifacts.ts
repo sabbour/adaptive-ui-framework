@@ -37,6 +37,21 @@ export function saveArtifact(content: string, language: string, label?: string):
   return artifact;
 }
 
+/** Create or update an artifact by exact filename */
+export function upsertArtifact(filename: string, content: string, language: string, label?: string): Artifact {
+  const idx = artifacts.findIndex((a) => a.filename === filename);
+  if (idx >= 0) {
+    artifacts[idx] = { ...artifacts[idx], content, label: label ?? artifacts[idx].label };
+    notify();
+    return artifacts[idx];
+  }
+  const id = `artifact-${++counter}-${Date.now()}`;
+  const artifact: Artifact = { id, filename, language, content, label, createdAt: Date.now() };
+  artifacts.push(artifact);
+  notify();
+  return artifact;
+}
+
 /** Remove an artifact */
 export function removeArtifact(id: string): void {
   artifacts = artifacts.filter((a) => a.id !== id);
