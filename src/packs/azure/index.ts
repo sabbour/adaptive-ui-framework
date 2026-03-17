@@ -50,6 +50,19 @@ COMPONENTS (use in "ask" as { type: "component", component: "name", props: {} } 
 For other Azure inputs (regions, resource groups, SKUs), use generic components (select, radioGroup)
 and populate them by asking the user — the LLM has Azure domain knowledge injected dynamically.
 
+- "azurePicker": { api, bind, label?, labelKey?, valueKey?, filterKey?, filterValue?, labelBind?, itemsPath?, loadingLabel? }
+    Dropdown that fetches options from an ARM API endpoint at render time.
+    Use this for ANY Azure list that should come from the API (regions, resource groups, SKUs, etc.).
+    DO NOT hardcode Azure regions, resource groups, or other API-populated lists in a "select" — always use azurePicker instead.
+    
+    Examples:
+    - Azure regions:
+      { type: "azurePicker", api: "/subscriptions/{{state.__azureSubscription}}/locations?api-version=2022-12-01", bind: "region", label: "Azure Region", labelKey: "displayName", valueKey: "name", filterKey: "metadata.regionType", filterValue: "Physical" }
+    - Resource groups:
+      { type: "azurePicker", api: "/subscriptions/{{state.__azureSubscription}}/resourcegroups?api-version=2022-09-01", bind: "resourceGroup", label: "Resource Group", labelKey: "name", valueKey: "name" }
+
+    In compact notation, the type is "azurePicker" (no alias).
+
 - "azureQuery": { api: "/subscriptions/{{st.__azureSubscription}}/resourceGroups?api-version=2022-09-01", bind: "stateKey", method?: "GET"|"PUT"|"POST"|"DELETE"|"PATCH", body?: "json string", loadingLabel?, showResult?, confirm? }
     Generic ARM API caller. Executes the API call at render time and stores the result in state.
     The API path supports {{state.key}} interpolation for dynamic values.
@@ -71,7 +84,7 @@ and populate them by asking the user — the LLM has Azure domain knowledge inje
 
 When the user mentions deploying an Azure resource:
 1. If __azureToken is not set, show azureLogin component first
-2. Ask for subscription, resource group and region using generic inputs
+2. Use azurePicker for resource group and region selection (NEVER hardcode these in a select)
 3. Use azureResourceForm for resource-specific configuration
 4. Show a summary and confirm`;
 
