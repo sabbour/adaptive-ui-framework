@@ -26,30 +26,12 @@ You have access to GitHub-specific capabilities. When the user discusses GitHub 
 issues, PRs, or workflows, use these features.
 
 TOOLS (called during inference, before generating UI):
-- github_api_get: Read-only GitHub API caller. Use to list repos, issues, PRs, branches,
-  workflows, or check repo details BEFORE generating the UI response. Returns JSON data
-  that YOU can see and use to build a meaningful UI (tables, selects, repo cards).
+- github_api_get: Read-only GitHub API caller. Use ONLY when you need to SEE the data to make decisions
+  (e.g., check if a file exists, read workflow config, verify repo structure).
+  Do NOT use this tool to list repos, orgs, or branches for the user to pick from — use githubPicker instead.
   Requires the user to be signed in (githubLogin component must have been shown first).
-  Example: github_api_get({ path: "/repos/owner/repo/issues?state=open&per_page=100" })
-  Example: github_api_get({ path: "/user/orgs?per_page=100" })
-  Example: github_api_get({ path: "/orgs/{org}/repos?sort=updated&per_page=100" })
-
-  The tool auto-paginates list endpoints (up to 200 items). Always use per_page=100 for efficiency.
-
-  REPO LISTING WORKFLOW (multi-turn — do NOT collapse into one step):
-  When listing repos, ALWAYS show an org/account picker FIRST in a separate turn:
-  1. Call github_api_get({ path: "/user/orgs?per_page=100" }) to get the user's organizations
-  2. In THIS turn's response, show a select/radioGroup with the org names PLUS "Personal account (username)"
-     as options. Let the user pick. Do NOT fetch repos yet — STOP here and wait for the user's choice.
-  3. Only AFTER the user selects an org, in the NEXT turn, call:
-     - github_api_get({ path: "/orgs/{org}/repos?sort=updated&per_page=100" }) for an org
-     - github_api_get({ path: "/user/repos?sort=updated&per_page=100&type=owner" }) for personal
-     Then show the repo list as a select.
-  Do NOT fetch repos and orgs in the same tool-call round. Do NOT skip the org picker.
-
-  IMPORTANT: When you need to READ data to present it to the user (list repos, show issues,
-  display branches), ALWAYS use this tool — NOT githubQuery. The tool runs during inference
-  so you can see the results and format them into a proper UI (select, table, list).
+  Example: github_api_get({ path: "/repos/owner/repo/contents/.github/workflows" })
+  Example: github_api_get({ path: "/repos/owner/repo/branches" })
 
 COMPONENTS (use in "ask" as { type: "component", component: "name", props: {} } — NEVER in "show"):
 - "githubLogin": { title?, description? }
@@ -105,7 +87,7 @@ export function createGitHubPack(): ComponentPack {
           type: 'function' as const,
           function: {
             name: 'github_api_get',
-            description: 'Call the GitHub REST API (GET only). Use to list repos, issues, PRs, branches, workflows, or read repo details before generating the UI response. Requires the user to have signed in via githubLogin first.',
+            description: 'Call the GitHub REST API (GET only). Use ONLY when you need to read data to make decisions (check file existence, read configs, verify structure). Do NOT use for listing repos/orgs/branches for selection — use the githubPicker component instead. Requires the user to have signed in via githubLogin first.',
             parameters: {
               type: 'object',
               properties: {
