@@ -660,8 +660,20 @@ export function GitHubCreatePR({ node }: AdaptiveComponentProps<GitHubCreatePRNo
   const owner = node.owner || (state.githubOrg as string) || getStoredOrg()
     || (state.__githubUser as string) || getStoredUser() || '';
   const repo = node.repo || (state.githubRepo as string) || getStoredRepo() || '';
-  const baseBranch = node.baseBranch || 'main';
+  const [detectedBranch, setDetectedBranch] = useState<string | null>(null);
+  const baseBranch = node.baseBranch || detectedBranch || 'main';
   const prTitle = node.title || 'Add generated infrastructure files';
+
+  // Auto-detect default branch from repo
+  useEffect(() => {
+    if (!token || !owner || !repo || node.baseBranch) return;
+    fetch(`https://api.github.com/repos/${owner}/${repo}`, {
+      headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json' },
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data?.default_branch) setDetectedBranch(data.default_branch); })
+      .catch(() => {});
+  }, [token, owner, repo, node.baseBranch]);
 
   // Filter out non-code artifacts (e.g., mermaid diagrams)
   const codeArtifacts = artifacts.filter(a => !a.filename.endsWith('.mmd'));
