@@ -123,6 +123,16 @@ export function AdaptiveRenderer({ node, itemContext, itemIndex }: RendererProps
   // Interpolate all string values in the node for dynamic content
   const resolved = interpolateDeep(node, state, itemContext, itemIndex);
 
+  // Handle { type: "component", component: "actualName" } wrapper pattern
+  // This occurs when the LLM uses the intent ask format in Adaptive mode or in show items
+  if (resolved.type === 'component' && (resolved as any).component) {
+    const compName = (resolved as any).component;
+    const { type: _t, component: _c, props: compProps, ...rest } = resolved as any;
+    const unwrapped = { type: compName, ...(compProps || {}), ...rest } as AdaptiveNode;
+    logDecision('renderer', `Unwrapped { type: "component", component: "${compName}" } into direct component render`);
+    return React.createElement(AdaptiveRenderer, { node: unwrapped, key: resolved.id });
+  }
+
   // Look up the component from the registry
   const Component = getComponent(resolved.type);
 
