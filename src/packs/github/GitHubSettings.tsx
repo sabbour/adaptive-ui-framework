@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   getStoredToken, getStoredUser, getStoredClientId, getStoredCorsProxy,
-  storeClientId, storeCorsProxy, loginWithPAT, requestDeviceCode,
+  storeClientId, storeCorsProxy, requestDeviceCode,
   pollForToken, logout,
 } from './auth';
 
@@ -9,18 +9,14 @@ import {
 export { getStoredToken as getStoredGitHubToken } from './auth';
 
 // ─── GitHub Settings Section ───
-// Supports two auth methods:
-// 1. OAuth Device Flow (if client_id is configured)
-// 2. Personal Access Token (always available as fallback)
+// OAuth Device Flow authentication
 
 export function GitHubSettings() {
   const [user, setUser] = useState(getStoredUser());
   const [clientId, setClientId] = useState(getStoredClientId());
   const [corsProxy, setCorsProxy] = useState(getStoredCorsProxy());
-  const [patInput, setPatInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [authMode, setAuthMode] = useState<'oauth' | 'pat'>(getStoredClientId() ? 'oauth' : 'pat');
   const [deviceCode, setDeviceCode] = useState<{ user_code: string; verification_uri: string } | null>(null);
   const [polling, setPolling] = useState(false);
 
@@ -59,26 +55,9 @@ export function GitHubSettings() {
     }
   };
 
-  const handlePAT = async () => {
-    const trimmed = patInput.trim();
-    if (!trimmed) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await loginWithPAT(trimmed);
-      setUser(data.login);
-      setPatInput('');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleDisconnect = () => {
     logout();
     setUser(null);
-    setPatInput('');
     setDeviceCode(null);
     setPolling(false);
   };
@@ -115,109 +94,49 @@ export function GitHubSettings() {
       style: { fontSize: '13px', fontWeight: 600, marginBottom: '8px' },
     }, 'GitHub'),
 
-    // Auth mode tabs
-    React.createElement('div', {
-      style: { display: 'flex', gap: '4px', marginBottom: '8px' },
-    },
-      React.createElement('button', {
-        onClick: () => { setAuthMode('oauth'); setError(null); },
-        style: {
-          flex: 1, padding: '4px', borderRadius: '4px', fontSize: '11px', fontWeight: 500,
-          border: 'none', cursor: 'pointer',
-          backgroundColor: authMode === 'oauth' ? '#24292e' : '#f3f4f6',
-          color: authMode === 'oauth' ? '#fff' : '#6b7280',
-        },
-      }, 'OAuth'),
-      React.createElement('button', {
-        onClick: () => { setAuthMode('pat'); setError(null); },
-        style: {
-          flex: 1, padding: '4px', borderRadius: '4px', fontSize: '11px', fontWeight: 500,
-          border: 'none', cursor: 'pointer',
-          backgroundColor: authMode === 'pat' ? '#24292e' : '#f3f4f6',
-          color: authMode === 'pat' ? '#fff' : '#6b7280',
-        },
-      }, 'PAT')
-    ),
+    // Client ID (pre-filled with default)
+    React.createElement('label', {
+      style: { display: 'block', fontSize: '11px', fontWeight: 500, marginBottom: '2px', color: '#374151' },
+    }, 'OAuth App Client ID'),
+    React.createElement('input', {
+      type: 'text',
+      value: clientId,
+      onChange: (e: React.ChangeEvent<HTMLInputElement>) => setClientId(e.target.value),
+      placeholder: 'Ov23li...',
+      style: { marginBottom: '8px', fontSize: '12px' },
+    }),
 
-    // OAuth mode
-    authMode === 'oauth' && React.createElement('div', null,
-      React.createElement('label', {
-        style: { display: 'block', fontSize: '11px', fontWeight: 500, marginBottom: '2px', color: '#374151' },
-      }, 'OAuth App Client ID'),
-      React.createElement('input', {
-        type: 'text',
-        value: clientId,
-        onChange: (e: React.ChangeEvent<HTMLInputElement>) => setClientId(e.target.value),
-        placeholder: 'Ov23li...',
-        style: { marginBottom: '6px', fontSize: '12px' },
-      }),
-      React.createElement('label', {
-        style: { display: 'block', fontSize: '11px', fontWeight: 500, marginBottom: '2px', color: '#374151' },
-      }, 'CORS Proxy URL'),
-      React.createElement('input', {
-        type: 'text',
-        value: corsProxy,
-        onChange: (e: React.ChangeEvent<HTMLInputElement>) => setCorsProxy(e.target.value),
-        placeholder: 'https://cors-proxy.example.com/',
-        style: { marginBottom: '4px', fontSize: '12px' },
-      }),
-      !corsProxy && React.createElement('div', {
-        style: { fontSize: '10px', color: '#d97706', marginBottom: '6px' },
-      }, 'Required — GitHub login endpoints block browser CORS. Use a proxy like cors-anywhere.'),
-
-      deviceCode && React.createElement('div', {
-        style: {
-          padding: '10px', borderRadius: '6px', marginBottom: '8px',
-          backgroundColor: '#eff6ff', border: '1px solid #bfdbfe',
-          textAlign: 'center' as const,
-        },
+    // Device code display
+    deviceCode && React.createElement('div', {
+      style: {
+        padding: '10px', borderRadius: '6px', marginBottom: '8px',
+        backgroundColor: '#eff6ff', border: '1px solid #bfdbfe',
+        textAlign: 'center' as const,
       },
-        React.createElement('div', {
-          style: { fontSize: '11px', color: '#1e40af', marginBottom: '4px' },
-        }, 'Enter this code at github.com/login/device:'),
-        React.createElement('div', {
-          style: { fontSize: '20px', fontWeight: 700, fontFamily: 'monospace', color: '#1e3a8a', letterSpacing: '2px' },
-        }, deviceCode.user_code),
-        polling && React.createElement('div', {
-          style: { fontSize: '10px', color: '#6b7280', marginTop: '6px' },
-        }, 'Waiting for authorization...')
-      ),
-
-      !deviceCode && React.createElement('button', {
-        onClick: handleOAuth,
-        disabled: !clientId.trim() || loading,
-        style: {
-          width: '100%', padding: '6px', borderRadius: '6px',
-          border: 'none', fontSize: '12px', fontWeight: 500,
-          cursor: clientId.trim() && !loading ? 'pointer' : 'default',
-          backgroundColor: '#24292e', color: '#fff',
-          opacity: clientId.trim() && !loading ? 1 : 0.5,
-        },
-      }, loading ? 'Authorizing...' : 'Sign in with GitHub')
+    },
+      React.createElement('div', {
+        style: { fontSize: '11px', color: '#1e40af', marginBottom: '4px' },
+      }, 'Enter this code at github.com/login/device:'),
+      React.createElement('div', {
+        style: { fontSize: '20px', fontWeight: 700, fontFamily: 'monospace', color: '#1e3a8a', letterSpacing: '2px' },
+      }, deviceCode.user_code),
+      polling && React.createElement('div', {
+        style: { fontSize: '10px', color: '#6b7280', marginTop: '6px' },
+      }, 'Waiting for authorization...')
     ),
 
-    // PAT mode
-    authMode === 'pat' && React.createElement('div', null,
-      React.createElement('input', {
-        type: 'password',
-        value: patInput,
-        onChange: (e: React.ChangeEvent<HTMLInputElement>) => setPatInput(e.target.value),
-        onKeyDown: (e: React.KeyboardEvent) => { if (e.key === 'Enter') handlePAT(); },
-        placeholder: 'ghp_...',
-        style: { marginBottom: '8px', fontFamily: 'monospace' },
-      }),
-      React.createElement('button', {
-        onClick: handlePAT,
-        disabled: !patInput.trim() || loading,
-        style: {
-          width: '100%', padding: '6px', borderRadius: '6px',
-          border: 'none', fontSize: '12px', fontWeight: 500,
-          cursor: patInput.trim() && !loading ? 'pointer' : 'default',
-          backgroundColor: '#24292e', color: '#fff',
-          opacity: patInput.trim() && !loading ? 1 : 0.5,
-        },
-      }, loading ? 'Connecting...' : 'Connect with PAT')
-    ),
+    // Sign in button
+    !deviceCode && React.createElement('button', {
+      onClick: handleOAuth,
+      disabled: !clientId.trim() || loading,
+      style: {
+        width: '100%', padding: '6px', borderRadius: '6px',
+        border: 'none', fontSize: '12px', fontWeight: 500,
+        cursor: clientId.trim() && !loading ? 'pointer' : 'default',
+        backgroundColor: '#24292e', color: '#fff',
+        opacity: clientId.trim() && !loading ? 1 : 0.5,
+      },
+    }, loading ? 'Authorizing...' : 'Sign in with GitHub'),
 
     error && React.createElement('div', {
       style: { fontSize: '11px', color: '#dc2626', marginTop: '6px' },

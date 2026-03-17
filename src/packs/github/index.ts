@@ -25,10 +25,11 @@ TOOLS (called during inference, before generating UI):
 
 COMPONENTS (use in "ask" as { type: "component", component: "name", props: {} } — NEVER in "show"):
 - "githubLogin": { title?, description? }
-    PAT-based sign-in card. Shows a token input field.
+    GitHub sign-in card. Shows a "Sign in with GitHub" button that opens an OAuth Device Flow.
     On success, sets __githubToken and __githubUser in state.
     If already signed in, shows a green confirmation with the username and avatar.
     Use this FIRST whenever GitHub API access is needed and __githubToken is not set.
+    This is a self-managed component — do NOT include a "next" prompt for sign-in steps.
 
 - "githubQuery": { api: "/repos/{owner}/{repo}/issues", bind: "stateKey", method?: "GET"|"POST"|"PUT"|"PATCH"|"DELETE", body?: "json string", loadingLabel?, showResult?, confirm? }
     Generic GitHub API caller. Works like azureQuery but for the GitHub REST API.

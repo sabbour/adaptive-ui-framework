@@ -1,9 +1,18 @@
 // ─── GitHub Auth ───
 // Supports two auth methods:
-// 1. OAuth Device Flow — uses GitHub OAuth App client_id + CORS proxy
-//    (github.com/login/* doesn't allow browser CORS, so we route through a proxy)
+// 1. OAuth Device Flow — uses GitHub OAuth App client_id
+//    In dev, the Vite proxy forwards requests to github.com (avoiding CORS).
+//    In production, a CORS proxy URL can be configured in settings.
 // 2. Personal Access Token (PAT) — direct token entry (api.github.com supports CORS)
 
+// Default GitHub OAuth App client ID — public, not secret
+const DEFAULT_CLIENT_ID = 'Ov23liG3k61qLZnRjBGu';
+
+// Vite dev proxy paths (see vite.config.ts)
+const DEV_DEVICE_CODE_PATH = '/github-oauth/device/code';
+const DEV_TOKEN_PATH = '/github-oauth/access_token';
+
+// Direct GitHub URLs (for production with CORS proxy)
 const GITHUB_DEVICE_CODE_URL = 'https://github.com/login/device/code';
 const GITHUB_TOKEN_URL = 'https://github.com/login/oauth/access_token';
 const POLL_INTERVAL = 5000;
@@ -45,7 +54,7 @@ export function storeAuth(token: string | null, user: string | null): void {
 }
 
 export function getStoredClientId(): string {
-  try { return localStorage.getItem(STORAGE_CLIENT_ID) || ''; } catch { return ''; }
+  try { return localStorage.getItem(STORAGE_CLIENT_ID) || DEFAULT_CLIENT_ID; } catch { return DEFAULT_CLIENT_ID; }
 }
 
 export function storeClientId(clientId: string): void {
@@ -66,11 +75,23 @@ export function storeCorsProxy(proxy: string): void {
   } catch {}
 }
 
-/** Proxy a URL through the configured CORS proxy */
-function proxied(url: string): string {
+/** Detect if we're running under the Vite dev server (proxy available) */
+function isDevMode(): boolean {
+  try { return import.meta.env?.DEV === true; } catch { return false; }
+}
+
+/**
+ * Resolve the URL for a GitHub OAuth endpoint.
+ * In dev mode, uses the Vite proxy paths to avoid CORS.
+ * In production, uses a CORS proxy if configured, otherwise direct URLs.
+ */
+function resolveOAuthUrl(endpoint: 'device_code' | 'access_token'): string {
+  if (isDevMode()) {
+    return endpoint === 'device_code' ? DEV_DEVICE_CODE_PATH : DEV_TOKEN_PATH;
+  }
   const proxy = getStoredCorsProxy();
+  const url = endpoint === 'device_code' ? GITHUB_DEVICE_CODE_URL : GITHUB_TOKEN_URL;
   if (!proxy) return url;
-  // Proxy format: "https://proxy.example.com/" + target URL
   const base = proxy.endsWith('/') ? proxy : proxy + '/';
   return base + url;
 }
@@ -99,7 +120,8 @@ export interface DeviceCodeResponse {
 
 /** Step 1: Request a device code */
 export async function requestDeviceCode(clientId: string): Promise<DeviceCodeResponse> {
-  const res = await fetch(proxied(GITHUB_DEVICE_CODE_URL), {
+  const url = resolveOAuthUrl('device_code');
+  const res = await fetch(url, {
     method: 'POST',
     headers: {
       Accept: 'application/json',
@@ -112,8 +134,8 @@ export async function requestDeviceCode(clientId: string): Promise<DeviceCodeRes
   });
   if (!res.ok) {
     const text = await res.text();
-    if (!getStoredCorsProxy()) {
-      throw new Error('CORS blocked. GitHub login/device endpoints require a CORS proxy for browser apps. Set a proxy URL in the GitHub settings.');
+    if (!isDevMode() && !getStoredCorsProxy()) {
+      throw new Error('CORS blocked. In production, set a CORS proxy URL in the GitHub settings.');
     }
     throw new Error(`Failed to request device code: ${res.status} ${text}`);
   }
@@ -131,7 +153,7 @@ export async function pollForToken(
     await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL));
     onPoll?.();
 
-    const res = await fetch(proxied(GITHUB_TOKEN_URL), {
+    const res = await fetch(resolveOAuthUrl('access_token'), {
       method: 'POST',
       headers: {
         Accept: 'application/json',

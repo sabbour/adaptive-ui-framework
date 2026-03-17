@@ -5,7 +5,7 @@ import { useAdaptive } from '../../framework/context';
 import { trackedFetch } from '../../framework/request-tracker';
 import {
   getStoredToken, getStoredClientId,
-  loginWithPAT, requestDeviceCode, pollForToken,
+  requestDeviceCode, pollForToken,
 } from './auth';
 
 // ─── Helpers ───
@@ -40,7 +40,7 @@ function Banner({ message, type }: { message: string; type: 'error' | 'warning' 
 }
 
 // ═══════════════════════════════════════
-// GitHub Login (PAT-based auth)
+// GitHub Login (OAuth Device Flow)
 // ═══════════════════════════════════════
 
 interface GitHubLoginNode extends AdaptiveNodeBase {
@@ -50,9 +50,8 @@ interface GitHubLoginNode extends AdaptiveNodeBase {
 }
 
 export function GitHubLogin({ node }: AdaptiveComponentProps<GitHubLoginNode>) {
-  const { state, dispatch } = useAdaptive();
+  const { state, dispatch, sendPrompt } = useAdaptive();
   const token = (state.__githubToken as string) || undefined;
-  const [inputToken, setInputToken] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [user, setUser] = useState<{ login: string; name: string | null; avatar_url: string } | null>(null);
@@ -83,28 +82,10 @@ export function GitHubLogin({ node }: AdaptiveComponentProps<GitHubLoginNode>) {
       })
       .catch(() => {
         dispatch({ type: 'SET', key: '__githubToken', value: '' });
-        setError('Token expired or invalid. Please re-enter.');
+        setError('Token expired or invalid. Please sign in again.');
       })
       .finally(() => setLoading(false));
   }, [token]);
-
-  const handleSubmit = async () => {
-    const trimmed = inputToken.trim();
-    if (!trimmed) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await loginWithPAT(trimmed);
-      dispatch({ type: 'SET', key: '__githubToken', value: trimmed });
-      dispatch({ type: 'SET', key: '__githubUser', value: data.login });
-      setUser(data);
-      setInputToken('');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Authentication failed');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleOAuth = async () => {
     if (!clientId) return;
@@ -133,33 +114,49 @@ export function GitHubLogin({ node }: AdaptiveComponentProps<GitHubLoginNode>) {
     }
   };
 
-  if (loading) {
-    return React.createElement(LoadingSpinner, { label: 'Verifying GitHub token...' });
+  if (loading && !deviceCode) {
+    return React.createElement(LoadingSpinner, { label: 'Connecting to GitHub...' });
   }
 
   // Authenticated
   if (token && user) {
     return React.createElement('div', {
-      style: {
-        display: 'flex', alignItems: 'center', gap: '10px',
-        padding: '12px 16px', borderRadius: '8px',
-        backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0',
-        ...node.style,
-      } as React.CSSProperties,
+      style: { ...node.style } as React.CSSProperties,
     },
-      React.createElement('img', {
-        src: user.avatar_url,
-        alt: user.login,
-        style: { width: '32px', height: '32px', borderRadius: '50%', flexShrink: 0 },
-      }),
-      React.createElement('div', null,
-        React.createElement('div', { style: { fontSize: '14px', fontWeight: 500, color: '#166534' } },
-          `Signed in as ${user.login}`
-        ),
-        user.name && React.createElement('div', { style: { fontSize: '12px', color: '#15803d' } },
-          user.name
+      React.createElement('div', {
+        style: {
+          display: 'flex', alignItems: 'center', gap: '10px',
+          padding: '12px 16px', borderRadius: '8px',
+          backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0',
+        },
+      },
+        user.avatar_url && React.createElement('img', {
+          src: user.avatar_url,
+          alt: user.login,
+          style: { width: '32px', height: '32px', borderRadius: '50%', flexShrink: 0 },
+        }),
+        React.createElement('div', null,
+          React.createElement('div', { style: { fontSize: '14px', fontWeight: 500, color: '#166534' } },
+            `Signed in as ${user.login}`
+          ),
+          user.name && React.createElement('div', { style: { fontSize: '12px', color: '#15803d' } },
+            user.name
+          )
         )
-      )
+      ),
+      // Continue button — advances the conversation after sign-in
+      React.createElement('button', {
+        onClick: () => sendPrompt(
+          `Signed in to GitHub as ${user.login}`,
+          null
+        ),
+        style: {
+          marginTop: '12px', width: '100%', padding: '10px',
+          borderRadius: '8px', border: 'none',
+          fontSize: '14px', fontWeight: 500, cursor: 'pointer',
+          backgroundColor: 'var(--adaptive-primary, #2563eb)', color: '#fff',
+        },
+      }, 'Continue')
     );
   }
 
@@ -187,7 +184,7 @@ export function GitHubLogin({ node }: AdaptiveComponentProps<GitHubLoginNode>) {
           node.title ?? 'Connect to GitHub'
         ),
         React.createElement('div', { style: { fontSize: '13px', color: '#6b7280' } },
-          node.description ?? 'Enter a Personal Access Token (PAT) with repo scope.'
+          node.description ?? 'Sign in with your GitHub account to access repos, issues, and workflows.'
         )
       )
     ),
@@ -197,69 +194,36 @@ export function GitHubLogin({ node }: AdaptiveComponentProps<GitHubLoginNode>) {
     // Device code display (OAuth in progress)
     deviceCode && React.createElement('div', {
       style: {
-        padding: '12px', borderRadius: '8px', marginTop: '8px',
+        padding: '16px', borderRadius: '8px', marginTop: '8px',
         backgroundColor: '#eff6ff', border: '1px solid #bfdbfe',
         textAlign: 'center' as const,
       },
     },
       React.createElement('div', {
-        style: { fontSize: '12px', color: '#1e40af', marginBottom: '4px' },
-      }, 'Enter this code at github.com/login/device:'),
+        style: { fontSize: '12px', color: '#1e40af', marginBottom: '6px' },
+      }, 'A browser tab has opened. Enter this code at github.com/login/device:'),
       React.createElement('div', {
-        style: { fontSize: '22px', fontWeight: 700, fontFamily: 'monospace', color: '#1e3a8a', letterSpacing: '3px' },
+        style: { fontSize: '28px', fontWeight: 700, fontFamily: 'monospace', color: '#1e3a8a', letterSpacing: '4px', margin: '8px 0' },
       }, deviceCode.user_code),
       polling && React.createElement('div', {
         style: { fontSize: '11px', color: '#6b7280', marginTop: '6px' },
       }, 'Waiting for authorization...')
     ),
 
-    // Auth buttons
-    !deviceCode && React.createElement('div', {
-      style: { display: 'flex', flexDirection: 'column', gap: '8px', marginTop: error ? '8px' : '0' } as React.CSSProperties,
-    },
-      // OAuth button (if client_id is configured)
-      clientId && React.createElement('button', {
-        onClick: handleOAuth,
-        disabled: loading,
-        style: {
-          width: '100%', padding: '10px', borderRadius: '8px',
-          border: 'none', fontSize: '14px', fontWeight: 500,
-          cursor: loading ? 'wait' : 'pointer',
-          backgroundColor: '#24292e', color: '#fff',
-          opacity: loading ? 0.7 : 1,
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-        },
-      }, 'Sign in with GitHub'),
-
-      // PAT fallback
-      React.createElement('div', {
-        style: { display: 'flex', gap: '8px' },
+    // Sign in button
+    !deviceCode && React.createElement('button', {
+      onClick: handleOAuth,
+      disabled: loading,
+      style: {
+        width: '100%', padding: '10px', borderRadius: '8px',
+        border: 'none', fontSize: '14px', fontWeight: 500,
+        cursor: loading ? 'wait' : 'pointer',
+        backgroundColor: '#24292e', color: '#fff',
+        opacity: loading ? 0.7 : 1,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+        marginTop: error ? '8px' : '0',
       },
-        React.createElement('input', {
-          type: 'password',
-          value: inputToken,
-          onChange: (e: React.ChangeEvent<HTMLInputElement>) => setInputToken(e.target.value),
-          onKeyDown: (e: React.KeyboardEvent) => { if (e.key === 'Enter') handleSubmit(); },
-          placeholder: clientId ? 'or paste a PAT (ghp_...)' : 'ghp_...',
-          style: {
-            flex: 1, padding: '8px 12px', borderRadius: '6px',
-            border: '1px solid #d1d5db', fontSize: '14px',
-            fontFamily: 'monospace',
-          },
-        }),
-        React.createElement('button', {
-          onClick: handleSubmit,
-          disabled: !inputToken.trim(),
-          style: {
-            padding: '8px 16px', borderRadius: '6px',
-            border: 'none', fontSize: '14px', fontWeight: 500,
-            cursor: inputToken.trim() ? 'pointer' : 'default',
-            backgroundColor: '#24292e', color: '#fff',
-            opacity: inputToken.trim() ? 1 : 0.5,
-          },
-        }, 'Connect')
-      )
-    )
+    }, 'Sign in with GitHub')
   );
 }
 
