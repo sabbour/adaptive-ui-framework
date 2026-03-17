@@ -36,6 +36,17 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* ── Focus visible outlines for keyboard navigation ── */
+[tabindex]:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--adaptive-primary);
+  outline-offset: 2px;
+  border-radius: var(--adaptive-radius);
+}
+
 /* ── Typography ── */
 h1, h2, h3, h4, h5, h6 {
   margin: 0 0 8px;

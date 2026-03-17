@@ -592,7 +592,16 @@ function RadioGroupComponent({ node }: AdaptiveComponentProps<RadioGroupNode>) {
       ...node.options.map((opt) =>
         React.createElement('label', {
           key: opt.value,
+          tabIndex: 0,
+          role: 'radio',
+          'aria-checked': value === opt.value,
           onClick: () => dispatch({ type: 'SET', key: node.bind, value: opt.value }),
+          onKeyDown: (e: React.KeyboardEvent) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              dispatch({ type: 'SET', key: node.bind, value: opt.value });
+            }
+          },
           style: {
             display: 'flex', alignItems: 'flex-start', gap: '10px',
             padding: '10px 14px', borderRadius: '8px',
@@ -648,7 +657,16 @@ function MultiSelectComponent({ node }: AdaptiveComponentProps<MultiSelectNode>)
         const isSelected = selected.includes(opt.value);
         return React.createElement('label', {
           key: opt.value,
+          tabIndex: 0,
+          role: 'checkbox',
+          'aria-checked': isSelected,
           onClick: () => toggle(opt.value),
+          onKeyDown: (e: React.KeyboardEvent) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              toggle(opt.value);
+            }
+          },
           style: {
             display: 'flex', alignItems: 'flex-start', gap: '10px',
             padding: '10px 14px', borderRadius: '8px',
