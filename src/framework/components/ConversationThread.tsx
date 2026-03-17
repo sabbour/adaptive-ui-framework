@@ -429,7 +429,25 @@ export function ConversationThread({ turns, isLoading, error, tokenUsage, lastRe
           whiteSpace: 'nowrap' as const,
           cursor: 'pointer',
         },
-      }, showDebug ? 'Hide Debug' : 'Debug')
+      }, showDebug ? 'Hide Debug' : 'Debug'),
+      React.createElement('button', {
+        onClick: () => {
+          const current = document.documentElement.getAttribute('data-theme');
+          const next = current === 'dark' ? 'light' : 'dark';
+          document.documentElement.setAttribute('data-theme', next);
+          try { localStorage.setItem('adaptive-ui-theme', next); } catch {}
+        },
+        title: 'Toggle dark/light theme',
+        style: {
+          fontSize: '10px', fontWeight: 500,
+          padding: '2px 6px', borderRadius: '4px',
+          backgroundColor: '#f9fafb',
+          color: '#6b7280',
+          border: '1px solid #e5e7eb',
+          whiteSpace: 'nowrap' as const,
+          cursor: 'pointer',
+        },
+      }, '\u263D')
     ),
 
     // Debug panel — raw LLM request
