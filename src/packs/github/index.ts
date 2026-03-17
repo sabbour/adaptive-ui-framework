@@ -4,6 +4,13 @@ import { GitHubSettings } from './GitHubSettings';
 import { getStoredToken } from './auth';
 import { trackedFetch } from '../../framework/request-tracker';
 
+/** Parse the GitHub Link header to extract the "next" page URL */
+function parseLinkNext(linkHeader: string | null): string | null {
+  if (!linkHeader) return null;
+  const match = linkHeader.match(/<([^>]+)>;\s*rel="next"/);
+  return match ? match[1] : null;
+}
+
 // ─── GitHub Component Pack ───
 // Provides GitHub API integration: authentication, repo queries, and issue/PR management.
 //
@@ -22,18 +29,20 @@ TOOLS (called during inference, before generating UI):
   workflows, or check repo details BEFORE generating the UI response. Returns JSON data
   that YOU can see and use to build a meaningful UI (tables, selects, repo cards).
   Requires the user to be signed in (githubLogin component must have been shown first).
-  Example: github_api_get({ path: "/repos/owner/repo/issues?state=open&per_page=10" })
-  Example: github_api_get({ path: "/user/orgs" })
-  Example: github_api_get({ path: "/orgs/{org}/repos?sort=updated&per_page=30" })
+  Example: github_api_get({ path: "/repos/owner/repo/issues?state=open&per_page=100" })
+  Example: github_api_get({ path: "/user/orgs?per_page=100" })
+  Example: github_api_get({ path: "/orgs/{org}/repos?sort=updated&per_page=100" })
+
+  The tool auto-paginates list endpoints (up to 200 items). Always use per_page=100 for efficiency.
 
   REPO LISTING WORKFLOW (multi-turn — do NOT collapse into one step):
   When listing repos, ALWAYS show an org/account picker FIRST in a separate turn:
-  1. Call github_api_get({ path: "/user/orgs" }) to get the user's organizations
+  1. Call github_api_get({ path: "/user/orgs?per_page=100" }) to get the user's organizations
   2. In THIS turn's response, show a select/radioGroup with the org names PLUS "Personal account (username)"
      as options. Let the user pick. Do NOT fetch repos yet — STOP here and wait for the user's choice.
   3. Only AFTER the user selects an org, in the NEXT turn, call:
-     - github_api_get({ path: "/orgs/{org}/repos?sort=updated&per_page=30" }) for an org
-     - github_api_get({ path: "/user/repos?sort=updated&per_page=30&type=owner" }) for personal
+     - github_api_get({ path: "/orgs/{org}/repos?sort=updated&per_page=100" }) for an org
+     - github_api_get({ path: "/user/repos?sort=updated&per_page=100&type=owner" }) for personal
      Then show the repo list as a select.
   Do NOT fetch repos and orgs in the same tool-call round. Do NOT skip the org picker.
 
@@ -99,15 +108,33 @@ export function createGitHubPack(): ComponentPack {
           const token = getStoredToken();
           if (!token) return 'Error: User is not signed in to GitHub. Show the githubLogin component first.';
           const path = String(args.path);
-          const url = `https://api.github.com${path.startsWith('/') ? '' : '/'}${path}`;
+          const baseUrl = `https://api.github.com${path.startsWith('/') ? '' : '/'}${path}`;
+          const headers = { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json' };
+
           try {
-            const res = await trackedFetch(url, {
-              headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json' },
-            });
-            const data = await res.json();
-            if (!res.ok) return `GitHub API error (${res.status}): ${data?.message ?? JSON.stringify(data)}`;
-            const text = JSON.stringify(data, null, 2);
-            let result = text.length > 8000 ? text.slice(0, 8000) + '\n[truncated]' : text;
+            // Auto-paginate list endpoints (arrays) up to 200 items
+            let allData: unknown;
+            const firstRes = await trackedFetch(baseUrl, { headers });
+            const firstData = await firstRes.json();
+            if (!firstRes.ok) return `GitHub API error (${firstRes.status}): ${(firstData as any)?.message ?? JSON.stringify(firstData)}`;
+
+            if (Array.isArray(firstData)) {
+              allData = [...firstData];
+              let nextUrl = parseLinkNext(firstRes.headers.get('link'));
+              while (nextUrl && (allData as unknown[]).length < 200) {
+                const pageRes = await trackedFetch(nextUrl, { headers });
+                if (!pageRes.ok) break;
+                const pageData = await pageRes.json();
+                if (!Array.isArray(pageData) || pageData.length === 0) break;
+                (allData as unknown[]).push(...pageData);
+                nextUrl = parseLinkNext(pageRes.headers.get('link'));
+              }
+            } else {
+              allData = firstData;
+            }
+
+            const text = JSON.stringify(allData, null, 2);
+            let result = text.length > 12000 ? text.slice(0, 12000) + '\n[truncated]' : text;
 
             // When listing orgs, remind the LLM to show an org picker before fetching repos
             if (path.match(/^\/user\/orgs\b/i)) {
