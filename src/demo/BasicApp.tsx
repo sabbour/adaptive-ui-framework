@@ -7,6 +7,8 @@ import { createAzurePack } from '../packs/azure';
 import { createGitHubPack } from '../packs/github';
 import { ArchitectureDiagram } from '../framework/components/ArchitectureDiagram';
 import { FilesPanel } from '../framework/components/FilesPanel';
+import { SessionsSidebar } from '../framework/components/SessionsSidebar';
+import { generateSessionId, saveSession, loadSession } from '../framework/session-manager';
 import { registerAzureDiagramIcons } from '../packs/azure/diagram-icons';
 
 // Register packs and diagram icons
@@ -63,6 +65,12 @@ const initialSpec: AdaptiveUISpec = {
 };
 
 export function SolutionArchitectApp() {
+  const [sessionId, setSessionId] = useState(() => {
+    try {
+      return localStorage.getItem('adaptive-ui-active-session') || generateSessionId();
+    } catch { return generateSessionId(); }
+  });
+
   const [diagram, setDiagram] = useState(() => {
     try {
       return sessionStorage.getItem('adaptive-ui-diagram') || initialSpec.diagram || '';
@@ -76,6 +84,49 @@ export function SolutionArchitectApp() {
     }
   }, []);
 
+  const handleNewSession = useCallback(() => {
+    // Save current session before creating a new one
+    try {
+      const raw = localStorage.getItem(`adaptive-ui-turns-${sessionId}`);
+      if (raw) {
+        const { turns } = JSON.parse(raw);
+        if (turns && turns.length > 1) {
+          const name = turns[turns.length - 1]?.agentSpec?.title || 'Session';
+          saveSession(sessionId, name, turns);
+        }
+      }
+    } catch {}
+
+    const newId = generateSessionId();
+    setSessionId(newId);
+    try { localStorage.setItem('adaptive-ui-active-session', newId); } catch {}
+    setDiagram('');
+    try { sessionStorage.removeItem('adaptive-ui-diagram'); } catch {}
+
+    // Save the new session immediately so it shows in the sidebar
+    saveSession(newId, 'New session', []);
+  }, [sessionId]);
+
+  const handleSelectSession = useCallback((id: string) => {
+    setSessionId(id);
+    try { localStorage.setItem('adaptive-ui-active-session', id); } catch {}
+  }, []);
+
+  // Auto-save session name from first user message
+  const handleSpecChangeWithSave = useCallback((spec: AdaptiveUISpec) => {
+    handleSpecChange(spec);
+    // Save session with a name derived from the agent message
+    const name = spec.title || spec.agentMessage?.slice(0, 50) || 'Untitled session';
+    // We'll save from the persisted turns
+    try {
+      const raw = localStorage.getItem(`adaptive-ui-turns-${sessionId}`);
+      if (raw) {
+        const { turns } = JSON.parse(raw);
+        saveSession(sessionId, name, turns);
+      }
+    } catch {}
+  }, [sessionId, handleSpecChange]);
+
   return React.createElement('div', {
     style: {
       display: 'flex',
@@ -83,6 +134,13 @@ export function SolutionArchitectApp() {
       width: '100%',
     } as React.CSSProperties,
   },
+    // Sessions sidebar
+    React.createElement(SessionsSidebar, {
+      activeSessionId: sessionId,
+      onSelectSession: handleSelectSession,
+      onNewSession: handleNewSession,
+    }),
+
     // Left panel: Architecture diagram + Files
     React.createElement('div', {
       style: {
@@ -125,15 +183,16 @@ export function SolutionArchitectApp() {
       } as React.CSSProperties,
     },
       React.createElement(AdaptiveApp, {
+        key: sessionId,
         initialSpec,
-        persistKey: 'architect',
+        persistKey: sessionId,
         systemPromptOverride: ARCHITECT_SYSTEM_PROMPT,
         theme: {
           primaryColor: '#2563eb',
           backgroundColor: '#f0f2f5',
           surfaceColor: '#ffffff',
         },
-        onSpecChange: handleSpecChange,
+        onSpecChange: handleSpecChangeWithSave,
         onError: (error: Error) => console.error('Architect error:', error),
       })
     )
