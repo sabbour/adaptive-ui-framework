@@ -14,49 +14,24 @@ const BASE_URL = 'https://www.themealdb.com/api/json/v1/1';
 const RESTAURANT_DATA_PROMPT = `
 RESTAURANT DATA PACK:
 
-You have access to real meal and recipe data via TheMealDB. Use these tools to give concrete, real recommendations.
+Real meal/recipe data via TheMealDB. Use for concrete recommendations.
 
-TOOLS (called during inference):
-- search_meals: Search meals by name.
-  Use when the user mentions a specific dish or keyword.
-  Example: search_meals({ query: "chicken curry" })
-  Returns: list of matching meals with name, category, area (cuisine), image, and ID.
+TOOLS:
+- search_meals: Search by name ("chicken curry", "pasta"). Returns meals with name, category, area, image, ID.
+- browse_by_area: Meals from a cuisine ("Japanese", "Mexican").
+- browse_by_category: Meals by type ("Seafood", "Vegetarian", "Dessert").
+- get_meal_details: Full recipe by meal ID — ingredients, instructions, image. Use after search/browse.
+- list_categories: All available categories with descriptions.
+- list_areas: All available cuisine areas.
 
-- browse_by_area: List meals from a specific cuisine/area.
-  Use when the user wants food from a specific region or country.
-  Example: browse_by_area({ area: "Japanese" })
-  Returns: list of meals from that cuisine.
-
-- browse_by_category: List meals in a category.
-  Use when the user wants a type of food (beef, seafood, vegetarian, dessert, etc.).
-  Example: browse_by_category({ category: "Seafood" })
-  Returns: list of meals in that category.
-
-- get_meal_details: Get full recipe details by meal ID.
-  Use after finding a meal via search or browse — to show ingredients, instructions, and image.
-  Example: get_meal_details({ id: "52772" })
-  Returns: full recipe with ingredients list, quantities, cooking instructions, and image URL.
-
-- list_categories: List all available meal categories.
-  Use when you need to show the user what types of food are available.
-  Returns: list of categories with descriptions.
-
-- list_areas: List all available cuisine areas.
-  Use when you need to show what cuisines are available.
-  Returns: list of area names (e.g., "Italian", "Japanese", "Mexican").
-
-WHEN TO USE TOOLS:
-- ALWAYS search or browse when recommending dishes — use real meal data, don't make up menu items
-- Use get_meal_details to show full recipes when the user picks a dish
-- Use list_categories or list_areas when the user says "what's available?" or "surprise me"
-- Combine results: browse_by_area for cuisine, then get_meal_details for the specific dish
-
-PRESENTING DATA:
-- Show meal images using the thumbnail URLs from the API
-- Present ingredients as a clear list with quantities
-- Mention the cuisine origin: "This is a classic Japanese dish..."
-- When showing multiple options, include the category and area tags
+RULES:
+- ALWAYS search/browse when recommending — use real data, don't invent dishes.
+- Use get_meal_details for full recipes when user picks a dish.
+- Use list_categories/list_areas for "what's available?" or "surprise me".
+- Show meal images from thumbnail URLs. Present ingredients with quantities.
+- Mention cuisine origin. Include category/area tags when showing multiple options.
 `;
+
 
 /** Slim a meal search/browse result to essential fields */
 function slimMealList(meals: any[] | null): any[] {
