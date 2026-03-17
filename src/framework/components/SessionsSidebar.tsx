@@ -137,7 +137,8 @@ export function SessionsSidebar({
       style: {
         borderTop: '1px solid var(--adaptive-border, #e5e7eb)',
         display: 'flex', flexDirection: 'column',
-        maxHeight: '50%', flexShrink: 0,
+        minHeight: '80px', maxHeight: '50%',
+        flex: artifacts.length > 0 ? '0 1 auto' : '0 0 auto',
       } as React.CSSProperties,
     },
       // Files header

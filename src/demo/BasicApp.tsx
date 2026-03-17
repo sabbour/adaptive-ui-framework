@@ -388,11 +388,12 @@ export function SolutionArchitectApp() {
       display: 'flex',
       height: '100%',
       width: '100%',
+      overflow: 'hidden',
     } as React.CSSProperties,
   },
     // Left: Sessions sidebar with files
     React.createElement('div', {
-      style: { width: `${sidebarWidth}px`, flexShrink: 0, height: '100%' } as React.CSSProperties,
+      style: { width: `${sidebarWidth}px`, flexShrink: 0, height: '100%', overflow: 'hidden' } as React.CSSProperties,
     },
       React.createElement(SessionsSidebar, {
         activeSessionId: sessionId,
