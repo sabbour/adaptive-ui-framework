@@ -3,7 +3,7 @@ import type { ConversationTurn } from '../schema';
 import type { DecisionEntry } from '../decision-log';
 import { AdaptiveRenderer } from '../renderer';
 import { useAdaptive } from '../context';
-import { simpleMarkdown } from './builtins';
+import { simpleMarkdown, promptHistory, MAX_PROMPT_HISTORY } from './builtins';
 import { getCompletedRequests, subscribeCompleted, type CompletedRequest } from '../request-tracker';
 
 // Icons
@@ -94,6 +94,8 @@ function ActiveTurn({ turn }: { turn: ConversationTurn }) {
   const [escapeText, setEscapeText] = useState('');
   const [escapeOpen, setEscapeOpen] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [historyIndex, setHistoryIndex] = useState(-1);
+  const savedDraftRef = useRef('');
 
   // Collapse if submitted locally OR if a prompt was sent via another path (e.g. chatInput)
   const isCollapsed = submitted || !!turn.userMessage || isLoading;
@@ -107,9 +109,56 @@ function ActiveTurn({ turn }: { turn: ConversationTurn }) {
   const handleEscapeSend = () => {
     const text = escapeText.trim();
     if (!text) return;
+    // Add to shared prompt history
+    if (promptHistory.length === 0 || promptHistory[promptHistory.length - 1] !== text) {
+      promptHistory.push(text);
+      if (promptHistory.length > MAX_PROMPT_HISTORY) promptHistory.shift();
+    }
     setEscapeText('');
     setEscapeOpen(false);
+    setHistoryIndex(-1);
+    savedDraftRef.current = '';
     handleSend(text);
+  };
+
+  const handleEscapeKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleEscapeSend();
+      return;
+    }
+    if (e.key === 'Escape') {
+      setEscapeOpen(false);
+      setEscapeText('');
+      setHistoryIndex(-1);
+      return;
+    }
+    if (e.key === 'ArrowUp') {
+      if (promptHistory.length === 0) return;
+      e.preventDefault();
+      if (historyIndex === -1) {
+        savedDraftRef.current = escapeText;
+      }
+      const newIndex = historyIndex === -1
+        ? promptHistory.length - 1
+        : Math.max(0, historyIndex - 1);
+      setHistoryIndex(newIndex);
+      setEscapeText(promptHistory[newIndex]);
+      return;
+    }
+    if (e.key === 'ArrowDown') {
+      if (historyIndex === -1) return;
+      e.preventDefault();
+      if (historyIndex >= promptHistory.length - 1) {
+        setHistoryIndex(-1);
+        setEscapeText(savedDraftRef.current);
+      } else {
+        const newIndex = historyIndex + 1;
+        setHistoryIndex(newIndex);
+        setEscapeText(promptHistory[newIndex]);
+      }
+      return;
+    }
   };
 
   return React.createElement('div', { style: { marginBottom: '8px' } },
@@ -163,17 +212,8 @@ function ActiveTurn({ turn }: { turn: ConversationTurn }) {
                     },
                       React.createElement('textarea', {
                         value: escapeText,
-                        onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => setEscapeText(e.target.value),
-                        onKeyDown: (e: React.KeyboardEvent) => {
-                          if (e.key === 'Enter' && !e.shiftKey) {
-                            e.preventDefault();
-                            handleEscapeSend();
-                          }
-                          if (e.key === 'Escape') {
-                            setEscapeOpen(false);
-                            setEscapeText('');
-                          }
-                        },
+                        onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => { setEscapeText(e.target.value); setHistoryIndex(-1); },
+                        onKeyDown: handleEscapeKeyDown,
                         placeholder: "Can't fill the form? Describe what you need instead...",
                         rows: 2, autoFocus: true,
                         style: {

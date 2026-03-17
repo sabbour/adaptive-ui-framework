@@ -495,8 +495,8 @@ function AlertComponent({ node }: AdaptiveComponentProps<AlertNode>) {
 
 // ─── ChatInput ───
 // Module-level prompt history (persisted across re-renders, shared across all chatInput instances)
-const promptHistory: string[] = [];
-const MAX_PROMPT_HISTORY = 50;
+export const promptHistory: string[] = [];
+export const MAX_PROMPT_HISTORY = 50;
 
 function ChatInputComponent({ node }: AdaptiveComponentProps<ChatInputNode>) {
   const { sendPrompt, isLoading } = useAdaptive();
