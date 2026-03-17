@@ -347,7 +347,7 @@ export class OpenAIAdapter implements LLMAdapter {
     messages.push({
       role: 'user',
       content: `Current state: ${JSON.stringify(
-        Object.fromEntries(Object.entries(currentState).filter(([k]) => !k.startsWith('__')))
+        Object.fromEntries(Object.entries(currentState).filter(([k]) => !k.startsWith('__') && !/password|secret|token|apiKey|credential|connectionString/i.test(k)))
       )}\n\nUser request: ${prompt}`,
     });
 

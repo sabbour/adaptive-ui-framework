@@ -82,6 +82,35 @@ registerTool(
   },
   async (args) => {
     const url = String(args.url);
+
+    // ─── SSRF Protection ───
+    // Block private/loopback/link-local IPs and non-HTTP protocols
+    try {
+      const parsed = new URL(url);
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        return `Blocked: only http/https URLs are allowed (got ${parsed.protocol})`;
+      }
+      const hostname = parsed.hostname.toLowerCase();
+      if (
+        hostname === 'localhost' ||
+        hostname === '127.0.0.1' ||
+        hostname === '[::1]' ||
+        hostname === '0.0.0.0' ||
+        hostname.endsWith('.local') ||
+        hostname.endsWith('.internal') ||
+        /^10\./.test(hostname) ||
+        /^172\.(1[6-9]|2\d|3[01])\./.test(hostname) ||
+        /^192\.168\./.test(hostname) ||
+        /^169\.254\./.test(hostname) ||
+        hostname === 'metadata.google.internal' ||
+        hostname === 'metadata.google.com'
+      ) {
+        return `Blocked: cannot fetch private/internal URLs (${hostname})`;
+      }
+    } catch {
+      return `Invalid URL: ${url}`;
+    }
+
     const headers: Record<string, string> = {
       Accept: 'text/markdown, text/plain, text/html',
     };

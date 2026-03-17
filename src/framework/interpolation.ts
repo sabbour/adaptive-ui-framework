@@ -5,6 +5,9 @@ import type { AdaptiveValue } from './schema';
 
 export type StateStore = Record<string, AdaptiveValue | AdaptiveValue[] | Record<string, AdaptiveValue>[]>;
 
+/** Keys that are considered sensitive and must not be interpolated into rendered output */
+const SENSITIVE_KEY_RE = /^__|password|secret|token|apiKey|credential|connectionString/i;
+
 /** Interpolate {{state.xxx}} / {{st.xxx}} and {{item.xxx}} in a string */
 export function interpolate(
   template: string,
@@ -26,6 +29,8 @@ export function interpolate(
 
     if (trimmed.startsWith('state.') || trimmed.startsWith('st.')) {
       const key = trimmed.startsWith('state.') ? trimmed.slice(6) : trimmed.slice(3);
+      // Block sensitive state keys from leaking into rendered output
+      if (SENSITIVE_KEY_RE.test(key)) return '[REDACTED]';
       const val = state[key];
       if (val === null || val === undefined) return '';
       if (typeof val === 'object') return JSON.stringify(val);
