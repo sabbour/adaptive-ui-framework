@@ -4,11 +4,13 @@ import type { AdaptiveUISpec } from '../framework/schema';
 import { registerApp } from '../framework/app-registry';
 import { registerPackWithSkills } from '../framework/registry';
 import { createAzurePack } from '../packs/azure';
+import { createGitHubPack } from '../packs/github';
 import { ArchitectureDiagram } from '../framework/components/ArchitectureDiagram';
 import { registerAzureDiagramIcons } from '../packs/azure/diagram-icons';
 
 // Register packs and diagram icons
 registerPackWithSkills(createAzurePack());
+registerPackWithSkills(createGitHubPack());
 registerAzureDiagramIcons();
 
 // ─── Solution Architect Coworker ───

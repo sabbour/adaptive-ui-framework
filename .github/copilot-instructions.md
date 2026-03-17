@@ -15,6 +15,12 @@ npm run preview      # Preview production build
 
 No test framework is configured yet.
 
+## Git Workflow
+
+- **Big features**: Create a branch (`spike/<feature-name>` or `feat/<feature-name>`), do all work there. When the user approves (e.g., "looks good", "merge it", "you're good"), run `npx tsc -b --noEmit`, commit, merge back to main with `--no-ff`, and delete the branch.
+- **Small fixes**: Commit directly on the current branch.
+- **Always** verify the build passes (`npx tsc -b --noEmit`) before committing.
+
 ## Architecture
 
 Two modes: **intent-based** (token-efficient) and **full-spec** (maximum layout control).
