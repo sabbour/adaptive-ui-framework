@@ -2,6 +2,11 @@ import React from 'react';
 import { AdaptiveApp } from '../framework';
 import type { AdaptiveUISpec } from '../framework/schema';
 import { registerApp } from '../framework/app-registry';
+import { registerPackWithSkills } from '../framework/registry';
+import { createRestaurantDataPack } from '../packs/restaurant-data';
+
+// Register restaurant data pack (TheMealDB — recipes, cuisines, categories)
+registerPackWithSkills(createRestaurantDataPack());
 
 const FOOD_ORDER_SYSTEM_PROMPT = `You are a Food Ordering Assistant — a friendly, helpful concierge for ordering food from local restaurants.
 
@@ -78,6 +83,7 @@ function FoodOrderApp() {
       initialSpec,
       persistKey: 'food',
       systemPromptSuffix: FOOD_ORDER_SYSTEM_PROMPT,
+      visiblePacks: ['restaurant-data'],
       theme: {
         primaryColor: '#e85d04',
         backgroundColor: '#fff7ed',
