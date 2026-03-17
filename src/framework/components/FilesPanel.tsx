@@ -5,9 +5,74 @@
 import React, { useSyncExternalStore, useState } from 'react';
 import { getArtifacts, subscribeArtifacts, downloadArtifact, removeArtifact, clearArtifacts, type Artifact } from '../artifacts';
 
+/** Download all artifacts as individual files (triggers multiple downloads) */
+function downloadAllArtifacts(artifacts: Artifact[]) {
+  for (const artifact of artifacts) {
+    downloadArtifact(artifact);
+  }
+}
+
+/** Commit artifacts to a GitHub repo via the Contents API */
+async function commitToGitHub(
+  artifacts: Artifact[],
+  token: string,
+  owner: string,
+  repo: string,
+  branch: string,
+  commitMessage: string,
+  onProgress?: (msg: string) => void
+): Promise<void> {
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    Accept: 'application/vnd.github+json',
+    'Content-Type': 'application/json',
+  };
+
+  for (let i = 0; i < artifacts.length; i++) {
+    const artifact = artifacts[i];
+    onProgress?.(`Committing ${artifact.filename} (${i + 1}/${artifacts.length})...`);
+
+    // Check if file exists (to get its SHA for updates)
+    let sha: string | undefined;
+    try {
+      const checkRes = await fetch(
+        `https://api.github.com/repos/${owner}/${repo}/contents/${artifact.filename}?ref=${branch}`,
+        { headers }
+      );
+      if (checkRes.ok) {
+        const existing = await checkRes.json();
+        sha = existing.sha;
+      }
+    } catch { /* file doesn't exist, that's fine */ }
+
+    // Create or update the file
+    const body: Record<string, unknown> = {
+      message: `${commitMessage}: ${artifact.filename}`,
+      content: btoa(unescape(encodeURIComponent(artifact.content))),
+      branch,
+    };
+    if (sha) body.sha = sha;
+
+    const res = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/contents/${artifact.filename}`,
+      { method: 'PUT', headers, body: JSON.stringify(body) }
+    );
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(`Failed to commit ${artifact.filename}: ${res.status} ${(err as any)?.message || ''}`);
+    }
+  }
+}
+
 export function FilesPanel() {
   const artifacts = useSyncExternalStore(subscribeArtifacts, getArtifacts);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [showCommit, setShowCommit] = useState(false);
+  const [commitMsg, setCommitMsg] = useState('Add generated infrastructure files');
+  const [commitBranch, setCommitBranch] = useState('main');
+  const [committing, setCommitting] = useState(false);
+  const [commitStatus, setCommitStatus] = useState<string | null>(null);
   const selected = selectedId ? artifacts.find((a) => a.id === selectedId) : null;
 
   if (selected) {
@@ -85,13 +150,111 @@ export function FilesPanel() {
       },
     },
       `Files (${artifacts.length})`,
-      artifacts.length > 0 && React.createElement('button', {
-        onClick: clearArtifacts,
+      artifacts.length > 0 && React.createElement('div', { style: { display: 'flex', gap: '4px' } },
+        React.createElement('button', {
+          onClick: () => downloadAllArtifacts(artifacts),
+          title: 'Download all files',
+          style: {
+            background: 'none', border: '1px solid var(--adaptive-border, #e5e7eb)', borderRadius: '4px',
+            color: 'var(--adaptive-text, #111827)', cursor: 'pointer', fontSize: '10px', padding: '2px 6px',
+          },
+        }, '\u2913 All'),
+        React.createElement('button', {
+          onClick: () => setShowCommit(true),
+          title: 'Push files to GitHub',
+          style: {
+            background: 'none', border: '1px solid var(--adaptive-border, #e5e7eb)', borderRadius: '4px',
+            color: 'var(--adaptive-text, #111827)', cursor: 'pointer', fontSize: '10px', padding: '2px 6px',
+          },
+        }, '\u2B22 Push'),
+        React.createElement('button', {
+          onClick: clearArtifacts,
+          title: 'Clear all files',
+          style: {
+            background: 'none', border: 'none', color: 'var(--adaptive-text-secondary, #6b7280)',
+            cursor: 'pointer', fontSize: '10px',
+          },
+        }, 'Clear')
+      )
+    ),
+
+    // Commit to GitHub dialog
+    showCommit && React.createElement('div', {
+      style: {
+        padding: '10px 12px', borderBottom: '1px solid var(--adaptive-border, #e5e7eb)',
+        backgroundColor: '#f9fafb', fontSize: '11px',
+      },
+    },
+      React.createElement('div', { style: { fontWeight: 600, marginBottom: '6px' } }, 'Push to GitHub'),
+      React.createElement('input', {
+        type: 'text',
+        value: commitBranch,
+        onChange: (e: React.ChangeEvent<HTMLInputElement>) => setCommitBranch(e.target.value),
+        placeholder: 'Branch (e.g., main)',
+        style: { width: '100%', padding: '4px 8px', fontSize: '11px', marginBottom: '4px', borderRadius: '4px', border: '1px solid #d1d5db' },
+      }),
+      React.createElement('input', {
+        type: 'text',
+        value: commitMsg,
+        onChange: (e: React.ChangeEvent<HTMLInputElement>) => setCommitMsg(e.target.value),
+        placeholder: 'Commit message',
+        style: { width: '100%', padding: '4px 8px', fontSize: '11px', marginBottom: '6px', borderRadius: '4px', border: '1px solid #d1d5db' },
+      }),
+      commitStatus && React.createElement('div', {
         style: {
-          background: 'none', border: 'none', color: 'var(--adaptive-text-secondary, #6b7280)',
-          cursor: 'pointer', fontSize: '10px',
+          fontSize: '10px', marginBottom: '4px', padding: '4px',
+          color: commitStatus.startsWith('Error') ? '#dc2626' : commitStatus.startsWith('\u2713') ? '#16a34a' : '#6b7280',
         },
-      }, 'Clear all')
+      }, commitStatus),
+      React.createElement('div', { style: { display: 'flex', gap: '4px' } },
+        React.createElement('button', {
+          onClick: async () => {
+            // Read GitHub state from localStorage
+            const token = (() => { try { return localStorage.getItem('adaptive-ui-github-token') || ''; } catch { return ''; } })();
+            const stateRaw = (() => { try { return localStorage.getItem('adaptive-ui-state') || '{}'; } catch { return '{}'; } })();
+            let owner = '', repo = '';
+            try {
+              const s = JSON.parse(stateRaw);
+              owner = s.githubOrg || s.__githubUser || '';
+              repo = s.githubRepo || '';
+            } catch {}
+            // Also try reading from the running app state via a data attribute
+            if (!owner || !repo) {
+              const el = document.querySelector('[data-github-org]');
+              if (el) {
+                owner = owner || (el as HTMLElement).dataset.githubOrg || '';
+                repo = repo || (el as HTMLElement).dataset.githubRepo || '';
+              }
+            }
+            if (!token) { setCommitStatus('Error: Not signed in to GitHub. Sign in first.'); return; }
+            if (!owner || !repo) { setCommitStatus('Error: No repository selected. Pick an org and repo first.'); return; }
+
+            setCommitting(true);
+            setCommitStatus(null);
+            try {
+              await commitToGitHub(artifacts, token, owner, repo, commitBranch, commitMsg, setCommitStatus);
+              setCommitStatus(`\u2713 Pushed ${artifacts.length} files to ${owner}/${repo}`);
+            } catch (err) {
+              setCommitStatus(`Error: ${err instanceof Error ? err.message : String(err)}`);
+            } finally {
+              setCommitting(false);
+            }
+          },
+          disabled: committing || !commitBranch.trim() || !commitMsg.trim(),
+          style: {
+            flex: 1, padding: '4px', borderRadius: '4px', border: 'none',
+            backgroundColor: '#24292e', color: '#fff', fontSize: '10px', fontWeight: 500,
+            cursor: committing ? 'wait' : 'pointer', opacity: committing ? 0.6 : 1,
+          },
+        }, committing ? 'Pushing...' : `Push ${artifacts.length} files`),
+        React.createElement('button', {
+          onClick: () => { setShowCommit(false); setCommitStatus(null); },
+          style: {
+            padding: '4px 8px', borderRadius: '4px', border: '1px solid #d1d5db',
+            background: '#fff', fontSize: '10px', cursor: 'pointer',
+          },
+        }, 'Cancel')
+      )
     ),
 
     // File list
