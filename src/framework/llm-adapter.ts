@@ -71,6 +71,10 @@ export interface LLMAdapter {
     currentState: StateStore,
     conversationHistory: LLMMessage[]
   ): Promise<GenerateUIResult>;
+
+  /** Summarize old conversation history into a compact context string.
+   *  Used by auto-compaction to reduce token usage on long conversations. */
+  summarizeHistory?(messages: LLMMessage[]): Promise<string>;
 }
 
 // ─── System prompt that teaches the LLM the schema ───
@@ -577,6 +581,34 @@ export class OpenAIAdapter implements LLMAdapter {
       rawRequest: JSON.stringify(loopMessages, null, 2),
       decisionLog: getDecisionLog(),
     };
+  }
+
+  async summarizeHistory(messages: LLMMessage[]): Promise<string> {
+    const { url: endpoint, isAzure } = normalizeEndpoint(this.config.endpoint, this.config.model);
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (isAzure) {
+      headers['api-key'] = this.config.apiKey;
+    } else {
+      headers['Authorization'] = `Bearer ${this.config.apiKey}`;
+    }
+
+    const conversation = messages.map(m => `[${m.role}]: ${m.content}`).join('\n\n');
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model: this.config.model ?? 'gpt-4o',
+        messages: [
+          { role: 'system', content: 'You are a concise conversation summarizer. Output plain text only — no JSON, no markdown fences.' },
+          { role: 'user', content: `Summarize this conversation history into a compact context summary (under 500 words) that preserves:\n- All user requirements and constraints discovered\n- Key decisions made (architecture, services, tech stack)\n- Current project state and what has been completed\n- Pending questions or next steps\n\nConversation:\n${conversation}` },
+        ],
+        max_completion_tokens: 2048,
+      }),
+    });
+
+    if (!res.ok) throw new Error(`Summarization failed: ${res.status}`);
+    const data = await res.json();
+    return data.choices?.[0]?.message?.content ?? '';
   }
 }
 

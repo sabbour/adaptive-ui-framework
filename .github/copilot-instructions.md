@@ -104,6 +104,7 @@ A `ComponentPack` bundles: components, system prompt, knowledge skills resolver,
 - `resolveSkills(prompt)` fetches domain knowledge on demand per user message.
 - **Tools vs Components**: Read-only API queries that the LLM needs to make decisions should be **tools** (run during inference). Interactive UI with user confirmation should be **components** (rendered in the browser).
 - Pack tools are registered automatically during `registerPackWithSkills()` via the `tools` array in the pack definition.
+- **Pack system prompts must explicitly guide tool vs component usage.** If a pack has both a read-only tool (`github_api_get`) and a query component (`githubQuery`), the prompt must tell the LLM to use the tool for reads and the component only for writes. Without this, LLMs default to components, which load data into state but never show it to the LLM — resulting in useless "N items loaded" UI.
 - **Provider-specific content belongs in packs, not the base prompt.** Cloud-specific IaC (Bicep, CloudFormation), CLI commands (`az`, `aws`), service names (Key Vault, Log Analytics), and diagram icon lists go in the pack's `systemPrompt`. The base architect prompt uses generic terms (vault service, workload identity, centralized logging).
 
 ### Path Alias

@@ -5,7 +5,7 @@
 
 export interface DecisionEntry {
   /** Pipeline stage */
-  stage: 'adapter' | 'intent' | 'renderer';
+  stage: 'adapter' | 'intent' | 'renderer' | 'compaction';
   /** What happened */
   message: string;
   /** Timestamp */

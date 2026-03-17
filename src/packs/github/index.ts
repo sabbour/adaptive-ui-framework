@@ -19,9 +19,27 @@ issues, PRs, or workflows, use these features.
 
 TOOLS (called during inference, before generating UI):
 - github_api_get: Read-only GitHub API caller. Use to list repos, issues, PRs, branches,
-  workflows, or check repo details BEFORE generating the UI response.
+  workflows, or check repo details BEFORE generating the UI response. Returns JSON data
+  that YOU can see and use to build a meaningful UI (tables, selects, repo cards).
   Requires the user to be signed in (githubLogin component must have been shown first).
   Example: github_api_get({ path: "/repos/owner/repo/issues?state=open&per_page=10" })
+  Example: github_api_get({ path: "/user/orgs" })
+  Example: github_api_get({ path: "/orgs/{org}/repos?sort=updated&per_page=30" })
+
+  REPO LISTING WORKFLOW (multi-turn — do NOT collapse into one step):
+  When listing repos, ALWAYS show an org/account picker FIRST in a separate turn:
+  1. Call github_api_get({ path: "/user/orgs" }) to get the user's organizations
+  2. In THIS turn's response, show a select/radioGroup with the org names PLUS "Personal account (username)"
+     as options. Let the user pick. Do NOT fetch repos yet — STOP here and wait for the user's choice.
+  3. Only AFTER the user selects an org, in the NEXT turn, call:
+     - github_api_get({ path: "/orgs/{org}/repos?sort=updated&per_page=30" }) for an org
+     - github_api_get({ path: "/user/repos?sort=updated&per_page=30&type=owner" }) for personal
+     Then show the repo list as a select.
+  Do NOT fetch repos and orgs in the same tool-call round. Do NOT skip the org picker.
+
+  IMPORTANT: When you need to READ data to present it to the user (list repos, show issues,
+  display branches), ALWAYS use this tool — NOT githubQuery. The tool runs during inference
+  so you can see the results and format them into a proper UI (select, table, list).
 
 COMPONENTS (use in "ask" as { type: "component", component: "name", props: {} } — NEVER in "show"):
 - "githubLogin": { title?, description? }
@@ -31,23 +49,11 @@ COMPONENTS (use in "ask" as { type: "component", component: "name", props: {} } 
     Use this FIRST whenever GitHub API access is needed and __githubToken is not set.
     This is a self-managed component — do NOT include a "next" prompt for sign-in steps.
 
-- "githubQuery": { api: "/repos/{owner}/{repo}/issues", bind: "stateKey", method?: "GET"|"POST"|"PUT"|"PATCH"|"DELETE", body?: "json string", loadingLabel?, showResult?, confirm? }
-    Generic GitHub API caller. Works like azureQuery but for the GitHub REST API.
-    The API path supports {{state.key}} interpolation.
-    GET requests auto-execute on mount. Write operations show a confirmation dialog.
-    Results are stored as JSON string under the bind key.
-    
-    Common API paths:
-    - List repos for a user: /users/{username}/repos?sort=updated&per_page=10
-    - Get a repo: /repos/{owner}/{repo}
-    - List issues: /repos/{owner}/{repo}/issues?state=open&per_page=20
-    - List PRs: /repos/{owner}/{repo}/pulls?state=open&per_page=20
-    - Get repo languages: /repos/{owner}/{repo}/languages
-    - List branches: /repos/{owner}/{repo}/branches
-    - List workflows: /repos/{owner}/{repo}/actions/workflows
-    - List workflow runs: /repos/{owner}/{repo}/actions/runs?per_page=5
-    - Create an issue: method "POST", api "/repos/{owner}/{repo}/issues", body with title and body
-    - Create a comment: method "POST", api "/repos/{owner}/{repo}/issues/{number}/comments", body with body
+- "githubQuery": { api, bind, method?, body?, loadingLabel?, showResult?, confirm? }
+    Generic GitHub API caller for WRITE operations (POST, PUT, PATCH, DELETE).
+    Use ONLY for mutations that need user confirmation (create issue, comment, etc.).
+    Do NOT use githubQuery for read-only data fetching — use the github_api_get tool instead.
+    Write operations show a confirmation dialog. Results are stored in state under the bind key.
 
 - "githubRepoInfo": { repo: "owner/repo" }
     Displays a rich repo card with name, description, language, stars, forks, and issue count.
@@ -55,9 +61,9 @@ COMPONENTS (use in "ask" as { type: "component", component: "name", props: {} } 
 
 When the user mentions a GitHub repo or workflow:
 1. If __githubToken is not set, show githubLogin component first
-2. Use githubQuery to fetch data from the GitHub API
-3. Present results using standard show types (table, markdown, code)
-4. For write operations (create issue, comment, etc.), always confirm first`;
+2. Use the github_api_get TOOL to read data (repos, issues, PRs, branches) — you'll see the results and can build proper UI
+3. Present results using standard components (select for choices, table for lists, markdown for details)
+4. For write operations (create issue, comment, etc.), use githubQuery component with confirm`;
 
 export function createGitHubPack(): ComponentPack {
   return {
@@ -101,7 +107,14 @@ export function createGitHubPack(): ComponentPack {
             const data = await res.json();
             if (!res.ok) return `GitHub API error (${res.status}): ${data?.message ?? JSON.stringify(data)}`;
             const text = JSON.stringify(data, null, 2);
-            return text.length > 8000 ? text.slice(0, 8000) + '\n[truncated]' : text;
+            let result = text.length > 8000 ? text.slice(0, 8000) + '\n[truncated]' : text;
+
+            // When listing orgs, remind the LLM to show an org picker before fetching repos
+            if (path.match(/^\/user\/orgs\b/i)) {
+              result += '\n\nIMPORTANT: Show an org/account picker to the user NOW. Do NOT call github_api_get again for repos in this turn. Wait for the user to select an org first.';
+            }
+
+            return result;
           } catch (err) {
             return `Failed to call GitHub API: ${err instanceof Error ? err.message : String(err)}`;
           }
