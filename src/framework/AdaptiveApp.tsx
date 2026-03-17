@@ -356,6 +356,9 @@ export interface AdaptiveAppProps {
   /** Override the system prompt entirely (replaces the default ADAPTIVE_UI_SYSTEM_PROMPT) */
   systemPromptOverride?: string;
 
+  /** Additional context appended after the base system prompt (keeps component docs intact) */
+  systemPromptSuffix?: string;
+
   /** Additional settings components to inject into the settings panel */
   settingsComponents?: React.ComponentType[];
 
@@ -382,6 +385,7 @@ export function AdaptiveApp({
   onError,
   persistKey,
   systemPromptOverride,
+  systemPromptSuffix,
   settingsComponents,
   className,
   style,
@@ -418,9 +422,10 @@ export function AdaptiveApp({
       endpoint: config.endpoint || undefined,
       model: config.model || 'gpt-4o',
       systemPromptOverride,
+      systemPromptSuffix,
       useIntents: intentMode,
     });
-  }, [externalAdapter, isConnected, adapterKey, systemPromptOverride, intentMode]);
+  }, [externalAdapter, isConnected, adapterKey, systemPromptOverride, systemPromptSuffix, intentMode]);
 
   const handleConnect = useCallback((config: { endpoint: string; apiKey: string; model: string }) => {
     saveLLMConfig(config);

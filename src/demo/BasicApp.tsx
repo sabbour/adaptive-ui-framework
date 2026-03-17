@@ -235,7 +235,7 @@ export function SolutionArchitectApp() {
         key: sessionId,
         initialSpec,
         persistKey: sessionId,
-        systemPromptOverride: ARCHITECT_SYSTEM_PROMPT,
+        systemPromptSuffix: ARCHITECT_SYSTEM_PROMPT,
         theme: {
           primaryColor: '#2563eb',
           backgroundColor: '#f0f2f5',
