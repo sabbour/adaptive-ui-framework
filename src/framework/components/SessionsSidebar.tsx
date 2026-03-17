@@ -1,21 +1,31 @@
 // ─── Sessions Sidebar ───
-// Shows saved conversation sessions in a collapsible left sidebar.
-// Supports creating, switching, renaming, and deleting sessions.
+// Shows saved conversation sessions and file artifacts in a collapsible left sidebar.
+// Sessions section on top, Files section below.
 
 import React, { useSyncExternalStore, useState } from 'react';
 import {
   getSessions, subscribeSessions, deleteSession,
   type Session,
 } from '../session-manager';
+import {
+  getArtifacts, subscribeArtifacts, removeArtifact, downloadArtifact,
+  type Artifact,
+} from '../artifacts';
 
 interface SessionsSidebarProps {
   activeSessionId: string | null;
   onSelectSession: (id: string) => void;
   onNewSession: () => void;
+  selectedFileId: string | null;
+  onSelectFile: (id: string | null) => void;
 }
 
-export function SessionsSidebar({ activeSessionId, onSelectSession, onNewSession }: SessionsSidebarProps) {
+export function SessionsSidebar({
+  activeSessionId, onSelectSession, onNewSession,
+  selectedFileId, onSelectFile,
+}: SessionsSidebarProps) {
   const sessions = useSyncExternalStore(subscribeSessions, getSessions);
+  const artifacts = useSyncExternalStore(subscribeArtifacts, getArtifacts);
   const [collapsed, setCollapsed] = useState(false);
 
   if (collapsed) {
@@ -53,7 +63,7 @@ export function SessionsSidebar({ activeSessionId, onSelectSession, onNewSession
 
   return React.createElement('div', {
     style: {
-      width: '220px', flexShrink: 0, height: '100%',
+      width: '100%', height: '100%',
       borderRight: '1px solid var(--adaptive-border, #e5e7eb)',
       backgroundColor: 'var(--adaptive-surface, #fff)',
       display: 'flex', flexDirection: 'column',
@@ -63,13 +73,13 @@ export function SessionsSidebar({ activeSessionId, onSelectSession, onNewSession
     // Header
     React.createElement('div', {
       style: {
-        padding: '8px 10px', borderBottom: '1px solid var(--adaptive-border, #e5e7eb)',
+        padding: '10px 12px', borderBottom: '1px solid var(--adaptive-border, #e5e7eb)',
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         flexShrink: 0,
       },
     },
       React.createElement('span', {
-        style: { fontSize: '12px', fontWeight: 600, color: 'var(--adaptive-text, #111827)' },
+        style: { fontSize: '13px', fontWeight: 600, color: 'var(--adaptive-text, #111827)' },
       }, 'Sessions'),
       React.createElement('div', { style: { display: 'flex', gap: '4px' } },
         React.createElement('button', {
@@ -78,7 +88,7 @@ export function SessionsSidebar({ activeSessionId, onSelectSession, onNewSession
           style: {
             background: 'none', border: '1px solid var(--adaptive-border, #e5e7eb)',
             borderRadius: '4px', cursor: 'pointer',
-            fontSize: '12px', color: 'var(--adaptive-text-secondary, #6b7280)',
+            fontSize: '13px', color: 'var(--adaptive-text-secondary, #6b7280)',
             width: '22px', height: '22px',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           },
@@ -97,11 +107,11 @@ export function SessionsSidebar({ activeSessionId, onSelectSession, onNewSession
 
     // Session list
     React.createElement('div', {
-      style: { flex: 1, overflow: 'auto' } as React.CSSProperties,
+      style: { flex: 1, overflow: 'auto', minHeight: 0 } as React.CSSProperties,
     },
       sessions.length === 0
         ? React.createElement('div', {
-            style: { padding: '16px 10px', fontSize: '11px', color: 'var(--adaptive-text-secondary, #6b7280)', textAlign: 'center' as const },
+            style: { padding: '16px 10px', fontSize: '13px', color: 'var(--adaptive-text-secondary, #6b7280)', textAlign: 'center' as const },
           }, 'No saved sessions')
         : sessions.map((session) =>
             React.createElement(SessionItem, {
@@ -112,6 +122,55 @@ export function SessionsSidebar({ activeSessionId, onSelectSession, onNewSession
               onDelete: () => deleteSession(session.id),
             })
           )
+    ),
+
+    // ─── Files section ───
+    React.createElement('div', {
+      style: {
+        borderTop: '1px solid var(--adaptive-border, #e5e7eb)',
+        display: 'flex', flexDirection: 'column',
+        maxHeight: '50%', flexShrink: 0,
+      } as React.CSSProperties,
+    },
+      // Files header
+      React.createElement('div', {
+        style: {
+          padding: '10px 12px',
+          borderBottom: '1px solid var(--adaptive-border, #e5e7eb)',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          flexShrink: 0,
+        },
+      },
+        React.createElement('span', {
+          style: { fontSize: '13px', fontWeight: 600, color: 'var(--adaptive-text, #111827)' },
+        }, 'Files'),
+        React.createElement('span', {
+          style: { fontSize: '12px', color: 'var(--adaptive-text-secondary, #6b7280)' },
+        }, String(artifacts.length))
+      ),
+
+      // File list
+      React.createElement('div', {
+        style: { flex: 1, overflow: 'auto' } as React.CSSProperties,
+      },
+        artifacts.length === 0
+          ? React.createElement('div', {
+              style: { padding: '12px 10px', fontSize: '13px', color: 'var(--adaptive-text-secondary, #6b7280)', textAlign: 'center' as const },
+            }, 'No files yet')
+          : artifacts.map((artifact) =>
+              React.createElement(FileItem, {
+                key: artifact.id,
+                artifact,
+                isSelected: artifact.id === selectedFileId,
+                onSelect: () => onSelectFile(artifact.id),
+                onRemove: () => {
+                  removeArtifact(artifact.id);
+                  if (selectedFileId === artifact.id) onSelectFile(null);
+                },
+                onDownload: () => downloadArtifact(artifact),
+              })
+            )
+      )
     )
   );
 }
@@ -129,7 +188,7 @@ function SessionItem({
   return React.createElement('div', {
     onClick: onSelect,
     style: {
-      padding: '8px 10px', cursor: 'pointer',
+      padding: '10px 12px', cursor: 'pointer',
       backgroundColor: isActive ? 'rgba(37, 99, 235, 0.06)' : 'transparent',
       borderLeft: isActive ? '3px solid var(--adaptive-primary, #2563eb)' : '3px solid transparent',
       borderBottom: '1px solid var(--adaptive-border, #e5e7eb)',
@@ -139,13 +198,13 @@ function SessionItem({
     React.createElement('div', { style: { flex: 1, minWidth: 0 } },
       React.createElement('div', {
         style: {
-          fontSize: '12px', fontWeight: isActive ? 600 : 400,
+          fontSize: '13px', fontWeight: isActive ? 600 : 400,
           color: 'var(--adaptive-text, #111827)',
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const,
         },
       }, session.name),
       React.createElement('div', {
-        style: { fontSize: '10px', color: 'var(--adaptive-text-secondary, #6b7280)', marginTop: '2px' },
+        style: { fontSize: '11px', color: 'var(--adaptive-text-secondary, #6b7280)', marginTop: '2px' },
       }, `${session.turnCount} turns \u00B7 ${timeAgo}`)
     ),
     React.createElement('button', {
@@ -158,6 +217,64 @@ function SessionItem({
         opacity: 0.5,
       },
     }, '\u2715')
+  );
+}
+
+function FileItem({
+  artifact, isSelected, onSelect, onRemove, onDownload,
+}: {
+  artifact: Artifact;
+  isSelected: boolean;
+  onSelect: () => void;
+  onRemove: () => void;
+  onDownload: () => void;
+}) {
+  const icon = artifact.filename.endsWith('.mmd') ? '\uD83D\uDCC8'
+    : artifact.filename.endsWith('.md') ? '\uD83D\uDCC4'
+    : '\uD83D\uDCBE';
+
+  return React.createElement('div', {
+    onClick: onSelect,
+    style: {
+      padding: '8px 12px', cursor: 'pointer',
+      backgroundColor: isSelected ? 'rgba(37, 99, 235, 0.06)' : 'transparent',
+      borderLeft: isSelected ? '3px solid var(--adaptive-primary, #2563eb)' : '3px solid transparent',
+      borderBottom: '1px solid var(--adaptive-border, #e5e7eb)',
+      display: 'flex', alignItems: 'center', gap: '6px',
+      fontSize: '13px',
+    } as React.CSSProperties,
+  },
+    React.createElement('span', { style: { fontSize: '14px', flexShrink: 0 } }, icon),
+    React.createElement('div', {
+      style: {
+        flex: 1, minWidth: 0,
+        fontFamily: 'monospace', fontSize: '13px',
+        color: 'var(--adaptive-text, #111827)',
+        overflow: 'hidden', textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap' as const,
+      },
+    }, artifact.filename),
+    React.createElement('div', {
+      style: { display: 'flex', gap: '2px', flexShrink: 0 },
+      onClick: (e: React.MouseEvent) => e.stopPropagation(),
+    },
+      React.createElement('button', {
+        onClick: onDownload,
+        title: 'Download',
+        style: {
+          background: 'none', border: 'none', color: 'var(--adaptive-text-secondary, #6b7280)',
+          cursor: 'pointer', fontSize: '11px', padding: '2px', opacity: 0.6,
+        },
+      }, '\u2913'),
+      React.createElement('button', {
+        onClick: onRemove,
+        title: 'Remove',
+        style: {
+          background: 'none', border: 'none', color: 'var(--adaptive-text-secondary, #6b7280)',
+          cursor: 'pointer', fontSize: '11px', padding: '2px', opacity: 0.6,
+        },
+      }, '\u2715')
+    )
   );
 }
 

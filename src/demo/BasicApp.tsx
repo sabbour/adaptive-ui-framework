@@ -1,14 +1,15 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useSyncExternalStore } from 'react';
 import { AdaptiveApp } from '../framework';
 import type { AdaptiveUISpec } from '../framework/schema';
 import { registerApp } from '../framework/app-registry';
 import { registerPackWithSkills } from '../framework/registry';
 import { createAzurePack } from '../packs/azure';
 import { createGitHubPack } from '../packs/github';
-import { ArchitectureDiagram } from '../framework/components/ArchitectureDiagram';
-import { FilesPanel } from '../framework/components/FilesPanel';
 import { SessionsSidebar } from '../framework/components/SessionsSidebar';
-import { generateSessionId, saveSession, loadSession } from '../framework/session-manager';
+import { FileViewer, FileViewerPlaceholder } from '../framework/components/FileViewer';
+import { ResizeHandle } from '../framework/components/ResizeHandle';
+import { generateSessionId, saveSession } from '../framework/session-manager';
+import { upsertArtifact, getArtifacts, subscribeArtifacts } from '../framework/artifacts';
 import { registerAzureDiagramIcons } from '../packs/azure/diagram-icons';
 
 // Register packs and diagram icons
@@ -61,8 +62,49 @@ const initialSpec: AdaptiveUISpec = {
     type: 'chatInput',
     placeholder: 'Describe your application or architecture needs...',
   },
-  diagram: 'block-beta\n  columns 1\n  User(["User"]):1\n  space:1\n  App["Your Application"]:1\n  space:1\n  Cloud["Cloud Provider"]:1\n  User -- "requests" --> App\n  App -- "deploys to" --> Cloud',
+  diagram: 'flowchart TD\n  User(["User"])\n  App["Your Application"]\n  Cloud["Cloud Provider"]\n  User --> App --> Cloud',
 };
+
+// ─── Mermaid extraction ───
+// In Adaptive (full-spec) mode the LLM sometimes embeds the architecture
+// diagram as a markdown text node instead of using the top-level `diagram`
+// field. Walk the layout tree and extract the first Mermaid flowchart found.
+const MERMAID_RE = /^(flowchart\s+(TD|TB|BT|LR|RL)\b)/;
+
+function extractMermaidFromLayout(node: any): string | null {
+  if (!node) return null;
+  // Check markdown or text nodes
+  if ((node.type === 'markdown' || node.type === 'md' || node.type === 'text' || node.type === 'tx') && typeof node.content === 'string') {
+    if (MERMAID_RE.test(node.content.trim())) return node.content.trim();
+  }
+  // Also check the compact `c` key used before expansion
+  if (typeof node.c === 'string' && MERMAID_RE.test(node.c.trim())) return node.c.trim();
+  // Recurse children
+  const kids: any[] = node.children || node.ch || [];
+  for (const child of kids) {
+    const found = extractMermaidFromLayout(child);
+    if (found) return found;
+  }
+  // Recurse list items
+  if (Array.isArray(node.items)) {
+    for (const item of node.items) {
+      const found = extractMermaidFromLayout(item);
+      if (found) return found;
+    }
+  }
+  // Recurse tabs
+  if (Array.isArray(node.tabs)) {
+    for (const tab of node.tabs) {
+      if (tab.children) {
+        for (const child of tab.children) {
+          const found = extractMermaidFromLayout(child);
+          if (found) return found;
+        }
+      }
+    }
+  }
+  return null;
+}
 
 export function SolutionArchitectApp() {
   const [sessionId, setSessionId] = useState(() => {
@@ -71,16 +113,30 @@ export function SolutionArchitectApp() {
     } catch { return generateSessionId(); }
   });
 
-  const [diagram, setDiagram] = useState(() => {
-    try {
-      return sessionStorage.getItem('adaptive-ui-diagram') || initialSpec.diagram || '';
-    } catch { return initialSpec.diagram || ''; }
-  });
+  const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
+  const artifacts = useSyncExternalStore(subscribeArtifacts, getArtifacts);
+  const selectedArtifact = selectedFileId ? artifacts.find((a) => a.id === selectedFileId) || null : null;
+
+  // Resizable panel widths
+  const [sidebarWidth, setSidebarWidth] = useState(240);
+  const [chatWidth, setChatWidth] = useState(480);
+
+  const handleSidebarResize = useCallback((delta: number) => {
+    setSidebarWidth((w) => Math.max(160, Math.min(400, w + delta)));
+  }, []);
+  const handleChatResize = useCallback((delta: number) => {
+    setChatWidth((w) => Math.max(320, Math.min(700, w - delta)));
+  }, []);
 
   const handleSpecChange = useCallback((spec: AdaptiveUISpec) => {
-    if (spec.diagram) {
-      setDiagram(spec.diagram);
-      try { sessionStorage.setItem('adaptive-ui-diagram', spec.diagram); } catch {}
+    // Auto-save/update architecture diagram as an artifact.
+    // The diagram may come from the top-level `diagram` field (intent mode)
+    // or embedded as a markdown node in the layout (adaptive/full-spec mode).
+    const diagram = spec.diagram || extractMermaidFromLayout(spec.layout);
+    if (diagram) {
+      const art = upsertArtifact('architecture.mmd', diagram, 'mermaid', 'Solution Architecture');
+      // Auto-select the diagram artifact when it's first created
+      setSelectedFileId((prev) => prev || art.id);
     }
   }, []);
 
@@ -100,11 +156,10 @@ export function SolutionArchitectApp() {
     const newId = generateSessionId();
     setSessionId(newId);
     try { localStorage.setItem('adaptive-ui-active-session', newId); } catch {}
-    setDiagram('');
-    try { sessionStorage.removeItem('adaptive-ui-diagram'); } catch {}
 
     // Save the new session immediately so it shows in the sidebar
     saveSession(newId, 'New session', []);
+    setSelectedFileId(null);
   }, [sessionId]);
 
   const handleSelectSession = useCallback((id: string) => {
@@ -112,12 +167,10 @@ export function SolutionArchitectApp() {
     try { localStorage.setItem('adaptive-ui-active-session', id); } catch {}
   }, []);
 
-  // Auto-save session name from first user message
+  // Auto-save session name from spec changes
   const handleSpecChangeWithSave = useCallback((spec: AdaptiveUISpec) => {
     handleSpecChange(spec);
-    // Save session with a name derived from the agent message
     const name = spec.title || spec.agentMessage?.slice(0, 50) || 'Untitled session';
-    // We'll save from the persisted turns
     try {
       const raw = localStorage.getItem(`adaptive-ui-turns-${sessionId}`);
       if (raw) {
@@ -134,48 +187,44 @@ export function SolutionArchitectApp() {
       width: '100%',
     } as React.CSSProperties,
   },
-    // Sessions sidebar
-    React.createElement(SessionsSidebar, {
-      activeSessionId: sessionId,
-      onSelectSession: handleSelectSession,
-      onNewSession: handleNewSession,
-    }),
-
-    // Left panel: Architecture diagram + Files
+    // Left: Sessions sidebar with files
     React.createElement('div', {
-      style: {
-        width: '55%',
-        minWidth: '350px',
-        height: '100%',
-        flexShrink: 0,
-        display: 'flex',
-        flexDirection: 'column',
-      } as React.CSSProperties,
+      style: { width: `${sidebarWidth}px`, flexShrink: 0, height: '100%' } as React.CSSProperties,
     },
-      // Diagram (top)
-      React.createElement('div', {
-        style: { flex: 1, minHeight: 0, overflow: 'hidden' } as React.CSSProperties,
-      },
-        React.createElement(ArchitectureDiagram, {
-          diagram,
-          title: 'Solution Architecture',
-        })
-      ),
-      // Files panel (bottom)
-      React.createElement('div', {
-        style: {
-          height: '200px', flexShrink: 0,
-          borderTop: '1px solid #333',
-        } as React.CSSProperties,
-      },
-        React.createElement(FilesPanel)
-      )
+      React.createElement(SessionsSidebar, {
+        activeSessionId: sessionId,
+        onSelectSession: handleSelectSession,
+        onNewSession: handleNewSession,
+        selectedFileId,
+        onSelectFile: setSelectedFileId,
+      })
     ),
 
-    // Right panel: Chat
+    // Resize handle: sidebar ↔ center
+    React.createElement(ResizeHandle, { direction: 'vertical', onResize: handleSidebarResize }),
+
+    // Center: File viewer / editor
     React.createElement('div', {
       style: {
         flex: 1,
+        minWidth: 0,
+        height: '100%',
+        overflow: 'hidden',
+      } as React.CSSProperties,
+    },
+      selectedArtifact
+        ? React.createElement(FileViewer, { artifact: selectedArtifact })
+        : React.createElement(FileViewerPlaceholder)
+    ),
+
+    // Resize handle: center ↔ chat
+    React.createElement(ResizeHandle, { direction: 'vertical', onResize: handleChatResize }),
+
+    // Right: Chat
+    React.createElement('div', {
+      style: {
+        width: `${chatWidth}px`,
+        flexShrink: 0,
         height: '100%',
         overflow: 'hidden',
         display: 'flex',
@@ -186,7 +235,7 @@ export function SolutionArchitectApp() {
         key: sessionId,
         initialSpec,
         persistKey: sessionId,
-        systemPromptOverride: ARCHITECT_SYSTEM_PROMPT,
+        systemPromptSuffix: ARCHITECT_SYSTEM_PROMPT,
         theme: {
           primaryColor: '#2563eb',
           backgroundColor: '#f0f2f5',

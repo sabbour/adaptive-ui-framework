@@ -93,7 +93,7 @@ export { registerTool, getToolDefinitions } from './tools';
 export type { ToolDefinition, ToolCall, ToolResult } from './tools';
 
 // Artifacts
-export { saveArtifact, removeArtifact, clearArtifacts, getArtifacts, subscribeArtifacts, downloadArtifact } from './artifacts';
+export { saveArtifact, upsertArtifact, removeArtifact, clearArtifacts, getArtifacts, subscribeArtifacts, downloadArtifact } from './artifacts';
 export type { Artifact } from './artifacts';
 
 // Session management
