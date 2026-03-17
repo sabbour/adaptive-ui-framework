@@ -3,6 +3,8 @@ import type { AdaptiveNode } from '../../framework/schema';
 import { AzureResourceForm, AzureLogin, AzureQuery, AzurePicker } from './components';
 import { AzureSettings } from './AzureSettings';
 import { resolveAzureSkills } from './skills-resolver';
+import { trackedFetch } from '../../framework/request-tracker';
+import { getActiveAccount } from './auth';
 import './css/azure-theme.css';
 
 // ─── Azure Component Pack ───
@@ -21,6 +23,12 @@ AZURE CLOUD PACK:
 
 You have access to Azure-specific capabilities. When the user discusses Azure services,
 use these features to provide a better experience.
+
+TOOLS (called during inference, before generating UI):
+- azure_arm_get: Read-only ARM API caller. Use to list resources, check existing infrastructure,
+  or validate configuration BEFORE generating the UI response. Returns JSON from the ARM API.
+  Requires the user to be signed in (azureLogin component must have been shown first).
+  Example: azure_arm_get({ path: "/subscriptions/{sub}/providers/Microsoft.ContainerService/managedClusters?api-version=2024-01-01" })
 
 COMPONENTS (use in "ask" as { type: "component", component: "name", props: {} } — NEVER in "show"):
 - "azureLogin": { title?, description? }
@@ -136,6 +144,44 @@ export function createAzurePack(): ComponentPack {
         } as unknown as AdaptiveNode),
       },
     },
+    tools: [
+      {
+        definition: {
+          type: 'function' as const,
+          function: {
+            name: 'azure_arm_get',
+            description: 'Call the Azure Resource Manager REST API (GET only). Use to list existing resources, check infrastructure state, or read configuration before generating the UI response. Requires the user to have signed in via azureLogin first.',
+            parameters: {
+              type: 'object',
+              properties: {
+                path: {
+                  type: 'string',
+                  description: 'ARM API path starting with /subscriptions/... Include api-version parameter. Example: /subscriptions/{sub-id}/resourceGroups?api-version=2022-09-01',
+                },
+              },
+              required: ['path'],
+            },
+          },
+        },
+        handler: async (args: Record<string, unknown>) => {
+          const acct = await getActiveAccount();
+          if (!acct) return 'Error: User is not signed in to Azure. Show the azureLogin component first.';
+          const path = String(args.path);
+          const url = `https://management.azure.com${path.startsWith('/') ? '' : '/'}${path}`;
+          try {
+            const res = await trackedFetch(url, {
+              headers: { Authorization: `Bearer ${acct.accessToken}`, Accept: 'application/json' },
+            });
+            const data = await res.json();
+            if (!res.ok) return `ARM API error (${res.status}): ${data?.error?.message ?? JSON.stringify(data)}`;
+            const text = JSON.stringify(data, null, 2);
+            return text.length > 8000 ? text.slice(0, 8000) + '\n[truncated]' : text;
+          } catch (err) {
+            return `Failed to call ARM API: ${err instanceof Error ? err.message : String(err)}`;
+          }
+        },
+      },
+    ],
   };
 }
 

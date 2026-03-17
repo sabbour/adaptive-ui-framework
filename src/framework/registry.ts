@@ -1,5 +1,6 @@
 import React from 'react';
 import type { AdaptiveNode, AdaptiveNodeBase } from './schema';
+import { registerTool } from './tools';
 
 // ─── Component Registry ───
 // Maps schema `type` strings to React components.
@@ -72,6 +73,10 @@ export interface ComponentPack {
   /** Optional intent resolvers — custom ask types the LLM can use in intent mode.
    *  Auto-documented in the system prompt so the LLM knows they exist. */
   intentResolvers?: Record<string, IntentResolverEntry>;
+
+  /** Optional tools — functions the LLM can call during inference (e.g., read-only API queries).
+   *  Registered via registerTool() so the LLM can invoke them before producing the UI response. */
+  tools?: Array<{ definition: import('./tools').ToolDefinition; handler: (args: Record<string, unknown>) => Promise<string> }>;
 }
 
 /** Register a component pack */
@@ -95,6 +100,11 @@ export async function registerPack(pack: ComponentPack): Promise<void> {
   if (pack.intentResolvers) {
     for (const [type, entry] of Object.entries(pack.intentResolvers)) {
       registerIntentResolver(type, entry);
+    }
+  }
+  if (pack.tools) {
+    for (const tool of pack.tools) {
+      registerTool(tool.definition, tool.handler);
     }
   }
 }

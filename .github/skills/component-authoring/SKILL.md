@@ -200,6 +200,36 @@ If the component maps to a semantic intent (e.g., a new input type, display type
 
 Skip this step if the component is only used via raw `layout` (escape hatch) or via pack `component` ask type.
 
+### Step 5b — Consider registering a tool (for pack components)
+
+If this is a **pack component** that calls an external API (e.g., Azure ARM, GitHub REST), consider whether the LLM would benefit from calling that API **during inference** (before generating the UI).
+
+- **Register a read-only tool** if the LLM needs API data to make decisions (e.g., list existing resources, check repo details)
+- **Keep as component only** if the operation requires user interaction (login, confirmation, write operations)
+
+Tools are registered in the pack's `createXPack()` function via the `tools` array:
+
+```typescript
+tools: [
+  {
+    definition: {
+      type: 'function',
+      function: {
+        name: '<pack>_api_get',
+        description: 'Read-only API call. Use to check data before generating UI.',
+        parameters: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'] },
+      },
+    },
+    handler: async (args) => {
+      const res = await trackedFetch(`https://api.example.com${args.path}`, { headers: { Authorization: `Bearer ${token}` } });
+      return JSON.stringify(await res.json(), null, 2).slice(0, 8000);
+    },
+  },
+],
+```
+
+Document the tool in the pack's system prompt under a TOOLS section.
+
 ### Step 6 — Verify
 
 Run `npm run build` to confirm TypeScript compilation passes.
@@ -214,4 +244,5 @@ Run `npm run build` to confirm TypeScript compilation passes.
 - [ ] Compact type alias added to `TYPE_MAP` in `compact.ts`
 - [ ] Any new props added to `KEY_MAP` in `compact.ts`
 - [ ] Intent resolver mapping added in `intent-resolver.ts` (if applicable)
+- [ ] Pack tool registered for read-only API access (if applicable)
 - [ ] `npm run build` succeeds

@@ -37,6 +37,12 @@ export function create<Name>Pack(): ComponentPack {
     systemPrompt: SYSTEM_PROMPT,
     // resolveSkills: resolveSkillsFn,       // optional
     // settingsComponent: SettingsComponent,  // optional
+    // tools: [                              // optional — read-only API tools for LLM inference
+    //   {
+    //     definition: { type: 'function', function: { name: 'tool_name', description: '...', parameters: { ... } } },
+    //     handler: async (args) => { /* call API, return string */ },
+    //   },
+    // ],
   };
 }
 ```
@@ -60,7 +66,41 @@ import { create<Name>Pack } from '../packs/<name>';
 registerPackWithSkills(create<Name>Pack());
 ```
 
-### 4. Optional files
+### 4. Optional: Register tools for LLM inference
+
+If the pack integrates with an API, register **read-only GET tools** so the LLM can query data during inference (before generating the UI). Write operations stay as components with user confirmation.
+
+```typescript
+tools: [
+  {
+    definition: {
+      type: 'function',
+      function: {
+        name: '<pack>_api_get',
+        description: 'Call the <service> API (GET only). Use to read data before generating the UI.',
+        parameters: {
+          type: 'object',
+          properties: { path: { type: 'string', description: 'API path' } },
+          required: ['path'],
+        },
+      },
+    },
+    handler: async (args) => {
+      const token = getStoredToken();
+      if (!token) return 'Error: User not signed in.';
+      const res = await trackedFetch(`https://api.example.com${args.path}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      return JSON.stringify(data, null, 2).slice(0, 8000);
+    },
+  },
+],
+```
+
+Document the tool in the system prompt under a TOOLS section.
+
+### 5. Optional files
 
 - `src/packs/<name>/skills-resolver.ts` — keyword-triggered knowledge fetching
 - `src/packs/<name>/css/<name>-theme.css` — custom CSS tokens

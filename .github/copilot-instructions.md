@@ -46,6 +46,8 @@ Enable intent mode with `useIntents: true` in `OpenAIAdapterConfig`. The resolve
 | `src/framework/interpolation.ts` | `{{state.key}}` / `{{item.key}}` template resolution |
 | `src/framework/compact.ts` | Compact JSON notation for LLM output (~40% token savings) |
 | `src/framework/sanitize.ts` | XSS prevention: URL, style, and state key sanitization |
+| `src/framework/tools.ts` | Tool registry + built-in `fetch_webpage` tool for LLM tool-calling |
+| `src/framework/decision-log.ts` | Pipeline decision logging for the debug panel |
 | `src/framework/AdaptiveApp.tsx` | Top-level orchestrator component + settings panel |
 | `src/framework/components/builtins.tsx` | All 24 built-in component implementations |
 | `src/framework/components/ConversationThread.tsx` | Turn history + active turn UI |
@@ -68,6 +70,7 @@ Enable intent mode with `useIntents: true` in `OpenAIAdapterConfig`. The resolve
 - **Target: ES2020.** Do not use ES2021+ APIs (e.g., `String.replaceAll`). Use `split().join()` instead.
 - All framework-level code uses `React.createElement()`, not JSX. This is intentional — match the existing style.
 - Run `npm run build` (tsc + vite) to verify changes. The only pre-existing warning is strict-mode related.
+- See `.github/instructions/pitfalls.instructions.md` for common mistakes and conventions.
 
 ### Layout & Positioning
 
@@ -94,11 +97,13 @@ Enable intent mode with `useIntents: true` in `OpenAIAdapterConfig`. The resolve
 
 ### Packs (Extensions)
 
-A `ComponentPack` bundles: components, system prompt, knowledge skills resolver, and optional settings UI. See `src/packs/azure/` as the reference implementation.
+A `ComponentPack` bundles: components, system prompt, knowledge skills resolver, optional settings UI, and optional tools. See `src/packs/azure/` as the reference implementation.
 
 - Register via `registerPackWithSkills(pack)`.
 - Pack system prompts are concatenated into the LLM context automatically.
 - `resolveSkills(prompt)` fetches domain knowledge on demand per user message.
+- **Tools vs Components**: Read-only API queries that the LLM needs to make decisions should be **tools** (run during inference). Interactive UI with user confirmation should be **components** (rendered in the browser).
+- Pack tools are registered automatically during `registerPackWithSkills()` via the `tools` array in the pack definition.
 
 ### Path Alias
 
@@ -121,11 +126,22 @@ A `ComponentPack` bundles: components, system prompt, knowledge skills resolver,
 - **Intent resolver is tolerant**: `normalizeAskType()` maps LLM component names (e.g., `radioGroup`, `input`, `select`) back to intent types. Unknown types pass through as raw component nodes. When adding new intent types, also add aliases in `ASK_TYPE_ALIASES`.
 - **API-populated data belongs on the client**: Lists that require API calls (regions, resource groups, SKUs) should use pack-registered intent resolvers (e.g., `azure-regions`) or dynamic components — the LLM should never hardcode these options.
 
+### Tool Calling
+
+- The adapter supports **OpenAI tool-calling** (function calling). Tools are registered via `registerTool(definition, handler)` in `src/framework/tools.ts`.
+- Built-in tool: `fetch_webpage` — fetches a URL and returns text/markdown content. The LLM uses this to read documentation, API references, or any public URL.
+- When tools are registered, `response_format: json_object` is omitted from the API request (OpenAI doesn't support both simultaneously). The system prompt instructs JSON output instead.
+- The adapter runs a **tool-call loop** (up to 5 rounds): LLM requests tools → adapter executes them → sends results back → LLM produces final JSON response.
+- Tool calls are logged in the decision log and visible in the debug panel.
+- Packs can register additional tools via `registerTool()` at startup.
+
 ### Mermaid Diagrams
 
-- Architecture diagrams use **Mermaid `block-beta`** syntax with `columns 1` for vertical layout.
-- Groups use `block:id["Label"] ... end`. The renderer auto-fixes `subgraph` → `block:` if the LLM gets it wrong.
-- Arrows (`-->`) go AFTER all block definitions.
+- Architecture diagrams use **Mermaid `flowchart TD`** syntax for top-down layout with right-angled connectors.
+- Groups use `subgraph id["Label"] ... end` to organize services by tier.
+- Do **NOT** use `block-beta` or `block:` syntax — it causes parse errors.
+- Branching is supported — a node can have multiple outgoing arrows to show parallel paths.
+- Arrows (`-->`) connect node IDs. Chain arrows for linear flows: `A --> B --> C`.
 - Icon placeholders: `%%icon:azure/aks%%` prefix in node labels.
 - Diagram value is a plain string with `\n` for newlines, no backticks.
 

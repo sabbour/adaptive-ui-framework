@@ -6,6 +6,7 @@ import { sanitizeSpec } from './sanitize';
 import { trackStart, trackEnd } from './request-tracker';
 import { resolveIntent, isAgentIntent } from './intent-resolver';
 import { resetDecisionLog, logDecision, getDecisionLog, type DecisionEntry } from './decision-log';
+import { getToolDefinitions, executeTool, type ToolCall } from './tools';
 
 // ─── Truncated JSON repair ───
 // When finish_reason=length, the JSON is cut off mid-stream.
@@ -171,7 +172,11 @@ ESCAPE HATCH / RE-ADAPTATION:
 - ALWAYS preserve any state values from the current collected data (sent as "Current collected data: {...}")
 - Pre-fill form fields with previously collected values using the "state" property
 - If the user's text answers a question, capture that value and advance to the next step
-- If the user asks for a different approach, re-generate the UI but keep any reusable data`;
+- If the user asks for a different approach, re-generate the UI but keep any reusable data
+
+TOOLS:
+- You may have access to tools like fetch_webpage. Use them to look up documentation or API references when you need accurate details (e.g., ARM API body schemas, correct API versions, service quotas).
+- Do NOT guess ARM request body structures — if unsure, use fetch_webpage to check the docs first.`;
 
 // ─── Intent-based system prompt (~400 tokens vs ~1,200 for full spec) ───
 export const INTENT_SYSTEM_PROMPT = `You are a conversational agent that drives multi-step workflows by asking questions and presenting choices. Respond ONLY with valid JSON.
@@ -226,7 +231,8 @@ GUIDELINES:
 - If you need a custom control shape, you may emit a component-like ask or raw layout, but include common props such as key/bind, label, options, children, rows/columns, or content so the client can infer a usable fallback
 - When the workflow is complete, show a summary (use show type "markdown" or "table") and omit "ask"
 - If the user responds with free text instead of using controls, parse their text and adapt accordingly
-- ALWAYS preserve previously collected state values`;
+- ALWAYS preserve previously collected state values
+- You may have access to tools (e.g., fetch_webpage). Use them to look up documentation when you need exact API body schemas, versions, or service details. Do NOT guess ARM request bodies.`;
 
 // ─── Endpoint normalization ───
 // Handles various endpoint formats:
@@ -357,57 +363,127 @@ export class OpenAIAdapter implements LLMAdapter {
       model: this.config.model ?? 'gpt-4o',
       messages,
       max_completion_tokens: this.config.maxTokens ?? 16384,
-      response_format: { type: 'json_object' },
     };
+
+    // Add tools if registered; when tools are present, use json_schema or omit response_format
+    // (OpenAI doesn't support response_format: json_object + tools simultaneously)
+    const tools = getToolDefinitions();
+    if (tools.length > 0) {
+      body.tools = tools;
+      // Don't set response_format when tools are available — the system prompt
+      // already instructs the LLM to respond with JSON on the final turn
+    } else {
+      body.response_format = { type: 'json_object' };
+    }
 
     // Only include temperature if explicitly set (some models only support default)
     if (this.config.temperature !== undefined) {
       body.temperature = this.config.temperature;
     }
 
-    const reqId = trackStart('POST', endpoint);
-    let response: Response;
-    try {
-      response = await fetch(endpoint, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(body),
-      });
-    } catch (err) {
+    // ─── Tool-call loop ───
+    // The LLM may request tool calls before producing the final JSON response.
+    // We loop up to MAX_TOOL_ROUNDS, executing tools and feeding results back.
+    const MAX_TOOL_ROUNDS = 5;
+    let loopMessages = [...messages];
+    let content: string | null = null;
+    let finishReason = 'unknown';
+    const usage: TokenUsage = { promptTokens: 0, completionTokens: 0 };
+
+    for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
+      const reqId = trackStart('POST', endpoint);
+      let response: Response;
+      try {
+        response = await fetch(endpoint, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ ...body, messages: loopMessages }),
+        });
+      } catch (err) {
+        trackEnd(reqId);
+        throw err;
+      }
+
+      if (!response.ok) {
+        trackEnd(reqId);
+        const text = await response.text();
+        throw new Error(`LLM API error (${response.status}): ${text}`);
+      }
+
+      const data = await response.json();
       trackEnd(reqId);
-      throw err;
+
+      const choice = data.choices?.[0];
+      finishReason = choice?.finish_reason ?? 'unknown';
+
+      // Accumulate token usage across rounds
+      usage.promptTokens += data.usage?.prompt_tokens ?? 0;
+      usage.completionTokens += data.usage?.completion_tokens ?? 0;
+
+      // Check for tool calls
+      const toolCalls: ToolCall[] | undefined = choice?.message?.tool_calls;
+      if (toolCalls && toolCalls.length > 0) {
+        logDecision('adapter', `LLM requested ${toolCalls.length} tool call(s): ${toolCalls.map(tc => tc.function.name).join(', ')} (round ${round + 1}/${MAX_TOOL_ROUNDS})`);
+
+        // Add assistant message with tool_calls to the conversation
+        loopMessages.push(choice.message);
+
+        // Execute each tool and add results
+        for (const tc of toolCalls) {
+          const result = await executeTool(tc);
+          loopMessages.push(result as any);
+        }
+        continue; // Loop back to the LLM with tool results
+      }
+
+      // Normal completion — extract content
+      content = choice?.message?.content ?? null;
+      break;
     }
 
-    if (!response.ok) {
-      trackEnd(reqId);
-      const text = await response.text();
-      throw new Error(`LLM API error (${response.status}): ${text}`);
+    // If tools were used and the final response isn't JSON, retry with response_format enforcement
+    if (content && tools.length > 0 && !content.trim().startsWith('{')) {
+      logDecision('adapter', 'Response after tool calls was not JSON — retrying with response_format: json_object to force structured output');
+      loopMessages.push({ role: 'assistant', content } as any);
+      loopMessages.push({ role: 'user', content: 'Please respond with ONLY the JSON object as specified in the system prompt. No prose, no markdown fences, just the raw JSON.' } as any);
+      const retryReqId = trackStart('POST', endpoint);
+      try {
+        const retryRes = await fetch(endpoint, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            model: body.model,
+            messages: loopMessages,
+            max_completion_tokens: body.max_completion_tokens,
+            response_format: { type: 'json_object' },
+            ...(body.temperature !== undefined ? { temperature: body.temperature } : {}),
+          }),
+        });
+        trackEnd(retryReqId);
+        if (retryRes.ok) {
+          const retryData = await retryRes.json();
+          const retryContent = retryData.choices?.[0]?.message?.content;
+          if (retryContent) {
+            content = retryContent;
+            usage.promptTokens += retryData.usage?.prompt_tokens ?? 0;
+            usage.completionTokens += retryData.usage?.completion_tokens ?? 0;
+            finishReason = retryData.choices?.[0]?.finish_reason ?? finishReason;
+          }
+        }
+      } catch {
+        // Fall through to original content
+      }
     }
-
-    const data = await response.json();
-    const choice = data.choices?.[0];
-    const content = choice?.message?.content;
-    const finishReason = choice?.finish_reason ?? 'unknown';
 
     if (!content) {
-      // Provide more diagnostic info about why content is empty
-      const refusal = choice?.message?.refusal;
-      const filterResult = data.choices?.[0]?.content_filter_results;
       let detail = `finish_reason=${finishReason}`;
-      if (refusal) detail += `, refusal: ${refusal}`;
-      if (filterResult) detail += `, content_filter: ${JSON.stringify(filterResult)}`;
-      if (!data.choices?.length) detail = `no choices in response (model: ${data.model ?? 'unknown'})`;
+      if (finishReason === 'tool_calls') detail = 'LLM only produced tool calls but no final content within the allowed rounds';
       throw new Error(`Empty response from LLM (${detail})`);
     }
 
     if (finishReason === 'length') {
       logDecision('adapter', 'Response was truncated (finish_reason=length) — output token limit reached. Will attempt to salvage partial JSON.');
     }
-
-    const usage: TokenUsage = {
-      promptTokens: data.usage?.prompt_tokens ?? 0,
-      completionTokens: data.usage?.completion_tokens ?? 0,
-    };
 
     // Extract JSON from the response — LLMs sometimes wrap it in markdown code blocks
     // or add preamble/postamble text around the JSON object
@@ -448,25 +524,23 @@ export class OpenAIAdapter implements LLMAdapter {
             logDecision('adapter', 'Repaired truncated JSON by closing open braces/brackets');
             parsed = repaired;
           } else {
-            logDecision('adapter', 'Could not repair truncated JSON — showing raw text as markdown');
+            logDecision('adapter', 'Could not repair truncated JSON — showing raw text in agent bubble');
             parsed = {
-              agentMessage: 'Response was truncated. Try simplifying the conversation or resetting.',
-              layout: { type: 'markdown', content: content.slice(0, 2000) + '\n\n*[truncated]*' },
+              agentMessage: content.slice(0, 2000) + (content.length > 2000 ? '\n\n*[truncated]*' : ''),
+              layout: { type: 'chatInput', placeholder: 'Type your response...' },
             };
           }
         } else {
-          // If JSON parse still fails, wrap the raw text as a markdown spec
-          console.warn('[AdaptiveUI] LLM returned non-JSON response, wrapping as markdown');
-          logDecision('adapter', 'LLM returned non-JSON text — wrapping the entire response as a markdown block so it still renders');
+          // If JSON parse still fails, put all content in the agent bubble
+          console.warn('[AdaptiveUI] LLM returned non-JSON response, showing in agent bubble');
+          logDecision('adapter', 'LLM returned non-JSON text — showing full response in the agent message bubble');
           parsed = {
-            agentMessage: content.slice(0, 200),
-            layout: { type: 'markdown', content },
+            agentMessage: content.slice(0, 3000),
+            layout: { type: 'chatInput', placeholder: 'Type your response...' },
           };
         }
       }
     }
-
-    trackEnd(reqId);
 
     const expanded = expandCompact(parsed);
     if (JSON.stringify(expanded) !== JSON.stringify(parsed)) {
@@ -491,7 +565,7 @@ export class OpenAIAdapter implements LLMAdapter {
       spec: sanitizeSpec(spec) as AdaptiveUISpec,
       usage,
       rawResponse: content,
-      rawRequest: JSON.stringify(messages, null, 2),
+      rawRequest: JSON.stringify(loopMessages, null, 2),
       decisionLog: getDecisionLog(),
     };
   }
