@@ -18,9 +18,35 @@ const listeners = new Set<Listener>();
 let snapshot: Artifact[] = [];
 let counter = 0;
 
+const STORAGE_KEY = 'adaptive-ui-artifacts';
+
+/** Persist artifacts to localStorage */
+function persist(): void {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(artifacts)); } catch { /* quota exceeded or unavailable */ }
+}
+
+/** Restore artifacts from localStorage on startup */
+function restore(): void {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        artifacts = parsed;
+        counter = artifacts.length;
+        snapshot = [...artifacts];
+      }
+    }
+  } catch { /* ignore corrupt data */ }
+}
+
+// Auto-restore on module load
+restore();
+
 function notify(): void {
   snapshot = [...artifacts];
   listeners.forEach((fn) => fn());
+  persist();
 }
 
 /** Save a code block as an artifact */
