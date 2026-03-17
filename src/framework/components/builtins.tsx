@@ -494,14 +494,62 @@ function AlertComponent({ node }: AdaptiveComponentProps<AlertNode>) {
 }
 
 // ─── ChatInput ───
+// Module-level prompt history (persisted across re-renders, shared across all chatInput instances)
+const promptHistory: string[] = [];
+const MAX_PROMPT_HISTORY = 50;
+
 function ChatInputComponent({ node }: AdaptiveComponentProps<ChatInputNode>) {
   const { sendPrompt, isLoading } = useAdaptive();
   const [value, setValue] = useState('');
+  const [historyIndex, setHistoryIndex] = useState(-1);
+  const savedDraftRef = useRef('');
 
   const submit = () => {
     if (value.trim() && !isLoading) {
-      sendPrompt(value.trim());
+      // Add to history (avoid duplicates with the last entry)
+      const trimmed = value.trim();
+      if (promptHistory.length === 0 || promptHistory[promptHistory.length - 1] !== trimmed) {
+        promptHistory.push(trimmed);
+        if (promptHistory.length > MAX_PROMPT_HISTORY) promptHistory.shift();
+      }
+      sendPrompt(trimmed);
       setValue('');
+      setHistoryIndex(-1);
+      savedDraftRef.current = '';
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') { submit(); return; }
+
+    if (e.key === 'ArrowUp') {
+      if (promptHistory.length === 0) return;
+      e.preventDefault();
+      if (historyIndex === -1) {
+        // Save current draft before navigating
+        savedDraftRef.current = value;
+      }
+      const newIndex = historyIndex === -1
+        ? promptHistory.length - 1
+        : Math.max(0, historyIndex - 1);
+      setHistoryIndex(newIndex);
+      setValue(promptHistory[newIndex]);
+      return;
+    }
+
+    if (e.key === 'ArrowDown') {
+      if (historyIndex === -1) return;
+      e.preventDefault();
+      if (historyIndex >= promptHistory.length - 1) {
+        // Back to draft
+        setHistoryIndex(-1);
+        setValue(savedDraftRef.current);
+      } else {
+        const newIndex = historyIndex + 1;
+        setHistoryIndex(newIndex);
+        setValue(promptHistory[newIndex]);
+      }
+      return;
     }
   };
 
@@ -514,8 +562,8 @@ function ChatInputComponent({ node }: AdaptiveComponentProps<ChatInputNode>) {
     React.createElement('input', {
       type: 'text',
       value,
-      onChange: (e: React.ChangeEvent<HTMLInputElement>) => setValue(e.target.value),
-      onKeyDown: (e: React.KeyboardEvent) => { if (e.key === 'Enter') submit(); },
+      onChange: (e: React.ChangeEvent<HTMLInputElement>) => { setValue(e.target.value); setHistoryIndex(-1); },
+      onKeyDown: handleKeyDown,
       placeholder: node.placeholder ?? 'Type a message...',
       disabled: isLoading,
       style: {
