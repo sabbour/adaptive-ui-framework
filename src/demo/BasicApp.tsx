@@ -160,6 +160,12 @@ export function SolutionArchitectApp() {
     // Save the new session immediately so it shows in the sidebar
     saveSession(newId, 'New session', []);
     setSelectedFileId(null);
+
+    // Seed the diagram artifact from the initial spec so the viewer has it
+    if (initialSpec.diagram) {
+      const art = upsertArtifact('architecture.mmd', initialSpec.diagram, 'mermaid', 'Solution Architecture');
+      setSelectedFileId(art.id);
+    }
   }, [sessionId]);
 
   const handleSelectSession = useCallback((id: string) => {
