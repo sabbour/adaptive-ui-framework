@@ -1,6 +1,8 @@
 import type { ComponentPack } from '../../framework/registry';
 import { GitHubLogin, GitHubQuery, GitHubRepoInfo } from './components';
 import { GitHubSettings } from './GitHubSettings';
+import { getStoredToken } from './auth';
+import { trackedFetch } from '../../framework/request-tracker';
 
 // ─── GitHub Component Pack ───
 // Provides GitHub API integration: authentication, repo queries, and issue/PR management.
@@ -14,6 +16,12 @@ GITHUB PACK:
 
 You have access to GitHub-specific capabilities. When the user discusses GitHub repos,
 issues, PRs, or workflows, use these features.
+
+TOOLS (called during inference, before generating UI):
+- github_api_get: Read-only GitHub API caller. Use to list repos, issues, PRs, branches,
+  workflows, or check repo details BEFORE generating the UI response.
+  Requires the user to be signed in (githubLogin component must have been shown first).
+  Example: github_api_get({ path: "/repos/owner/repo/issues?state=open&per_page=10" })
 
 COMPONENTS (use in "ask" as { type: "component", component: "name", props: {} } — NEVER in "show"):
 - "githubLogin": { title?, description? }
@@ -61,5 +69,43 @@ export function createGitHubPack(): ComponentPack {
     },
     systemPrompt: GITHUB_SYSTEM_PROMPT,
     settingsComponent: GitHubSettings,
+    tools: [
+      {
+        definition: {
+          type: 'function' as const,
+          function: {
+            name: 'github_api_get',
+            description: 'Call the GitHub REST API (GET only). Use to list repos, issues, PRs, branches, workflows, or read repo details before generating the UI response. Requires the user to have signed in via githubLogin first.',
+            parameters: {
+              type: 'object',
+              properties: {
+                path: {
+                  type: 'string',
+                  description: 'GitHub API path starting with /. Example: /repos/owner/repo/issues?state=open&per_page=10',
+                },
+              },
+              required: ['path'],
+            },
+          },
+        },
+        handler: async (args: Record<string, unknown>) => {
+          const token = getStoredToken();
+          if (!token) return 'Error: User is not signed in to GitHub. Show the githubLogin component first.';
+          const path = String(args.path);
+          const url = `https://api.github.com${path.startsWith('/') ? '' : '/'}${path}`;
+          try {
+            const res = await trackedFetch(url, {
+              headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json' },
+            });
+            const data = await res.json();
+            if (!res.ok) return `GitHub API error (${res.status}): ${data?.message ?? JSON.stringify(data)}`;
+            const text = JSON.stringify(data, null, 2);
+            return text.length > 8000 ? text.slice(0, 8000) + '\n[truncated]' : text;
+          } catch (err) {
+            return `Failed to call GitHub API: ${err instanceof Error ? err.message : String(err)}`;
+          }
+        },
+      },
+    ],
   };
 }

@@ -29,15 +29,17 @@ KEY PRINCIPLES:
 - Consider cost optimization alongside reliability — present cost implications when recommending services.
 
 ARCHITECTURE DIAGRAM:
-Include a "diagram" field in EVERY response with a Mermaid block-beta diagram.
-- Use "block-beta" with "columns 1" for vertical layout.
-- Group services by architectural tier (networking, compute, data, observability) — each tier is a separate block group.
-- Place only closely-related services in the same group. DNS and App Service belong in different tiers.
-- Define all blocks first, then arrows (-->) between block IDs.
-- Prefix labels with %%icon:ICON_NAME%% for icons (e.g. "%%icon:azure/aks%%AKS Cluster").
-- Diagram value is a plain string with \\n for newlines. Quote labels with special chars.
+Include a "diagram" field only when proposing or changing the architecture design. Do NOT include it on login, region/subscription selection, confirmation, or deployment steps — those waste output tokens.
 
-Example: "block-beta\\n  columns 1\\n  User[\\"User\\"]\\n  block:networking[\\"Networking\\"]\\n    DNS[\\"%%icon:azure/dns%%DNS\\"]\\n  end\\n  block:compute[\\"Compute\\"]\\n    AppSvc[\\"%%icon:azure/app-service%%App Service\\"]\\n  end\\n  block:observability[\\"Observability\\"]\\n    Monitor[\\"%%icon:azure/monitor%%Azure Monitor\\"]\\n  end\\n  User --> DNS\\n  DNS --> AppSvc\\n  AppSvc --> Monitor"
+Diagram syntax rules:
+- Start with "flowchart TD" (top-down layout). Do NOT use "block-beta" or "block:" — those cause parse errors.
+- Group services with "subgraph id[\"Label\"] ... end" (NOT "block:id").
+- Arrows: A --> B connects nodes. Chain: A --> B --> C. Branch: A --> B and A --> C on separate lines.
+- Prefix labels with %%icon:ICON_NAME%% for icons.
+- Diagram value is a plain string with \\n for newlines. No backticks.
+
+Working example:
+"flowchart TD\n  User([\"User\"])\n  subgraph networking[\"Networking\"]\n    DNS[\"%%icon:azure/dns%%DNS\"]\n    FD[\"%%icon:azure/front-door%%Front Door\"]\n  end\n  subgraph compute[\"Compute\"]\n    App[\"%%icon:azure/app-service%%App Service\"]\n  end\n  subgraph data[\"Data\"]\n    SQL[\"%%icon:azure/sql%%SQL\"]\n    Redis[\"%%icon:azure/redis%%Redis\"]\n  end\n  User --> DNS --> FD --> App\n  App --> SQL\n  App --> Redis"
 
 Icons: azure/aks, azure/vm, azure/vmss, azure/container-instances, azure/acr, azure/sql, azure/cosmos-db, azure/postgresql, azure/mysql, azure/redis, azure/vnet, azure/load-balancer, azure/app-gateway, azure/front-door, azure/dns, azure/firewall, azure/nsg, azure/app-service, azure/function-app, azure/storage, azure/key-vault, azure/monitor, azure/log-analytics, azure/cognitive-services, azure/event-grid, azure/api-management, azure/subscription, azure/resource-group
 

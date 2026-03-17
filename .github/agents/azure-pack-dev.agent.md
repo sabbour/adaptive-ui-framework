@@ -41,6 +41,8 @@ interface ComponentPack {
   initialize?: () => Promise<Record<string, ComponentFactory>>;
   resolveSkills?: (prompt: string) => Promise<string | null>;
   settingsComponent?: React.ComponentType;
+  intentResolvers?: Record<string, IntentResolverEntry>;
+  tools?: Array<{ definition: ToolDefinition; handler: (args: Record<string, unknown>) => Promise<string> }>;
 }
 ```
 
@@ -71,10 +73,21 @@ interface ComponentPack {
 
 ### Skills Resolver
 
-- `SKILL_TRIGGERS` maps regex-like pipe-separated keyword patterns to skill folder names.
-- Skills are fetched from `https://raw.githubusercontent.com/MicrosoftDocs/agent-skills/main/skills/{name}/SKILL.md`.
-- Fetched content is cached in a `Map` and trimmed to ~2000 chars.
-- Add new triggers: add a new key-value pair in `SKILL_TRIGGERS` with `'keyword1|keyword2': ['skill-folder-name']`.
+- `skills-resolver.ts` injects curated ARM PUT body templates into the LLM context when deploy/create keywords are detected.
+- ARM body templates are hardcoded for correctness (AKS, App Service, ACR, Container Apps, Storage, Key Vault, role assignments).
+- The LLM also has access to `fetch_webpage` and `azure_arm_get` tools for reading documentation and ARM APIs directly.
+
+### Pack Tools
+
+- The Azure pack registers `azure_arm_get` — a read-only ARM API tool the LLM can call during inference.
+- This lets the LLM check existing resources, list subscriptions, etc. before generating the UI.
+- Write operations stay as components (azureQuery with confirm).
+
+### Intent Resolvers
+
+- `azure-regions`, `azure-resource-groups`, `azure-subscriptions`, `azure-skus` are registered as pack intent resolvers.
+- They resolve to `azurePicker` components that fetch live data from ARM APIs.
+- Add new resolvers in the `intentResolvers` field of `createAzurePack()`.
 
 ### System Prompt
 
@@ -102,8 +115,8 @@ The intent resolver passes these through directly to the component registry. No 
 
 1. Identify which file(s) to modify based on the task (component, auth, introspection, skills, icons).
 2. Follow existing patterns in that file — match code style, error handling, caching approach.
-3. If adding a new component: define node interface → implement component → register in `createAzurePack()` → document in `AZURE_SYSTEM_PROMPT`.
-4. If adding a new skill trigger: add keyword pattern → skill folder mapping to `SKILL_TRIGGERS`.
+3. If adding a new component: define node interface → implement component → register in `createAzurePack()` → document in `AZURE_SYSTEM_PROMPT` → consider adding a read-only tool if the LLM needs API data during inference.
+4. If adding ARM body templates: add to `ARM_BODY_TEMPLATES` in `skills-resolver.ts` with the minimum correct PUT body structure.
 5. Run `npm run build` to verify TypeScript compilation succeeds.
 
 ## Output

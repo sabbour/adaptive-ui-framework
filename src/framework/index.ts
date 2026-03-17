@@ -88,6 +88,10 @@ export {
 } from './llm-adapter';
 export type { LLMAdapter, LLMMessage, OpenAIAdapterConfig } from './llm-adapter';
 
+// Tool system
+export { registerTool, getToolDefinitions } from './tools';
+export type { ToolDefinition, ToolCall, ToolResult } from './tools';
+
 // Intent-based UI resolution
 export { resolveIntent, isAgentIntent } from './intent-resolver';
 export type { AgentIntent, AskIntent, ShowIntent } from './intent-schema';

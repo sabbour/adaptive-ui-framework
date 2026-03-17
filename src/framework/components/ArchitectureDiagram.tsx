@@ -30,7 +30,7 @@ mermaid.initialize({
   },
   flowchart: {
     htmlLabels: true,
-    curve: 'basis',
+    curve: 'linear',
     padding: 20,
     nodeSpacing: 60,
     rankSpacing: 70,
@@ -94,75 +94,8 @@ export function ArchitectureDiagram({ diagram, title }: ArchitectureDiagramProps
         // with inline image tags for mermaid htmlLabels
         let processedDiagram = diagram;
 
-        // Auto-fix flowchart syntax that LLMs sometimes emit in block-beta diagrams:
-        // "subgraph name["Label"]" → "block:name["Label"]"
-        // "subgraph name" → "block:name"
-        if (processedDiagram.includes('block-beta')) {
-          processedDiagram = processedDiagram.replace(
-            /\bsubgraph\s+(\w+)(\[.*?\])?/g,
-            (_match, id, label) => `block:${id}${label || ''}`
-          );
-          // Auto-inject "columns 1" inside block groups that don't specify columns
-          processedDiagram = processedDiagram.replace(
-            /(block:\w+(?:\[.*?\])?)\n(?!\s*columns\b)/g,
-            '$1\n    columns 1\n'
-          );
-          // Move group labels to bottom: convert block:id["Label"] ... end
-          // into block:id ... labelNode["Label"] end
-          // This prevents labels from overlapping child nodes at the top
-          const lines = processedDiagram.split('\n');
-          const result: string[] = [];
-          const labelStack: Array<{ id: string; label: string } | null> = [];
-          // Track which nodes belong to which group for intra-group arrow removal
-          const nodeToGroup = new Map<string, string>();
-          let currentGroup: string | null = null;
-          for (const line of lines) {
-            const blockMatch = line.match(/^(\s*)block:(\w+)\["(.+?)"\]/);
-            if (blockMatch) {
-              const [, indent, id, label] = blockMatch;
-              result.push(`${indent}block:${id}`);
-              labelStack.push({ id, label });
-              currentGroup = id;
-            } else if (line.trim() === 'end' && labelStack.length > 0) {
-              const entry = labelStack.pop();
-              if (entry) {
-                result.push(`    ${entry.id}_label["${entry.label}"]`);
-                result.push(`    style ${entry.id}_label fill:none,stroke:none,color:#64748B,font-size:11px`);
-              }
-              result.push(line);
-              currentGroup = null;
-            } else {
-              // Track node IDs inside groups
-              if (currentGroup) {
-                const nodeMatch = line.match(/^\s+(\w+)\[/);
-                if (nodeMatch) {
-                  nodeToGroup.set(nodeMatch[1], currentGroup);
-                }
-              }
-              result.push(line);
-            }
-          }
-          // Remove intra-group arrows (siblings don't need connections)
-          const filtered = result.filter(line => {
-            const arrowMatch = line.match(/^\s*(\w+)\s*--.*?-->\s*(\w+)/);
-            if (!arrowMatch) {
-              const simpleArrow = line.match(/^\s*(\w+)\s*-->\s*(\w+)/);
-              if (simpleArrow) {
-                const [, from, to] = simpleArrow;
-                const fromGroup = nodeToGroup.get(from);
-                const toGroup = nodeToGroup.get(to);
-                if (fromGroup && toGroup && fromGroup === toGroup) return false;
-              }
-              return true;
-            }
-            const [, from, to] = arrowMatch;
-            const fromGroup = nodeToGroup.get(from);
-            const toGroup = nodeToGroup.get(to);
-            if (fromGroup && toGroup && fromGroup === toGroup) return false;
-            return true;
-          });
-          processedDiagram = filtered.join('\n');
-        }
+        // No auto-fixing of Mermaid syntax — the system prompt instructs
+        // the correct format. Invalid diagrams will show an error message.
 
         // Sanitize node labels: escape parentheses inside bracket labels [...]
         // e.g. Storage[Azure Storage (content/images)] → Storage["Azure Storage (content/images)"]
