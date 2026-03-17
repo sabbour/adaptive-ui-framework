@@ -48,6 +48,13 @@ description: "Common pitfalls and conventions learned from iterative development
 - **ANTI-PATTERN: Using query components for reads.** Query components store results in state but the LLM never sees that data; the user just sees "N items loaded" with no actual list.
 - **Pack system prompts must clearly separate all three.** State which operations use tools (LLM needs the data), which use pickers (selection lists), and which use query components (writes with confirmation).
 
+## Disabled Context (Past Turns)
+
+- Past turns are rendered inside a `DisabledScope` that sets `useAdaptive().disabled = true`.
+- **All pack components with `useEffect` API calls MUST guard with `if (disabled) return;`** at the top of the effect. Without this, past turn layouts will fire HTTP requests on mount (e.g., token validation, subscription loading, repo fetching).
+- Destructure `disabled` from `useAdaptive()`: `const { state, dispatch, disabled } = useAdaptive();`
+- The component still renders its visual output — only side effects are suppressed.
+
 ## Token Management
 
 - `max_completion_tokens` defaults to 16384. Diagrams can consume 300-500 output tokens per response.

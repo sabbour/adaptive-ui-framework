@@ -70,7 +70,7 @@ interface GitHubLoginNode extends AdaptiveNodeBase {
 }
 
 export function GitHubLogin({ node }: AdaptiveComponentProps<GitHubLoginNode>) {
-  const { state, dispatch, sendPrompt } = useAdaptive();
+  const { state, dispatch, sendPrompt, disabled } = useAdaptive();
   const token = (state.__githubToken as string) || undefined;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -81,6 +81,7 @@ export function GitHubLogin({ node }: AdaptiveComponentProps<GitHubLoginNode>) {
 
   // Check for token stored in settings on mount
   useEffect(() => {
+    if (disabled) return;
     if (token) return;
     const stored = getStoredToken();
     if (stored) {
@@ -90,6 +91,7 @@ export function GitHubLogin({ node }: AdaptiveComponentProps<GitHubLoginNode>) {
 
   // Validate existing token on mount
   useEffect(() => {
+    if (disabled) return;
     if (!token) return;
     setLoading(true);
     trackedFetch('https://api.github.com/user', {
@@ -271,7 +273,7 @@ interface GitHubQueryNode extends AdaptiveNodeBase {
 
 export function GitHubQuery({ node }: AdaptiveComponentProps<GitHubQueryNode>) {
   const token = useGitHubToken();
-  const { state, dispatch } = useAdaptive();
+  const { state, dispatch, disabled } = useAdaptive();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<any>(null);
@@ -289,9 +291,10 @@ export function GitHubQuery({ node }: AdaptiveComponentProps<GitHubQueryNode>) {
   const isReady = !!token && !resolvedApi.includes('//') && resolvedApi.length > 1;
 
   useEffect(() => {
+    if (disabled) return;
     if (!isReady || method !== 'GET') return;
     executeQuery();
-  }, [isReady, resolvedApi]);
+  }, [disabled, isReady, resolvedApi]);
 
   async function executeQuery() {
     if (!isReady) return;
@@ -432,7 +435,7 @@ interface GitHubRepoInfoNode extends AdaptiveNodeBase {
 
 export function GitHubRepoInfo({ node }: AdaptiveComponentProps<GitHubRepoInfoNode>) {
   const token = useGitHubToken();
-  const { state } = useAdaptive();
+  const { state, disabled } = useAdaptive();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [repo, setRepo] = useState<any>(null);
@@ -443,6 +446,7 @@ export function GitHubRepoInfo({ node }: AdaptiveComponentProps<GitHubRepoInfoNo
   });
 
   useEffect(() => {
+    if (disabled) return;
     if (!token || !resolvedRepo) return;
     setLoading(true);
     trackedFetch(`https://api.github.com/repos/${resolvedRepo}`, {
@@ -527,7 +531,7 @@ interface GitHubPickerNode extends AdaptiveNodeBase {
 
 export function GitHubPicker({ node }: AdaptiveComponentProps<GitHubPickerNode>) {
   const token = useGitHubToken();
-  const { state, dispatch } = useAdaptive();
+  const { state, dispatch, disabled } = useAdaptive();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [options, setOptions] = useState<Array<{ label: string; value: string; description?: string }>>([]);
@@ -538,6 +542,7 @@ export function GitHubPicker({ node }: AdaptiveComponentProps<GitHubPickerNode>)
   });
 
   useEffect(() => {
+    if (disabled) return;
     if (!token || !api) return;
     let cancelled = false;
 
@@ -652,7 +657,7 @@ interface GitHubCreatePRNode extends AdaptiveNodeBase {
 }
 
 export function GitHubCreatePR({ node }: AdaptiveComponentProps<GitHubCreatePRNode>) {
-  const { state, dispatch, sendPrompt } = useAdaptive();
+  const { state, dispatch, sendPrompt, disabled } = useAdaptive();
   const token = useGitHubToken();
   const artifacts = useSyncExternalStore(subscribeArtifacts, getArtifacts);
   const [status, setStatus] = useState<string | null>(null);
@@ -678,6 +683,7 @@ export function GitHubCreatePR({ node }: AdaptiveComponentProps<GitHubCreatePRNo
 
   // Auto-detect default branch from repo
   useEffect(() => {
+    if (disabled) return;
     if (!token || !owner || !repo || node.baseBranch) return;
     fetch(`https://api.github.com/repos/${owner}/${repo}`, {
       headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json' },

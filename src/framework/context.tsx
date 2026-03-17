@@ -16,6 +16,8 @@ interface AdaptiveContextValue {
   error: string | null;
   sendPrompt: (prompt: string, userDisplayText?: string | null) => void;
   resetSession: () => void;
+  /** When true, components should skip side effects (API calls, token validation, etc.) */
+  disabled: boolean;
 }
 
 type StateAction =
@@ -59,7 +61,10 @@ function reducer(state: AdaptiveState, action: StateAction): AdaptiveState {
   }
 }
 
-const AdaptiveContext = createContext<AdaptiveContextValue | null>(null);
+// Preserve context identity across HMR to prevent "useAdaptive must be used within
+// an AdaptiveProvider" errors when context.tsx is hot-reloaded independently.
+const AdaptiveContext: React.Context<AdaptiveContextValue | null> =
+  (globalThis as any).__ADAPTIVE_CONTEXT__ ??= createContext<AdaptiveContextValue | null>(null);
 
 export function useAdaptive(): AdaptiveContextValue {
   const ctx = useContext(AdaptiveContext);
@@ -183,6 +188,7 @@ export function AdaptiveProvider({
     error: adaptiveState.error,
     sendPrompt,
     resetSession,
+    disabled: false,
   };
 
   return (
@@ -194,3 +200,14 @@ export function AdaptiveProvider({
 
 export { AdaptiveContext };
 export type { AdaptiveContextValue, StateAction, AdaptiveState };
+
+/** Wraps children in a context override that sets disabled=true.
+ *  Components that check useAdaptive().disabled will skip side effects. */
+export function DisabledScope({ children }: { children: React.ReactNode }) {
+  const parent = useAdaptive();
+  const value = React.useMemo(
+    () => ({ ...parent, disabled: true }),
+    [parent]
+  );
+  return React.createElement(AdaptiveContext.Provider, { value }, children);
+}

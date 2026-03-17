@@ -82,7 +82,7 @@ interface AzureLoginNode extends AdaptiveNodeBase {
 }
 
 export function AzureLogin({ node }: AdaptiveComponentProps<AzureLoginNode>) {
-  const { state, dispatch, sendPrompt } = useAdaptive();
+  const { state, dispatch, sendPrompt, disabled } = useAdaptive();
   const token = (state.__azureToken as string) || undefined;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -90,6 +90,7 @@ export function AzureLogin({ node }: AdaptiveComponentProps<AzureLoginNode>) {
 
   // Check for existing session
   useEffect(() => {
+    if (disabled) return;
     if (token) {
       // Already have token — fetch subscriptions if not loaded
       if (!state.__azureSubscriptions) {
@@ -251,12 +252,13 @@ interface AzureResourceFormNode extends AdaptiveNodeBase {
 
 export function AzureResourceForm({ node }: AdaptiveComponentProps<AzureResourceFormNode>) {
   const token = useAzureToken();
-  const { state, dispatch } = useAdaptive();
+  const { state, dispatch, disabled } = useAdaptive();
   const [schema, setSchema] = useState<ArmResourceSchema | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (disabled) return;
     if (!token) return;
     setLoading(true);
     fetchResourceTypeSchema(token, node.resourceType)
@@ -398,7 +400,7 @@ const ARM_BASE = 'https://management.azure.com';
 
 export function AzureQuery({ node }: AdaptiveComponentProps<AzureQueryNode>) {
   const token = useAzureToken();
-  const { state, dispatch } = useAdaptive();
+  const { state, dispatch, disabled } = useAdaptive();
   const [authLoading, setAuthLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -425,9 +427,10 @@ export function AzureQuery({ node }: AdaptiveComponentProps<AzureQueryNode>) {
 
   // Auto-execute GET requests on mount (only when all state values are resolved)
   useEffect(() => {
+    if (disabled) return;
     if (!isReady || method !== 'GET') return;
     executeQuery();
-  }, [isReady, resolvedApi]);
+  }, [disabled, isReady, resolvedApi]);
 
   async function executeQuery() {
     if (!isReady) return;
@@ -738,7 +741,7 @@ interface AzurePickerNode extends AdaptiveNodeBase {
 
 export function AzurePicker({ node }: AdaptiveComponentProps<AzurePickerNode>) {
   const token = useAzureToken();
-  const { state, dispatch } = useAdaptive();
+  const { state, dispatch, disabled } = useAdaptive();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [options, setOptions] = useState<Array<{ label: string; value: string }>>([]);
@@ -747,6 +750,7 @@ export function AzurePicker({ node }: AdaptiveComponentProps<AzurePickerNode>) {
   const ARM_BASE_URL = 'https://management.azure.com';
 
   useEffect(() => {
+    if (disabled) return;
     if (!token || !api) return;
     let cancelled = false;
 

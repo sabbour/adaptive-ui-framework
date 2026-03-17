@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState, memo, useSyncExternalS
 import type { ConversationTurn } from '../schema';
 import type { DecisionEntry } from '../decision-log';
 import { AdaptiveRenderer } from '../renderer';
-import { useAdaptive } from '../context';
+import { useAdaptive, DisabledScope } from '../context';
 import { simpleMarkdown, promptHistory, MAX_PROMPT_HISTORY } from './builtins';
 import { getCompletedRequests, subscribeCompleted, type CompletedRequest } from '../request-tracker';
 
@@ -73,7 +73,9 @@ const PastTurn = memo(function PastTurn({ turn }: { turn: ConversationTurn }) {
             opacity: 0.5, pointerEvents: 'none' as const, userSelect: 'none' as const,
           },
         },
-          React.createElement(ActiveTurnUI, { node: turn.agentSpec.layout, onSend: () => {} })
+          React.createElement(DisabledScope, null,
+            React.createElement(ActiveTurnUI, { node: turn.agentSpec.layout, onSend: () => {} })
+          )
         ),
 
       )
@@ -118,6 +120,14 @@ function hasChatInput(node: any): boolean {
   return false;
 }
 
+/** Check if the layout is just a standalone chatInput with no other content.
+ *  When true, we render it in the fixed bottom bar instead of inline. */
+function isBareChatInput(node: any): boolean {
+  if (!node) return false;
+  const t = node.type || node.t;
+  return t === 'chatInput' || t === 'ci';
+}
+
 function ActiveTurn({ turn }: { turn: ConversationTurn }) {
   const { sendPrompt, state, isLoading } = useAdaptive();
   const [submitted, setSubmitted] = useState(false);
@@ -151,7 +161,8 @@ function ActiveTurn({ turn }: { turn: ConversationTurn }) {
         ),
 
         // ── Interactive UI (disabled after submit) ──
-        React.createElement('div', {
+        // Skip rendering if layout is a bare chatInput (it renders in the fixed bottom bar)
+        !isBareChatInput(turn.agentSpec.layout) && React.createElement('div', {
           style: {
             marginLeft: '38px', marginBottom: '8px', minWidth: 0, overflow: 'hidden',
             ...(isCollapsed ? { opacity: 0.5, pointerEvents: 'none' as const, userSelect: 'none' as const } : {}),
@@ -214,8 +225,14 @@ export function ConversationThread({ turns, isLoading, error, tokenUsage, lastRe
 
   const latestTurn = turns.length > 0 ? turns[turns.length - 1] : null;
   const latestIsCollapsed = !latestTurn || !!latestTurn.userMessage || isLoading;
-  const latestHasChatInput = latestTurn ? hasChatInput(latestTurn.agentSpec.layout) : true;
+  const latestIsBareChatInput = latestTurn ? isBareChatInput(latestTurn.agentSpec.layout) : false;
+  // Always show escape hatch when there's an active, non-collapsed turn.
+  // Even if the layout contains a chatInput, the escape hatch lets the user
+  // override the structured UI with free-text.
   const showEscapeHatch = !latestIsCollapsed;
+  const escapeHatchPlaceholder = latestIsBareChatInput && (latestTurn?.agentSpec.layout as any)?.placeholder
+    ? (latestTurn!.agentSpec.layout as any).placeholder
+    : 'Describe what you want instead...';
 
   const handleEscapeSend = () => {
     const text = escapeText.trim();
@@ -453,15 +470,20 @@ export function ConversationThread({ turns, isLoading, error, tokenUsage, lastRe
     React.createElement('div', {
       style: {
         flexShrink: 0,
+        flexGrow: 0,
+        height: showDebug ? '50vh' : 'auto',
+        maxHeight: '50vh',
+        overflowY: showDebug ? 'auto' as const : 'visible' as const,
         borderTop: '1px solid var(--adaptive-border, #e5e7eb)',
         backgroundColor: 'var(--adaptive-bg, #f5f5f5)',
       } as React.CSSProperties,
     },
 
     // Escape hatch textarea (shown when active turn has no chatInput)
-    showEscapeHatch && React.createElement('div', {
+    React.createElement('div', {
       style: {
-        display: 'flex', gap: '8px', alignItems: 'flex-end',
+        display: showEscapeHatch ? 'flex' : 'none',
+        gap: '8px', alignItems: 'flex-end',
         padding: '8px 24px',
       },
     },
@@ -469,7 +491,7 @@ export function ConversationThread({ turns, isLoading, error, tokenUsage, lastRe
         value: escapeText,
         onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => { setEscapeText(e.target.value); setEscapeHistoryIndex(-1); },
         onKeyDown: handleEscapeKeyDown,
-        placeholder: 'Describe what you want instead...',
+        placeholder: escapeHatchPlaceholder,
         rows: 2,
         style: {
           flex: 1, padding: '8px 10px', borderRadius: '8px',
@@ -496,7 +518,7 @@ export function ConversationThread({ turns, isLoading, error, tokenUsage, lastRe
     React.createElement('div', {
       style: {
         display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px',
-        padding: '8px 24px 0', flexWrap: 'wrap' as const,
+        padding: '8px 24px', flexWrap: 'wrap' as const,
       },
     },
       showReset && React.createElement('button', {

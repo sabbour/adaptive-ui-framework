@@ -22,6 +22,10 @@ function parseLinkNext(linkHeader: string | null): string | null {
 const GITHUB_SYSTEM_PROMPT = `
 GITHUB PACK:
 
+RUNTIME BEHAVIOR:
+- Past turns render as read-only snapshots in disabled context. Component side effects are suppressed there.
+- If you need fresh API-loaded UI (pickers/repo cards/PR actions), emit those components in the CURRENT active turn.
+
 TOOLS (inference-time, LLM sees results):
 - github_api_get: Read-only GitHub API. Use ONLY when you need data to reason about (check files, read configs). NOT for selection lists. Requires sign-in.
 

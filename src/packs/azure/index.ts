@@ -21,6 +21,10 @@ import './css/azure-theme.css';
 const AZURE_SYSTEM_PROMPT = `
 AZURE CLOUD PACK:
 
+RUNTIME BEHAVIOR:
+- Past turns render as read-only snapshots in disabled context. Component side effects are suppressed there.
+- If you need fresh API-loaded UI (pickers/forms), emit those components in the CURRENT active turn.
+
 TOOLS (inference-time, LLM sees results):
 - azure_arm_get: Read-only ARM API query. Use ONLY when you need data to reason about (check resources, validate config). NOT for selection lists. Requires sign-in.
 

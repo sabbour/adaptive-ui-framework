@@ -200,7 +200,6 @@ export function ArchitectureDiagram({ diagram, title }: ArchitectureDiagramProps
             .architecture-diagram-svg .nodeLabel {
               font-family: 'Segoe UI', system-ui, sans-serif;
               font-weight: 500;
-              font-size: 22px;
               text-align: center;
             }
             .architecture-diagram-svg .label foreignObject div {
@@ -290,7 +289,9 @@ export function ArchitectureDiagram({ diagram, title }: ArchitectureDiagramProps
               const padding = 48;
               const availW = containerRect.width - padding;
               const availH = containerRect.height - padding;
-              const fitScale = Math.min(availW / svgWidth, availH / svgHeight, 1.5);
+              // Never upscale above 1x; upscaling makes the initial small diagram
+              // appear much larger than later, denser diagrams.
+              const fitScale = Math.min(availW / svgWidth, availH / svgHeight, 1);
               if (fitScale > 0 && fitScale < 10) {
                 setScale(fitScale);
                 setTranslate({ x: 0, y: 0 });
