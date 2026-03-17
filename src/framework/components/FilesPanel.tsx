@@ -6,14 +6,14 @@ import React, { useSyncExternalStore, useState } from 'react';
 import { getArtifacts, subscribeArtifacts, downloadArtifact, removeArtifact, clearArtifacts, type Artifact } from '../artifacts';
 
 /** Download all artifacts as individual files (triggers multiple downloads) */
-function downloadAllArtifacts(artifacts: Artifact[]) {
+export function downloadAllArtifacts(artifacts: Artifact[]) {
   for (const artifact of artifacts) {
     downloadArtifact(artifact);
   }
 }
 
 /** Create a PR with artifacts committed to a new branch */
-async function createPullRequest(
+export async function createPullRequest(
   artifacts: Artifact[],
   token: string,
   owner: string,

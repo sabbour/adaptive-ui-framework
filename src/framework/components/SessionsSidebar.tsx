@@ -11,6 +11,7 @@ import {
   getArtifacts, subscribeArtifacts, removeArtifact, downloadArtifact,
   type Artifact,
 } from '../artifacts';
+import { downloadAllArtifacts, createPullRequest } from './FilesPanel';
 
 interface SessionsSidebarProps {
   activeSessionId: string | null;
@@ -27,6 +28,11 @@ export function SessionsSidebar({
   const sessions = useSyncExternalStore(subscribeSessions, getSessions);
   const artifacts = useSyncExternalStore(subscribeArtifacts, getArtifacts);
   const [collapsed, setCollapsed] = useState(false);
+  const [showPR, setShowPR] = useState(false);
+  const [prBranch, setPrBranch] = useState('main');
+  const [prMsg, setPrMsg] = useState('Add generated infrastructure files');
+  const [prStatus, setPrStatus] = useState<string | null>(null);
+  const [prBusy, setPrBusy] = useState(false);
 
   if (collapsed) {
     return React.createElement('div', {
@@ -144,10 +150,84 @@ export function SessionsSidebar({
       },
         React.createElement('span', {
           style: { fontSize: '13px', fontWeight: 600, color: 'var(--adaptive-text, #111827)' },
-        }, 'Files'),
-        React.createElement('span', {
-          style: { fontSize: '12px', color: 'var(--adaptive-text-secondary, #6b7280)' },
-        }, String(artifacts.length))
+        }, `Files (${artifacts.length})`),
+        artifacts.length > 0 && React.createElement('div', { style: { display: 'flex', gap: '4px' } },
+          React.createElement('button', {
+            onClick: () => downloadAllArtifacts(artifacts),
+            title: 'Download all files',
+            style: {
+              background: 'none', border: '1px solid var(--adaptive-border, #e5e7eb)', borderRadius: '4px',
+              color: 'var(--adaptive-text, #111827)', cursor: 'pointer', fontSize: '10px', padding: '2px 6px',
+            },
+          }, '\u2913'),
+          React.createElement('button', {
+            onClick: () => setShowPR(true),
+            title: 'Create pull request on GitHub',
+            style: {
+              background: 'none', border: '1px solid var(--adaptive-border, #e5e7eb)', borderRadius: '4px',
+              color: 'var(--adaptive-text, #111827)', cursor: 'pointer', fontSize: '10px', padding: '2px 6px',
+            },
+          }, 'PR')
+        )
+      ),
+
+      // PR dialog
+      showPR && React.createElement('div', {
+        style: {
+          padding: '8px 12px', borderBottom: '1px solid var(--adaptive-border, #e5e7eb)',
+          backgroundColor: '#f9fafb', fontSize: '11px',
+        },
+      },
+        React.createElement('div', { style: { fontWeight: 600, marginBottom: '4px' } }, 'Create Pull Request'),
+        React.createElement('input', {
+          type: 'text', value: prBranch,
+          onChange: (e: React.ChangeEvent<HTMLInputElement>) => setPrBranch(e.target.value),
+          placeholder: 'Base branch',
+          style: { width: '100%', padding: '3px 6px', fontSize: '11px', marginBottom: '4px', borderRadius: '4px', border: '1px solid #d1d5db' },
+        }),
+        React.createElement('input', {
+          type: 'text', value: prMsg,
+          onChange: (e: React.ChangeEvent<HTMLInputElement>) => setPrMsg(e.target.value),
+          placeholder: 'PR title',
+          style: { width: '100%', padding: '3px 6px', fontSize: '11px', marginBottom: '4px', borderRadius: '4px', border: '1px solid #d1d5db' },
+        }),
+        prStatus && React.createElement('div', {
+          style: {
+            fontSize: '10px', marginBottom: '4px', padding: '3px',
+            color: prStatus.startsWith('Error') ? '#dc2626' : prStatus.startsWith('\u2713') ? '#16a34a' : '#6b7280',
+            wordBreak: 'break-all' as const,
+          },
+        }, prStatus),
+        React.createElement('div', { style: { display: 'flex', gap: '4px' } },
+          React.createElement('button', {
+            onClick: async () => {
+              const token = (() => { try { return localStorage.getItem('adaptive-ui-github-token') || ''; } catch { return ''; } })();
+              const stateRaw = (() => { try { return localStorage.getItem('adaptive-ui-state') || '{}'; } catch { return '{}'; } })();
+              let owner = '', repo = '';
+              try { const s = JSON.parse(stateRaw); owner = s.githubOrg || s.__githubUser || ''; repo = s.githubRepo || ''; } catch {}
+              if (!token) { setPrStatus('Error: Not signed in to GitHub'); return; }
+              if (!owner || !repo) { setPrStatus('Error: No repository selected'); return; }
+              setPrBusy(true); setPrStatus(null);
+              try {
+                const url = await createPullRequest(artifacts, token, owner, repo, prBranch, prMsg, setPrStatus);
+                setPrStatus(`\u2713 PR created`);
+                window.open(url, '_blank', 'noopener,noreferrer');
+              } catch (err) {
+                setPrStatus(`Error: ${err instanceof Error ? err.message : String(err)}`);
+              } finally { setPrBusy(false); }
+            },
+            disabled: prBusy || !prBranch.trim() || !prMsg.trim(),
+            style: {
+              flex: 1, padding: '3px', borderRadius: '4px', border: 'none',
+              backgroundColor: '#24292e', color: '#fff', fontSize: '10px', fontWeight: 500,
+              cursor: prBusy ? 'wait' : 'pointer', opacity: prBusy ? 0.6 : 1,
+            },
+          }, prBusy ? 'Creating...' : 'Create PR'),
+          React.createElement('button', {
+            onClick: () => { setShowPR(false); setPrStatus(null); },
+            style: { padding: '3px 6px', borderRadius: '4px', border: '1px solid #d1d5db', background: '#fff', fontSize: '10px', cursor: 'pointer' },
+          }, '\u2715')
+        )
       ),
 
       // File list
