@@ -1,9 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useSyncExternalStore } from 'react';
 import type { AdaptiveComponentProps } from '../../framework/registry';
 import type { AdaptiveNodeBase } from '../../framework/schema';
 import { useAdaptive } from '../../framework/context';
 import { trackedFetch } from '../../framework/request-tracker';
 import { SearchableDropdown } from '../../framework/components/builtins';
+import { getArtifacts, subscribeArtifacts } from '../../framework/artifacts';
+import { createPullRequest } from '../../framework/components/FilesPanel';
 import {
   getStoredToken, getStoredClientId,
   requestDeviceCode, pollForToken,
@@ -610,5 +612,127 @@ export function GitHubPicker({ node }: AdaptiveComponentProps<GitHubPickerNode>)
       },
       placeholder: `\u2014 Select (${options.length} available) \u2014`,
     })
+  );
+}
+
+// ═══════════════════════════════════════
+// GitHub Create PR (commits all artifacts as a PR)
+// ═══════════════════════════════════════
+
+interface GitHubCreatePRNode extends AdaptiveNodeBase {
+  type: 'githubCreatePR';
+  /** PR title */
+  title?: string;
+  /** Base branch (default: "main") */
+  baseBranch?: string;
+}
+
+export function GitHubCreatePR({ node }: AdaptiveComponentProps<GitHubCreatePRNode>) {
+  const { state, sendPrompt } = useAdaptive();
+  const token = useGitHubToken();
+  const artifacts = useSyncExternalStore(subscribeArtifacts, getArtifacts);
+  const [status, setStatus] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(false);
+  const [prUrl, setPrUrl] = useState<string | null>(null);
+
+  const owner = (state.githubOrg as string) || (state.__githubUser as string) || '';
+  const repo = (state.githubRepo as string) || '';
+  const baseBranch = node.baseBranch || 'main';
+  const prTitle = node.title || 'Add generated infrastructure files';
+
+  // Filter out non-code artifacts (e.g., mermaid diagrams)
+  const codeArtifacts = artifacts.filter(a => !a.filename.endsWith('.mmd'));
+
+  const handleCreate = async () => {
+    if (!token || !owner || !repo || codeArtifacts.length === 0) return;
+    setBusy(true);
+    setStatus(null);
+    try {
+      const url = await createPullRequest(codeArtifacts, token, owner, repo, baseBranch, prTitle, setStatus);
+      setPrUrl(url);
+      setDone(true);
+      setStatus(`\u2713 Pull request created successfully`);
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } catch (err) {
+      setStatus(`Error: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!token) {
+    return React.createElement(Banner, { message: 'Connect to GitHub first.', type: 'warning' });
+  }
+
+  if (!owner || !repo) {
+    return React.createElement(Banner, { message: 'No repository selected. Pick an org and repo first.', type: 'warning' });
+  }
+
+  if (codeArtifacts.length === 0) {
+    return React.createElement(Banner, { message: 'No files to commit. Generate code files first.', type: 'warning' });
+  }
+
+  if (done && prUrl) {
+    return React.createElement('div', {
+      style: {
+        padding: '16px', borderRadius: '10px',
+        backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0',
+        ...node.style,
+      } as React.CSSProperties,
+    },
+      React.createElement('div', { style: { fontSize: '14px', fontWeight: 500, color: '#166534', marginBottom: '8px' } },
+        '\u2713 Pull request created'),
+      React.createElement('a', {
+        href: prUrl, target: '_blank', rel: 'noopener noreferrer',
+        style: { fontSize: '13px', color: '#2563eb', textDecoration: 'none', wordBreak: 'break-all' as const },
+      }, prUrl),
+      React.createElement('button', {
+        onClick: () => sendPrompt(`Pull request created: ${prUrl}`, null),
+        style: {
+          marginTop: '12px', width: '100%', padding: '10px',
+          borderRadius: '8px', border: 'none',
+          fontSize: '14px', fontWeight: 500, cursor: 'pointer',
+          backgroundColor: 'var(--adaptive-primary, #2563eb)', color: '#fff',
+        },
+      }, 'Continue')
+    );
+  }
+
+  return React.createElement('div', {
+    style: {
+      padding: '16px', borderRadius: '10px',
+      border: '1px solid #e5e7eb', backgroundColor: '#f9fafb',
+      ...node.style,
+    } as React.CSSProperties,
+  },
+    React.createElement('div', { style: { fontSize: '15px', fontWeight: 600, marginBottom: '8px' } },
+      `Create Pull Request to ${owner}/${repo}`),
+    React.createElement('div', { style: { fontSize: '13px', color: '#6b7280', marginBottom: '12px' } },
+      `${codeArtifacts.length} file${codeArtifacts.length > 1 ? 's' : ''} will be committed to a new branch based on "${baseBranch}"`),
+    React.createElement('div', {
+      style: { fontSize: '12px', color: '#6b7280', marginBottom: '12px', fontFamily: 'monospace' },
+    },
+      codeArtifacts.map(a => React.createElement('div', { key: a.id }, `\u2022 ${a.filename}`))
+    ),
+    status && React.createElement('div', {
+      style: {
+        fontSize: '12px', marginBottom: '8px', padding: '6px 10px', borderRadius: '6px',
+        backgroundColor: status.startsWith('Error') ? '#fef2f2' : '#eff6ff',
+        color: status.startsWith('Error') ? '#dc2626' : '#1e40af',
+      },
+    }, status),
+    React.createElement('button', {
+      onClick: handleCreate,
+      disabled: busy,
+      style: {
+        width: '100%', padding: '10px', borderRadius: '8px',
+        border: 'none', fontSize: '14px', fontWeight: 500,
+        cursor: busy ? 'wait' : 'pointer',
+        backgroundColor: '#24292e', color: '#fff',
+        opacity: busy ? 0.7 : 1,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+      },
+    }, busy ? 'Creating pull request...' : 'Create Pull Request')
   );
 }

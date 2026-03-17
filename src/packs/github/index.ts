@@ -1,6 +1,6 @@
 import type { ComponentPack } from '../../framework/registry';
 import type { AdaptiveNode } from '../../framework/schema';
-import { GitHubLogin, GitHubQuery, GitHubRepoInfo, GitHubPicker } from './components';
+import { GitHubLogin, GitHubQuery, GitHubRepoInfo, GitHubPicker, GitHubCreatePR } from './components';
 import { GitHubSettings } from './GitHubSettings';
 import { getStoredToken } from './auth';
 import { trackedFetch } from '../../framework/request-tracker';
@@ -63,11 +63,20 @@ COMPONENTS (use in "ask" as { type: "component", component: "name", props: {} } 
     Displays a rich repo card with name, description, language, stars, forks, and issue count.
     The repo prop supports {{state.key}} interpolation.
 
+- "githubCreatePR": { title?, baseBranch? }
+    Creates a pull request with all generated code files (artifacts).
+    Shows the list of files to be committed, lets the user confirm, creates a new branch,
+    commits all files, and opens the PR. Auto-opens the PR URL in a new tab.
+    Requires __githubToken and githubOrg/githubRepo in state.
+    Use this component when the user wants to commit generated files to their repository.
+    Example: { type: "githubCreatePR", title: "Add blog infrastructure", baseBranch: "main" }
+
 When the user mentions a GitHub repo or workflow:
 1. If __githubToken is not set, show githubLogin component first
 2. For PICKING from a list (orgs, repos, branches), use githubPicker component — data is fetched client-side, no tokens wasted
 3. Use the github_api_get TOOL only when the LLM needs to SEE the data to make decisions (e.g., check if a file exists, read workflow config)
-4. For write operations (create issue, comment, etc.), use githubQuery component with confirm`;
+4. For write operations (create issue, comment, etc.), use githubQuery component with confirm
+5. To create a pull request with generated files, use the githubCreatePR component`;
 
 export function createGitHubPack(): ComponentPack {
   return {
@@ -78,6 +87,7 @@ export function createGitHubPack(): ComponentPack {
       githubQuery: GitHubQuery,
       githubRepoInfo: GitHubRepoInfo,
       githubPicker: GitHubPicker,
+      githubCreatePR: GitHubCreatePR,
     },
     systemPrompt: GITHUB_SYSTEM_PROMPT,
     settingsComponent: GitHubSettings,
