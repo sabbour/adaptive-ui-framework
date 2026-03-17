@@ -373,6 +373,9 @@ export interface AdaptiveAppProps {
 
   /** Use intent-based mode for token-efficient LLM communication */
   useIntents?: boolean;
+
+  /** Ref callback that receives the sendPrompt function, allowing external components to trigger prompts */
+  sendPromptRef?: React.MutableRefObject<((prompt: string) => void) | null>;
 }
 
 let turnCounter = Date.now();
@@ -393,6 +396,7 @@ export function AdaptiveApp({
   className,
   style,
   useIntents,
+  sendPromptRef,
 }: AdaptiveAppProps) {
   // ─── Internal adapter management ───
   const [isConnected, setIsConnected] = useState(() => {
@@ -671,6 +675,10 @@ export function AdaptiveApp({
     [adapter, maxHistory, onSpecChange, onError]
   );
 
+  // Expose sendPrompt to external components via ref
+  // The actual state-aware sendPrompt is set by AdaptiveProvider (see below)
+  const externalSendPromptRef = sendPromptRef;
+
   const themeVars: React.CSSProperties & Record<string, string> = {
     '--adaptive-primary': theme.primaryColor ?? currentSpec?.theme?.primaryColor ?? '#2563eb',
     '--adaptive-bg': theme.backgroundColor ?? currentSpec?.theme?.backgroundColor ?? '#f5f5f5',
@@ -714,7 +722,7 @@ export function AdaptiveApp({
           onResetSession: handleResetSession,
           theme,
         },
-          React.createElement(AdaptiveAppInner, { turns, isLoading, error, tokenUsage, lastRequestUsage, useIntents: intentMode, onToggleIntentMode: handleToggleIntentMode, lastRawResponse, lastRawRequest, lastDecisionLog })
+          React.createElement(AdaptiveAppInner, { turns, isLoading, error, tokenUsage, lastRequestUsage, useIntents: intentMode, onToggleIntentMode: handleToggleIntentMode, lastRawResponse, lastRawRequest, lastDecisionLog, sendPromptRef: externalSendPromptRef })
         )
       : React.createElement('div', {
           style: {
@@ -751,6 +759,7 @@ function AdaptiveAppInner({
   lastRawResponse,
   lastRawRequest,
   lastDecisionLog,
+  sendPromptRef,
 }: {
   turns: ConversationTurn[];
   isLoading: boolean;
@@ -762,8 +771,17 @@ function AdaptiveAppInner({
   lastRawResponse: string | null;
   lastRawRequest: string | null;
   lastDecisionLog: DecisionEntry[];
+  sendPromptRef?: React.MutableRefObject<((prompt: string) => void) | null>;
 }) {
-  const { dispatch } = useAdaptive();
+  const { dispatch, sendPrompt } = useAdaptive();
+
+  // Expose context-aware sendPrompt to external ref
+  useEffect(() => {
+    if (sendPromptRef) {
+      sendPromptRef.current = sendPrompt;
+      return () => { sendPromptRef.current = null; };
+    }
+  }, [sendPromptRef, sendPrompt]);
 
   // Sync spec state when turns change
   useEffect(() => {

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useSyncExternalStore } from 'react';
+import React, { useState, useCallback, useRef, useSyncExternalStore } from 'react';
 import { AdaptiveApp } from '../framework';
 import type { AdaptiveUISpec } from '../framework/schema';
 import { registerApp } from '../framework/app-registry';
@@ -150,7 +150,8 @@ Diagram syntax:
    b. CI/CD pipeline YAML or GitOps manifests
    c. Dockerfiles if containerized
    d. Environment config files
-5. DEPLOY — Guide user through initial bootstrap (CLI login, pipeline setup, GitOps bootstrap)
+5. COMMIT — After generating files, proactively ask the user: "Would you like me to create a pull request with these files to your GitHub repository?" If the user already selected a GitHub org/repo earlier, reference it by name.
+6. DEPLOY — Guide user through initial bootstrap (CLI login, pipeline setup, GitOps bootstrap)
 
 Never skip discovery. Never hardcode infrastructure. Always generate reviewable IaC. Never deliver infrastructure without a deployment pipeline.`;
 
@@ -293,6 +294,13 @@ export function SolutionArchitectApp() {
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
   const artifacts = useSyncExternalStore(subscribeArtifacts, getArtifacts);
   const selectedArtifact = selectedFileId ? artifacts.find((a) => a.id === selectedFileId) || null : null;
+  const sendPromptRef = useRef<((prompt: string) => void) | null>(null);
+
+  const handleCreatePR = useCallback(() => {
+    if (sendPromptRef.current) {
+      sendPromptRef.current('Create a pull request with the generated files');
+    }
+  }, []);
 
   // Resizable panel widths
   const [sidebarWidth, setSidebarWidth] = useState(240);
@@ -392,6 +400,7 @@ export function SolutionArchitectApp() {
         onNewSession: handleNewSession,
         selectedFileId,
         onSelectFile: setSelectedFileId,
+        onCreatePR: handleCreatePR,
       })
     ),
 
@@ -431,6 +440,7 @@ export function SolutionArchitectApp() {
         initialSpec,
         persistKey: sessionId,
         systemPromptSuffix: ARCHITECT_SYSTEM_PROMPT,
+        sendPromptRef,
         theme: {
           primaryColor: '#2563eb',
           backgroundColor: '#f0f2f5',
