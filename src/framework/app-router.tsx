@@ -6,12 +6,6 @@ import { getApps, type AppEntry } from './app-registry';
 // Shows a switcher in the top-left if multiple apps are registered.
 // With only one app, renders it directly.
 
-// Restore saved theme preference
-try {
-  const savedTheme = localStorage.getItem('adaptive-ui-theme');
-  if (savedTheme) document.documentElement.setAttribute('data-theme', savedTheme);
-} catch {}
-
 function useHashRoute(): [string, (id: string) => void] {
   const [hash, setHash] = useState(() => window.location.hash.slice(1) || '');
 
