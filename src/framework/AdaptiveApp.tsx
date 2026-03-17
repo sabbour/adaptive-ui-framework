@@ -136,7 +136,7 @@ function SettingsPanel({
   const allPackSettings = getPackSettingsComponents();
   const packSettingsList = visiblePacks
     ? allPackSettings.filter(p => visiblePacks.includes(p.name))
-    : allPackSettings;
+    : [];
 
   const handleConnect = () => {
     saveLLMConfig(config);
@@ -382,7 +382,7 @@ export interface AdaptiveAppProps {
   /** Ref callback that receives the sendPrompt function, allowing external components to trigger prompts */
   sendPromptRef?: React.MutableRefObject<((prompt: string) => void) | null>;
 
-  /** Restrict which pack settings appear in the settings panel. If omitted, all packs are shown. */
+  /** Restrict which pack settings appear in the settings panel. Defaults to none — explicitly list pack names to show. */
   visiblePacks?: string[];
 }
 

@@ -94,6 +94,7 @@ function TravelPlannerApp() {
   },
     React.createElement(AdaptiveApp, {
       initialSpec,
+      persistKey: 'travel',
       systemPromptSuffix: TRAVEL_SYSTEM_PROMPT,
       visiblePacks: ['travel-data'],
       theme: {
