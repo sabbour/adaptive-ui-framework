@@ -9,7 +9,6 @@ import './framework/css/adaptive.css';
 // Import app modules — they self-register via registerApp()
 import './demo/BasicApp';
 import './demo/TravelApp';
-import './demo/FoodOrderApp';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   React.createElement(React.StrictMode, null,
