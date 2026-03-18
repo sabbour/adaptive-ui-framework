@@ -198,6 +198,123 @@ If the component maps to a semantic intent (e.g., a new input type, display type
 - For display components: add a case in `resolveShow()` mapping a show type to the component
 - Also update `src/framework/intent-schema.ts` to add the new ask/show type to the union
 
+## Creating a Pack Component
+
+Pack components live in `src/packs/<pack-name>/components.tsx`, not in `builtins.tsx`. They follow the same `React.createElement()` style but don't need schema types or compact mappings — they're registered via the pack's `components` map.
+
+### Pack file structure
+
+```
+src/packs/my-pack/
+  index.ts               # createMyPack() → ComponentPack, system prompt, tools
+  components.tsx          # Component implementations
+  MyPackSettings.tsx      # Settings UI (API key entry, etc.)
+```
+
+### Pack system prompt — three-tier pattern
+
+Every pack with API access should clearly separate three tiers in its system prompt:
+
+```
+TOOLS (inference-time, LLM sees results):
+- my_api_get: Description. Use ONLY when LLM needs to SEE data to reason.
+  Do NOT use for selection lists — use myPicker instead.
+
+COMPONENTS:
+myPicker — {api, bind, label?, ...}
+  Client-side dropdown. LLM never sees data. Use for ALL selection lists.
+  Example: {type:"myPicker", api:"/endpoint", bind:"selected", label:"Choose"}
+
+myEmbed — {query?, mode?, ...}
+  Display component. Use for visual output.
+  Example: {type:"myEmbed", query:"{{state.location}}"}
+
+WHEN TO USE:
+- Tool: LLM needs data to make decisions (ratings, availability, config)
+- Picker component: user picks from a list (hotels, restaurants, regions)
+- Display component: show visual content (maps, charts, embeds)
+```
+
+Key rules for system prompts:
+- **Document every component with full prop examples** — the LLM generates these in Adaptive mode
+- **Tool descriptions must NOT mention "list for selection"** — the LLM will call the tool instead of emitting a picker
+- **Separate WHEN TO USE** — explicitly state which operations use tools vs components
+- **Include interpolation examples** — show `{{state.key}}` usage in props
+
+### Settings component pattern
+
+For packs requiring API keys or credentials:
+
+```typescript
+// MyPackSettings.tsx
+const STORAGE_KEY = 'adaptive_my_pack_api_key';
+
+export function getStoredApiKey(): string {
+  return localStorage.getItem(STORAGE_KEY) ?? '';
+}
+
+export function storeApiKey(key: string): void {
+  if (key) localStorage.setItem(STORAGE_KEY, key);
+  else localStorage.removeItem(STORAGE_KEY);
+}
+
+export function MyPackSettings() {
+  // Status indicator + input + save button
+  // Use React.createElement(), match existing settings style
+}
+```
+
+- Store credentials in `localStorage`, not in adaptive state (avoids leaking to LLM)
+- Export `getStoredApiKey()` for use in components and tool handlers
+- Show a status indicator (green/red dot) for connection state
+
+### Tool handler pattern
+
+```typescript
+tools: [
+  {
+    definition: {
+      type: 'function' as const,
+      function: {
+        name: 'my_tool_name',
+        description: 'What it does. Do NOT use for listing — use myPicker instead.',
+        parameters: { type: 'object', properties: { ... }, required: [...] },
+      },
+    },
+    handler: async (args: Record<string, unknown>) => {
+      const apiKey = getStoredApiKey();
+      if (!apiKey) return 'Error: API key not configured. Ask user to add it in Settings.';
+      // ... fetch and return JSON string
+    },
+  },
+],
+```
+
+- Check for API key/auth first, return a clear error message if missing
+- Return JSON string (the LLM parses it)
+- Slim down responses to essential fields — avoid sending 5KB per item
+
+### Pack component conventions
+
+- Use `React.createElement()`, not JSX
+- Guard `useEffect` API calls with `if (disabled) return;` (past turns suppress side effects)
+- Use `interpolate()` for dynamic props — pass `{ allowSensitive: true }` for internal API paths that reference `__`-prefixed state keys
+- Check for API key before rendering, show a `Banner` component with setup instructions if missing
+- Register in the demo app's `visiblePacks` array so the settings panel appears
+
+### Registering a pack in a demo app
+
+```typescript
+// In the demo app file (e.g., TravelApp.tsx)
+import { createMyPack } from '../packs/my-pack';
+registerPackWithSkills(createMyPack());
+
+// In the AdaptiveApp config, add to visiblePacks:
+visiblePacks: ['existing-pack', 'my-pack'],
+```
+
+The `visiblePacks` array controls which pack settings sections appear in the settings panel. If you register a pack but don't add it to `visiblePacks`, its settings UI won't show.
+
 Skip this step if the component is only used via raw `layout` (escape hatch) or via pack `component` ask type.
 
 ### Step 5b — Consider registering a tool (for pack components)

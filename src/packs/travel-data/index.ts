@@ -1,29 +1,64 @@
 import type { ComponentPack } from '../../framework/registry';
 import { trackedFetch } from '../../framework/request-tracker';
+import { WeatherCard, CountryInfoCard, CurrencyConverter, TravelChecklist } from './components';
 
 // ─── Travel Data Pack ───
 // Provides real-time travel data via free, no-API-key-needed services:
 // - Weather forecasts (wttr.in)
 // - Currency exchange rates (open.er-api.com)
 // - Country information (restcountries.com)
-// All are tools — the LLM needs to see the data to give informed advice.
+// - Timezone data (worldtimeapi.org)
+// Mix of tools (LLM needs data) and components (visual, client-side)
 
 const TRAVEL_DATA_PROMPT = `
 TRAVEL DATA PACK:
 
-Real-time travel data tools. Use for accurate, data-backed advice.
-
-TOOLS:
-- get_weather: Current weather + 3-day forecast for any city. Use for packing/activity advice.
-- get_exchange_rate: Live currency rates. Use for budget/price discussions.
+TOOLS (inference-time, LLM sees results):
+- get_weather: Current weather + 3-day forecast. Use to advise on packing/activities.
+- get_exchange_rate: Live currency rates. Use for budget calculations.
 - get_country_info: Country facts (capital, languages, currency, timezone, driving side). Use when destination is picked.
+- get_time_zone: Current local time at a destination. Use for jet lag advice and scheduling.
+
+COMPONENTS (visual, client-side — LLM never sees the data):
+
+weatherCard — {city}
+  Visual weather card with current conditions + 3-day forecast strip. Fetches data client-side.
+  Use INSTEAD of describing weather in text — saves tokens and looks better.
+  Example: {type:"weatherCard", city:"{{state.destination}}"}
+  Example: {type:"weatherCard", city:"Paris"}
+
+countryInfoCard — {country}
+  Country fact card with flag, capital, languages, currency, timezone, driving side, population.
+  Use when a destination country is chosen — visual anchor for the trip.
+  Example: {type:"countryInfoCard", country:"{{state.country}}"}
+  Example: {type:"countryInfoCard", country:"Japan"}
+
+currencyConverter — {from?, to?}
+  Interactive currency converter widget. User enters amount, picks currencies, sees live conversion.
+  Use when discussing budget — more interactive than quoting a rate.
+  Example: {type:"currencyConverter", from:"USD", to:"JPY"}
+  Example: {type:"currencyConverter"} (defaults to USD → EUR)
+
+travelChecklist — {items, bind, title?}
+  Interactive packing/prep checklist with progress bar. User checks items off.
+  Items can be a string array or comma-separated string.
+  Example: {type:"travelChecklist", title:"Packing List", items:["Passport","Adapter plug","Sunscreen","Rain jacket","Comfortable shoes","Travel insurance docs","Local currency","Phone charger"], bind:"packingChecklist"}
+
+WHEN TO USE:
+- weatherCard: whenever showing weather for a destination — always prefer over text description
+- countryInfoCard: when a destination country is first chosen or discussed
+- currencyConverter: when discussing budget, prices, or financial planning
+- travelChecklist: at the FINALIZE step for packing lists, prep tasks, or document checklists
+- get_weather tool: when LLM needs weather data to make decisions (swap activities, suggest indoor alternatives)
+- get_exchange_rate tool: when LLM needs exact rates for budget calculations in text
+- get_country_info tool: when LLM needs country facts to reason about (visa requirements, cultural advice)
+- get_time_zone tool: for jet lag advice, scheduling, "what time is it there?"
 
 RULES:
-- ALWAYS check weather for activities/packing, exchange rates for budget, country info for new destinations.
-- Never guess weather, rates, or country facts — use the tools.
-- Weave results naturally: "Forecast shows rain (14°C) on Day 2, swap hike for covered market"
-- Include rates in budgets: "$150/day ≈ €138 at today's rate"
-- Mention practical info: "Japan drives on the left, tipping is considered rude"
+- ALWAYS use weatherCard component to display weather visually. Only use get_weather tool when you need the data to reason about.
+- ALWAYS use countryInfoCard when introducing a new destination country.
+- Offer currencyConverter when budget is discussed — users love playing with amounts.
+- Generate travelChecklist at the finalize step with weather-appropriate items.
 `;
 
 /** Slim down weather response to essential fields */
@@ -76,7 +111,12 @@ export function createTravelDataPack(): ComponentPack {
   return {
     name: 'travel-data',
     displayName: 'Travel Data',
-    components: {},
+    components: {
+      weatherCard: WeatherCard,
+      countryInfoCard: CountryInfoCard,
+      currencyConverter: CurrencyConverter,
+      travelChecklist: TravelChecklist,
+    },
     systemPrompt: TRAVEL_DATA_PROMPT,
     tools: [
       // ─── Weather Tool ───
@@ -186,6 +226,54 @@ export function createTravelDataPack(): ComponentPack {
             return JSON.stringify(slimCountry(data), null, 2);
           } catch (err) {
             return `Failed to fetch country info: ${err instanceof Error ? err.message : String(err)}`;
+          }
+        },
+      },
+
+      // ─── Timezone Tool ───
+      {
+        definition: {
+          type: 'function' as const,
+          function: {
+            name: 'get_time_zone',
+            description: 'Get the current local time at a destination city. Use for jet lag advice, scheduling, and "what time is it there?" questions.',
+            parameters: {
+              type: 'object',
+              properties: {
+                city: {
+                  type: 'string',
+                  description: 'City name (e.g., "Tokyo", "London", "New York")',
+                },
+              },
+              required: ['city'],
+            },
+          },
+        },
+        handler: async (args: Record<string, unknown>) => {
+          const city = String(args.city);
+          try {
+            // Try worldtimeapi with area/city lookup
+            const searchCity = city.split(',')[0].trim().split(' ').join('_');
+            const res = await trackedFetch(`https://worldtimeapi.org/api/timezone`);
+            if (!res.ok) return `Timezone API error: ${res.status}`;
+            const zones: string[] = await res.json();
+            // Find best match
+            const lowerCity = searchCity.toLowerCase();
+            const match = zones.find((z) => z.toLowerCase().includes(lowerCity));
+            if (!match) return `Could not find timezone for "${city}". Try a major city name.`;
+            const tzRes = await trackedFetch(`https://worldtimeapi.org/api/timezone/${match}`);
+            if (!tzRes.ok) return `Timezone API error: ${tzRes.status}`;
+            const tzData = await tzRes.json();
+            return JSON.stringify({
+              city,
+              timezone: tzData.timezone,
+              localTime: tzData.datetime,
+              utcOffset: tzData.utc_offset,
+              abbreviation: tzData.abbreviation,
+              dayOfWeek: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][tzData.day_of_week] || 'Unknown',
+            }, null, 2);
+          } catch (err) {
+            return `Failed to fetch timezone: ${err instanceof Error ? err.message : String(err)}`;
           }
         },
       },
