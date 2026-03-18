@@ -123,7 +123,7 @@ import { sanitizeUrl } from '../sanitize';
 import { upsertArtifact } from '../artifacts';
 import type {
   TextNode, ButtonNode, InputNode, SelectNode, ImageNode,
-  ContainerNode, CardNode, ListNode, TableNode, FormNode,
+  ContainerNode, ColumnsNode, CardNode, ListNode, TableNode, FormNode,
   TabsNode, ProgressNode, AlertNode, ChatInputNode, MarkdownNode,
   RadioGroupNode, MultiSelectNode, ToggleNode, SliderNode,
   DividerNode, BadgeNode, AccordionNode, CodeBlockNode, LinkNode,
@@ -253,6 +253,29 @@ function ContainerComponent({ node }: AdaptiveComponentProps<ContainerNode>) {
     style: { display: 'flex', flexDirection: 'column', gap: '4px', ...node.style } as React.CSSProperties,
     className: node.className,
   }, ...renderChildren(node.children));
+}
+
+// ─── Columns ───
+function ColumnsComponent({ node }: AdaptiveComponentProps<ColumnsNode>) {
+  const kids = renderChildren(node.children);
+  const count = kids.length || 1;
+  const gap = node.gap || '16px';
+
+  // Build grid-template-columns from sizes array or default to equal widths
+  const gridCols = node.sizes
+    ? node.sizes.map(s => /^\d+$/.test(s) ? `${s}fr` : s).join(' ')
+    : Array(count).fill('1fr').join(' ');
+
+  return React.createElement('div', {
+    style: {
+      display: 'grid',
+      gridTemplateColumns: gridCols,
+      gap,
+      alignItems: 'start',
+      ...node.style,
+    } as React.CSSProperties,
+    className: node.className,
+  }, ...kids);
 }
 
 // ─── Card ───
@@ -957,8 +980,7 @@ export function registerBuiltinComponents(): void {
     input: InputComponent,
     select: SelectComponent,
     image: ImageComponent,
-    container: ContainerComponent,
-    card: CardComponent,
+    container: ContainerComponent,    columns: ColumnsComponent,    card: CardComponent,
     list: ListComponent,
     table: TableComponent,
     form: FormComponent,

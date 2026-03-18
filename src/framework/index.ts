@@ -14,6 +14,7 @@ export type {
   SelectNode,
   ImageNode,
   ContainerNode,
+  ColumnsNode,
   CardNode,
   ListNode,
   TableNode,

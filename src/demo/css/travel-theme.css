@@ -1,0 +1,324 @@
+/* ─── Travel Concierge — Theme Override ───
+   A warm, immersive travel-themed skin layered over adaptive.css.
+   Uses CSS cascade to override framework design tokens. */
+
+/* ── Travel design tokens ── */
+.travel-app {
+  --adaptive-primary: #0891b2;
+  --adaptive-bg: transparent;
+  --adaptive-surface: rgba(255, 255, 255, 0.92);
+  --adaptive-text: #1e293b;
+  --adaptive-text-secondary: #64748b;
+  --adaptive-border: rgba(148, 163, 184, 0.25);
+  --adaptive-radius: 12px;
+  --adaptive-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
+  --adaptive-shadow-md: 0 4px 16px rgba(0, 0, 0, 0.08);
+  --adaptive-shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.1);
+
+  /* Travel accent palette */
+  --travel-coral: #f97066;
+  --travel-amber: #f59e0b;
+  --travel-teal: #0891b2;
+  --travel-emerald: #059669;
+  --travel-sky: #0ea5e9;
+  --travel-sand: #fef3c7;
+}
+
+/* ── Immersive gradient background ── */
+.travel-shell {
+  background:
+    linear-gradient(160deg,
+      #0c4a6e 0%,
+      #0e7490 20%,
+      #06b6d4 40%,
+      #a78bfa 65%,
+      #f97066 80%,
+      #fbbf24 95%
+    );
+  background-size: 200% 200%;
+  animation: travel-gradient-shift 20s ease-in-out infinite;
+}
+
+@keyframes travel-gradient-shift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+/* ── Frosted glass chat container ── */
+.travel-chat-container {
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  border-radius: 20px;
+}
+
+/* ── Branded header strip ── */
+.travel-header {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.travel-header-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #ffffff;
+  letter-spacing: -0.01em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+}
+
+.travel-header-subtitle {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.7);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.travel-header-icon {
+  font-size: 20px;
+  line-height: 1;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.15));
+}
+
+/* ── Agent avatar travel tint ── */
+.travel-app .adaptive-agent-avatar {
+  background: linear-gradient(135deg, #0891b2, #06b6d4) !important;
+  box-shadow: 0 2px 8px rgba(8, 145, 178, 0.3);
+}
+
+/* ── User bubble warm coral ── */
+.travel-app .adaptive-user-bubble {
+  background: linear-gradient(135deg, #f97066, #ef4444) !important;
+  box-shadow: 0 2px 8px rgba(249, 112, 102, 0.25);
+}
+
+/* ── Agent message bubble glass ── */
+.travel-app .adaptive-agent-bubble {
+  background: rgba(255, 255, 255, 0.95) !important;
+  border: 1px solid rgba(148, 163, 184, 0.2) !important;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+}
+
+/* ── Cards: warm lift ── */
+.travel-app .adaptive-card {
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  border-radius: 14px;
+}
+
+.travel-app .adaptive-card:hover {
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+  border-color: rgba(8, 145, 178, 0.3);
+}
+
+/* ── Selection cards ── */
+.travel-app .adaptive-option-card {
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  transition: all 150ms ease;
+}
+
+.travel-app .adaptive-option-card:hover {
+  background: rgba(8, 145, 178, 0.04);
+  border-color: rgba(8, 145, 178, 0.25);
+}
+
+.travel-app .adaptive-option-card-selected {
+  border-color: var(--travel-teal) !important;
+  border-width: 2px;
+  background: rgba(8, 145, 178, 0.06) !important;
+}
+
+/* ── Inputs: softer, rounder ── */
+.travel-app input[type="text"],
+.travel-app input[type="number"],
+.travel-app input[type="email"],
+.travel-app input[type="date"],
+.travel-app textarea,
+.travel-app select {
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.travel-app input:focus,
+.travel-app textarea:focus,
+.travel-app select:focus {
+  border-color: var(--travel-teal);
+  box-shadow: 0 0 0 3px rgba(8, 145, 178, 0.12);
+}
+
+/* ── Buttons: teal primary ── */
+.travel-app button[style*="background"] {
+  border-radius: 10px;
+}
+
+/* ── Alerts: warmer tones ── */
+.travel-app .adaptive-alert-info {
+  background: rgba(14, 165, 233, 0.08);
+  border-color: rgba(14, 165, 233, 0.2);
+  color: #0369a1;
+  border-radius: 12px;
+}
+
+.travel-app .adaptive-alert-success {
+  background: rgba(5, 150, 105, 0.08);
+  border-color: rgba(5, 150, 105, 0.2);
+  color: #047857;
+  border-radius: 12px;
+}
+
+.travel-app .adaptive-alert-warning {
+  background: rgba(245, 158, 11, 0.08);
+  border-color: rgba(245, 158, 11, 0.2);
+  color: #b45309;
+  border-radius: 12px;
+}
+
+/* ── Tabs: teal underline ── */
+.travel-app .adaptive-tab-active {
+  color: var(--travel-teal);
+  border-bottom-color: var(--travel-teal);
+}
+
+.travel-app .adaptive-tab:hover {
+  color: var(--travel-teal);
+}
+
+/* ── Badges: softer ── */
+.travel-app .adaptive-badge {
+  border-radius: 8px;
+  font-weight: 600;
+}
+
+/* ── Accordion: cleaner ── */
+.travel-app .adaptive-accordion-trigger:hover {
+  color: var(--travel-teal);
+}
+
+/* ── Progress bar: gradient ── */
+.travel-app .adaptive-progress-bar {
+  background: linear-gradient(90deg, var(--travel-teal), var(--travel-sky));
+}
+
+/* ── Code blocks: softer dark ── */
+.travel-app .adaptive-code-header {
+  border-radius: 12px 12px 0 0;
+  background: #1e293b;
+}
+
+.travel-app .adaptive-code-block {
+  background: #0f172a;
+}
+
+.travel-app .adaptive-code-block-rounded {
+  border-radius: 12px;
+}
+
+.travel-app .adaptive-code-block-bottom {
+  border-radius: 0 0 12px 12px;
+}
+
+/* ── Tooltip for bottom bar ── */
+.travel-app .adaptive-escape-trigger {
+  color: rgba(100, 116, 139, 0.7);
+}
+
+.travel-app .adaptive-escape-trigger:hover {
+  color: var(--travel-teal);
+}
+
+/* ── Table refinements ── */
+.travel-app th {
+  color: var(--travel-teal);
+  border-bottom-color: rgba(8, 145, 178, 0.15);
+}
+
+.travel-app tr:hover td {
+  background: rgba(8, 145, 178, 0.03);
+}
+
+/* ── Toggle switch teal ── */
+.travel-app .adaptive-toggle-track {
+  border-radius: 14px;
+}
+
+/* ── Scrollbar: subtle ── */
+.travel-app ::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.3);
+  border-radius: 6px;
+}
+
+.travel-app ::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.5);
+}
+
+/* ── Settings panel override ── */
+.travel-app .adaptive-settings-panel {
+  border-radius: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  background: rgba(255, 255, 255, 0.95);
+}
+
+/* ── Answered summary: travel green ── */
+.travel-app .adaptive-answered-summary {
+  border-radius: 10px;
+  background: rgba(5, 150, 105, 0.06);
+  border: 1px solid rgba(5, 150, 105, 0.15);
+  color: #047857;
+}
+
+/* ── Typing dots: teal ── */
+.travel-app .adaptive-typing-dot {
+  background: var(--travel-teal);
+}
+
+/* ── Divider: softer ── */
+.travel-app .adaptive-divider {
+  background: rgba(148, 163, 184, 0.15);
+}
+
+/* ── Columns: responsive stacking inside the narrow chat panel ── */
+@media (max-width: 520px) {
+  .travel-app [style*="grid-template-columns"] {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* ── Responsive: on smaller screens, remove outer margin ── */
+@media (max-width: 768px) {
+  .travel-chat-container {
+    border-radius: 0;
+    border: none;
+    box-shadow: none;
+    margin: 0 !important;
+    max-width: 100% !important;
+  }
+}
+
+/* ── Settings button: reposition into branded header next to clock ── */
+.travel-app .adaptive-settings-wrapper {
+  top: 46px !important;
+  right: 20px !important;
+}
+
+.travel-app .adaptive-settings-wrapper button:first-of-type {
+  background: rgba(255, 255, 255, 0.2) !important;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15) !important;
+}
+
+/* Push clock left to make room for settings gear */
+.travel-header > div:last-child {
+  margin-right: 40px;
+}

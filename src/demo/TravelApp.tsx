@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { AdaptiveApp } from '../framework';
 import type { AdaptiveUISpec } from '../framework/schema';
 import { registerApp } from '../framework/app-registry';
@@ -6,6 +6,7 @@ import { registerPackWithSkills } from '../framework/registry';
 import { createTravelDataPack } from '../packs/travel-data';
 import { createGoogleMapsPack } from '../packs/google-maps';
 import { createGoogleFlightsPack } from '../packs/google-flights';
+import './css/travel-theme.css';
 
 // Register travel data pack (weather, currency, country info)
 registerPackWithSkills(createTravelDataPack());
@@ -60,6 +61,10 @@ FINALIZE:
 - Show a currencyConverter for quick budget reference
 
 ═══ PRESENTATION ═══
+- Use columns to pair related content side by side — e.g. {type:"columns", children:[weatherCard, currencyConverter]}
+- When suggesting destinations, show 2 or 3 options in columns with a googlePhotoCard in each
+- Pair a countryInfoCard next to a weatherCard, or a googleMaps next to a googleNearby
+- columns(sizes:["2","1"]) for a main + sidebar layout (e.g. map on left, details on right)
 - radioGroup/select for preferences, table for budgets, accordion for day-by-day
 - alert(info) for pro tips, alert(warning) for notices, badge for "Must See"/"Hidden Gem"
 - codeBlock(language:"markdown") with filename label for downloadable summaries
@@ -87,20 +92,105 @@ const initialSpec: AdaptiveUISpec = {
 };
 
 function TravelPlannerApp() {
+  // Randomize the greeting tagline on mount
+  const [tagline] = useState(() => {
+    const lines = [
+      'Where shall we wander next?',
+      'Your next adventure starts here',
+      'Dream it. Plan it. Live it.',
+      'The world is waiting for you',
+      'Let\u2019s plan something unforgettable',
+    ];
+    return lines[Math.floor(Math.random() * lines.length)];
+  });
+
+  // Clock showing current local time — adds a live "concierge desk" feel
+  const [time, setTime] = useState(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setTime(new Date()), 60000);
+    return () => clearInterval(id);
+  }, []);
+  const timeStr = time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
   return React.createElement('div', {
-    style: { height: '100%', width: '100%' } as React.CSSProperties,
+    className: 'travel-shell',
+    style: {
+      height: '100%',
+      width: '100%',
+      display: 'flex',
+      flexDirection: 'column',
+      overflow: 'hidden',
+    } as React.CSSProperties,
   },
-    React.createElement(AdaptiveApp, {
-      initialSpec,
-      persistKey: 'travel',
-      systemPromptSuffix: TRAVEL_SYSTEM_PROMPT,
-      visiblePacks: ['travel-data', 'google-maps', 'google-flights'],
-      theme: {
-        primaryColor: '#059669',
-        backgroundColor: '#f0fdf4',
-        surfaceColor: '#ffffff',
+
+    // ── Branded header strip ──
+    React.createElement('div', {
+      className: 'travel-header',
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '8px 20px',
+        flexShrink: 0,
+      } as React.CSSProperties,
+    },
+      // Left: logo + title
+      React.createElement('div', {
+        style: { display: 'flex', alignItems: 'center', gap: '10px' },
       },
-    })
+        React.createElement('span', { className: 'travel-header-icon' }, '\u2708\uFE0F'),
+        React.createElement('div', null,
+          React.createElement('div', { className: 'travel-header-title' }, 'Travel Concierge'),
+          React.createElement('div', { className: 'travel-header-subtitle' }, tagline)
+        )
+      ),
+      // Right: time
+      React.createElement('div', {
+        style: {
+          fontSize: '13px',
+          color: 'rgba(255,255,255,0.6)',
+          fontVariantNumeric: 'tabular-nums',
+          letterSpacing: '0.02em',
+        },
+      }, timeStr)
+    ),
+
+    // ── Main content area ──
+    React.createElement('div', {
+      style: {
+        flex: 1,
+        minHeight: 0,
+        display: 'flex',
+        justifyContent: 'center',
+        padding: '12px 16px 16px',
+        overflow: 'hidden',
+      } as React.CSSProperties,
+    },
+
+      // ── Frosted glass chat card ──
+      React.createElement('div', {
+        className: 'travel-chat-container travel-app',
+        style: {
+          width: '100%',
+          maxWidth: '720px',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+        } as React.CSSProperties,
+      },
+        React.createElement(AdaptiveApp, {
+          initialSpec,
+          persistKey: 'travel',
+          systemPromptSuffix: TRAVEL_SYSTEM_PROMPT,
+          visiblePacks: ['travel-data', 'google-maps', 'google-flights'],
+          theme: {
+            primaryColor: '#0891b2',
+            backgroundColor: 'transparent',
+            surfaceColor: 'rgba(255, 255, 255, 0.95)',
+          },
+        })
+      )
+    )
   );
 }
 

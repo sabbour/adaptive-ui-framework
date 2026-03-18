@@ -150,6 +150,15 @@ export interface ContainerNode extends AdaptiveNodeBase {
   children: AdaptiveNode[];
 }
 
+export interface ColumnsNode extends AdaptiveNodeBase {
+  type: 'columns';
+  children: AdaptiveNode[];
+  /** Column width ratios, e.g. ["1","2"] → 1fr 2fr. Defaults to equal widths. */
+  sizes?: string[];
+  /** Gap between columns, e.g. "16px". Defaults to 16px. */
+  gap?: string;
+}
+
 export interface CardNode extends AdaptiveNodeBase {
   type: 'card';
   title?: string;
@@ -279,6 +288,7 @@ export type AdaptiveNode =
   | SelectNode
   | ImageNode
   | ContainerNode
+  | ColumnsNode
   | CardNode
   | ListNode
   | TableNode

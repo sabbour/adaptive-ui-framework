@@ -144,6 +144,7 @@ function SettingsPanel({
   };
 
   return React.createElement('div', {
+    className: 'adaptive-settings-wrapper',
     style: { position: 'fixed', top: '6px', right: '12px', zIndex: 1001 },
   },
     open && React.createElement('div', {

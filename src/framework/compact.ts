@@ -21,6 +21,7 @@ const KEY_MAP: Record<string, string> = {
   mn: 'min', mx: 'max', stp: 'step',
   clr: 'color', code: 'code', lang: 'language',
   href: 'href', ext: 'external',
+  szs: 'sizes', gp: 'gap',
   rt: 'resourceType',
   pc: 'primaryColor', bg: 'backgroundColor',
   sc: 'surfaceColor', tc: 'textColor',
@@ -32,7 +33,7 @@ const KEY_MAP: Record<string, string> = {
 
 const TYPE_MAP: Record<string, string> = {
   tx: 'text', btn: 'button', inp: 'input', sel: 'select', img: 'image',
-  ctr: 'container', crd: 'card', lst: 'list', tbl: 'table', frm: 'form',
+  ctr: 'container', clm: 'columns', crd: 'card', lst: 'list', tbl: 'table', frm: 'form',
   tbs: 'tabs', prg: 'progress', alt: 'alert', ci: 'chatInput', md: 'markdown',
   rg: 'radioGroup', ms: 'multiSelect', tgl: 'toggle', sld: 'slider',
   div: 'divider', bdg: 'badge', acc: 'accordion', cb: 'codeBlock', lnk: 'link',

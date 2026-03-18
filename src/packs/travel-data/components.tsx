@@ -74,7 +74,7 @@ export function WeatherCard({ node }: AdaptiveComponentProps<WeatherCardNode>) {
         const res = await trackedFetch(`https://wttr.in/${encodeURIComponent(city)}?format=j1`);
         if (!res.ok) throw new Error(`Weather API error: ${res.status}`);
         const json = await res.json();
-        if (!cancelled) setData(json);
+        if (!cancelled) setData(json.data ?? json);
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to fetch weather');
       } finally {
@@ -333,8 +333,13 @@ export function CurrencyConverter({ node }: AdaptiveComponentProps<CurrencyConve
       value,
       onChange: (e: React.ChangeEvent<HTMLSelectElement>) => onChange(e.target.value),
       style: {
-        padding: '8px 10px', borderRadius: '8px', border: '1px solid #d1d5db',
-        fontSize: '14px', fontWeight: 600, backgroundColor: '#fff', cursor: 'pointer',
+        flex: 1, padding: '10px 14px', borderRadius: '10px', border: '1px solid #e5e7eb',
+        fontSize: '14px', fontWeight: 500, backgroundColor: '#fff', cursor: 'pointer',
+        color: '#1e293b', appearance: 'none' as const,
+        backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'12\' height=\'12\' viewBox=\'0 0 12 12\'%3E%3Cpath fill=\'%2364748b\' d=\'M2 4l4 4 4-4\'/%3E%3C/svg%3E")',
+        backgroundRepeat: 'no-repeat',
+        backgroundPosition: 'right 12px center',
+        paddingRight: '32px',
       },
     },
       ...COMMON_CURRENCIES.map((c) =>
@@ -344,68 +349,117 @@ export function CurrencyConverter({ node }: AdaptiveComponentProps<CurrencyConve
 
   return React.createElement('div', {
     style: {
-      borderRadius: '12px', border: '1px solid #e5e7eb',
-      backgroundColor: '#fff', padding: '16px 20px',
+      borderRadius: '16px', border: '1px solid #e2e8f0',
+      backgroundColor: '#fff', overflow: 'hidden',
+      boxShadow: '0 2px 12px rgba(0, 0, 0, 0.06)',
       ...node.style,
     } as React.CSSProperties,
   },
+    // Header
     React.createElement('div', {
-      style: { fontSize: '14px', fontWeight: 600, marginBottom: '12px', color: '#374151' },
-    }, '💱 Currency Converter'),
-
-    // From row
-    React.createElement('div', {
-      style: { display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '8px' },
+      style: {
+        padding: '14px 20px',
+        background: 'linear-gradient(135deg, #0891b2 0%, #06b6d4 100%)',
+        display: 'flex', alignItems: 'center', gap: '8px',
+      },
     },
-      React.createElement('input', {
-        type: 'number',
-        value: amount,
-        onChange: (e: React.ChangeEvent<HTMLInputElement>) => setAmount(e.target.value),
-        style: {
-          flex: 1, padding: '10px 12px', borderRadius: '8px',
-          border: '1px solid #d1d5db', fontSize: '18px', fontWeight: 600,
-          boxSizing: 'border-box' as const,
-        },
-      }),
-      currencySelect(fromCur, setFromCur)
+      React.createElement('span', { style: { fontSize: '18px' } }, '💱'),
+      React.createElement('span', {
+        style: { fontSize: '14px', fontWeight: 600, color: '#fff', letterSpacing: '-0.01em' },
+      }, 'Currency Converter')
     ),
 
-    // Swap + equals
-    React.createElement('div', {
-      style: { display: 'flex', alignItems: 'center', gap: '8px', margin: '4px 0', justifyContent: 'center' },
-    },
-      React.createElement('button', {
-        onClick: () => { const tmp = fromCur; setFromCur(toCur); setToCur(tmp); },
-        style: {
-          background: 'none', border: '1px solid #d1d5db', borderRadius: '50%',
-          width: '32px', height: '32px', cursor: 'pointer', fontSize: '14px',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-        },
-      }, '⇅')
-    ),
+    React.createElement('div', { style: { padding: '20px' } },
 
-    // To row
-    React.createElement('div', {
-      style: { display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '8px' },
-    },
+      // From section
       React.createElement('div', {
         style: {
-          flex: 1, padding: '10px 12px', borderRadius: '8px',
-          backgroundColor: '#f9fafb', border: '1px solid #e5e7eb',
-          fontSize: '18px', fontWeight: 600, color: loading ? '#9ca3af' : '#111827',
+          backgroundColor: '#f8fafc', borderRadius: '12px', padding: '14px',
+          border: '1px solid #e2e8f0', marginBottom: '12px',
         },
-      }, loading ? '...' : converted),
-      currencySelect(toCur, setToCur)
-    ),
+      },
+        React.createElement('div', {
+          style: { fontSize: '11px', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase' as const, letterSpacing: '0.05em', marginBottom: '8px' },
+        }, 'From'),
+        React.createElement('div', {
+          style: { display: 'flex', gap: '10px', alignItems: 'center' },
+        },
+          React.createElement('input', {
+            type: 'number',
+            value: amount,
+            onChange: (e: React.ChangeEvent<HTMLInputElement>) => setAmount(e.target.value),
+            style: {
+              width: '120px', padding: '10px 14px', borderRadius: '10px',
+              border: '1px solid #e2e8f0', fontSize: '20px', fontWeight: 700,
+              color: '#0f172a', backgroundColor: '#fff',
+              boxSizing: 'border-box' as const,
+              outline: 'none',
+            },
+          }),
+          currencySelect(fromCur, setFromCur)
+        )
+      ),
 
-    // Rate info
-    rate && !loading && React.createElement('div', {
-      style: { fontSize: '12px', color: '#6b7280', textAlign: 'center', marginTop: '4px' } as React.CSSProperties,
-    }, `1 ${fromCur} = ${rate.toFixed(4)} ${toCur}`),
+      // Swap button
+      React.createElement('div', {
+        style: { display: 'flex', justifyContent: 'center', margin: '-6px 0', position: 'relative' as const, zIndex: 1 },
+      },
+        React.createElement('button', {
+          onClick: () => { const tmp = fromCur; setFromCur(toCur); setToCur(tmp); },
+          style: {
+            background: '#fff', border: '2px solid #e2e8f0', borderRadius: '50%',
+            width: '36px', height: '36px', cursor: 'pointer', fontSize: '16px',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: '#0891b2', fontWeight: 700,
+            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
+            transition: 'all 0.15s ease',
+          },
+        }, '⇅')
+      ),
 
-    error && React.createElement('div', {
-      style: { fontSize: '12px', color: '#991b1b', textAlign: 'center', marginTop: '4px' } as React.CSSProperties,
-    }, error)
+      // To section
+      React.createElement('div', {
+        style: {
+          backgroundColor: '#f0fdfa', borderRadius: '12px', padding: '14px',
+          border: '1px solid #ccfbf1', marginTop: '12px',
+        },
+      },
+        React.createElement('div', {
+          style: { fontSize: '11px', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase' as const, letterSpacing: '0.05em', marginBottom: '8px' },
+        }, 'To'),
+        React.createElement('div', {
+          style: { display: 'flex', gap: '10px', alignItems: 'center' },
+        },
+          React.createElement('div', {
+            style: {
+              width: '120px', padding: '10px 14px', borderRadius: '10px',
+              backgroundColor: '#fff', border: '1px solid #ccfbf1',
+              fontSize: '20px', fontWeight: 700,
+              color: loading ? '#94a3b8' : '#0891b2',
+            },
+          }, loading ? '...' : converted),
+          currencySelect(toCur, setToCur)
+        )
+      ),
+
+      // Rate info
+      rate && !loading && React.createElement('div', {
+        style: {
+          fontSize: '12px', color: '#64748b', textAlign: 'center',
+          marginTop: '14px', padding: '8px 12px',
+          backgroundColor: '#f8fafc', borderRadius: '8px',
+        } as React.CSSProperties,
+      }, `1 ${fromCur} = ${rate.toFixed(4)} ${toCur}`),
+
+      error && React.createElement('div', {
+        style: {
+          fontSize: '12px', color: '#991b1b', textAlign: 'center',
+          marginTop: '14px', padding: '8px 12px',
+          backgroundColor: '#fef2f2', borderRadius: '8px',
+          border: '1px solid #fecaca',
+        } as React.CSSProperties,
+      }, error)
+    )
   );
 }
 

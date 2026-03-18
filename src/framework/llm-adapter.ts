@@ -167,7 +167,7 @@ JSON schema:
 
 Component types:
 
-LAYOUT: container(children), card(title?,subtitle?,children,onClick?), tabs(tabs:[{label,id,children}])
+LAYOUT: container(children), columns(children,sizes?:["1","2"],gap?), card(title?,subtitle?,children,onClick?), tabs(tabs:[{label,id,children}])
 TEXT: text(content,variant?:h1|h2|h3|h4|body|caption|code), markdown(content), image(src,alt?)
 INPUT: input(inputType?:text|number|email|password|textarea|date, label?,placeholder?,bind), select(label?,options:[{label,value}],bind), radioGroup(label?,options:[{label,value,description?}],bind), multiSelect(label?,options:[{label,value,description?}],bind)
 ACTION: button(label,variant?:primary|secondary|danger|ghost,onClick,disabled?), form(children,onSubmit)
