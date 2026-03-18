@@ -9,8 +9,8 @@ import { createGoogleFlightsPack } from '../packs/google-flights';
 import { SessionsSidebar } from '../framework/components/SessionsSidebar';
 import { ResizeHandle } from '../framework/components/ResizeHandle';
 import { TripNotebook } from './TripNotebook';
-import { generateSessionId, saveSession, deleteSession } from '../framework/session-manager';
-import { upsertArtifact, getArtifacts, subscribeArtifacts, loadArtifactsForSession, saveArtifactsForSession, deleteArtifactsForSession } from '../framework/artifacts';
+import { generateSessionId, saveSession, deleteSession, setSessionScope } from '../framework/session-manager';
+import { upsertArtifact, getArtifacts, subscribeArtifacts, loadArtifactsForSession, saveArtifactsForSession, deleteArtifactsForSession, setArtifactsScope } from '../framework/artifacts';
 import './css/travel-theme.css';
 
 // Register travel data pack (weather, currency, country info)
@@ -23,7 +23,7 @@ registerPackWithSkills(createGoogleFlightsPack());
 // The LLM acts as a travel concierge: discovers preferences, suggests destinations,
 // builds day-by-day itineraries, and helps with booking decisions.
 
-const TRAVEL_SYSTEM_PROMPT = `You are a Travel Concierge — friendly, knowledgeable travel advisor helping plan memorable trips.
+const TRAVEL_SYSTEM_PROMPT = `You are a Travel Notebook assistant — friendly, knowledgeable travel advisor helping plan memorable trips.
 The user has a Trip Notebook panel on the right that auto-collects destinations, budget breakdowns, and itinerary files as you generate them.
 
 ═══ DISCOVERY ═══
@@ -98,8 +98,8 @@ Enthusiastic but not overwhelming. Emojis sparingly.`;
 
 const initialSpec: AdaptiveUISpec = {
   version: '1',
-  title: 'Travel Concierge',
-  agentMessage: "Hey there! ✈️ I'm your personal Travel Concierge. I help plan unforgettable trips — from hidden local gems to the perfect restaurant for sunset dinner.\n\nWhere are you dreaming of going? Or if you're open to ideas, tell me what kind of experience you're after and I'll surprise you!",
+  title: 'Travel Notebook',
+  agentMessage: "Hey there! ✈️ I'm your Travel Notebook assistant. I help plan unforgettable trips — from hidden local gems to the perfect restaurant for sunset dinner.\n\nWhere are you dreaming of going? Or if you're open to ideas, tell me what kind of experience you're after and I'll surprise you!",
   state: {},
   layout: {
     type: 'chatInput',
@@ -160,6 +160,10 @@ function extractPlacesFromLayout(node: any): PlaceRef[] {
 }
 
 function TravelPlannerApp() {
+  // Scope sessions and artifacts to this app
+  setSessionScope('travel');
+  setArtifactsScope('travel');
+
   // ─── Session management ───
   const [sessionId, setSessionId] = useState(() => {
     try {
@@ -308,7 +312,7 @@ function TravelPlannerApp() {
       },
         React.createElement('span', { className: 'travel-header-icon' }, '\u2708\uFE0F'),
         React.createElement('div', null,
-          React.createElement('div', { className: 'travel-header-title' }, 'Travel Concierge'),
+          React.createElement('div', { className: 'travel-header-title' }, 'Travel Notebook'),
           React.createElement('div', { className: 'travel-header-subtitle' }, tagline)
         )
       ),
@@ -412,7 +416,7 @@ function TravelPlannerApp() {
 
 registerApp({
   id: 'travel',
-  name: 'Travel Concierge',
-  description: 'AI travel advisor — plan trips, discover destinations, build itineraries',
+  name: 'Travel Notebook',
+  description: 'AI travel planner — plan trips, discover destinations, build itineraries',
   component: TravelPlannerApp,
 });

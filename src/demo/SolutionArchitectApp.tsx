@@ -8,8 +8,8 @@ import { createGitHubPack } from '../packs/github';
 import { SessionsSidebar } from '../framework/components/SessionsSidebar';
 import { FileViewer, FileViewerPlaceholder } from '../framework/components/FileViewer';
 import { ResizeHandle } from '../framework/components/ResizeHandle';
-import { generateSessionId, saveSession, deleteSession } from '../framework/session-manager';
-import { upsertArtifact, getArtifacts, subscribeArtifacts, loadArtifactsForSession, saveArtifactsForSession, deleteArtifactsForSession } from '../framework/artifacts';
+import { generateSessionId, saveSession, deleteSession, setSessionScope } from '../framework/session-manager';
+import { upsertArtifact, getArtifacts, subscribeArtifacts, loadArtifactsForSession, saveArtifactsForSession, deleteArtifactsForSession, setArtifactsScope } from '../framework/artifacts';
 import { registerAzureDiagramIcons } from '../packs/azure/diagram-icons';
 
 // Register packs and diagram icons
@@ -228,6 +228,10 @@ function codeBlockToFilename(block: CodeBlock): string {
 }
 
 export function SolutionArchitectApp() {
+  // Scope sessions and artifacts to this app
+  setSessionScope('architect');
+  setArtifactsScope('architect');
+
   const [sessionId, setSessionId] = useState(() => {
     try {
       return localStorage.getItem('adaptive-ui-active-session') || generateSessionId();

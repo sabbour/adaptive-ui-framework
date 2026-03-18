@@ -21,10 +21,17 @@ interface StoredSession {
 }
 
 const STORAGE_PREFIX = 'adaptive-ui-session-';
-const INDEX_KEY = 'adaptive-ui-sessions';
+let INDEX_KEY = 'adaptive-ui-sessions';
 
 const listeners = new Set<Listener>();
 let sessionIndex: Session[] | null = null;
+
+/** Scope sessions to a specific app. Call before any session operations. */
+export function setSessionScope(appId: string): void {
+  INDEX_KEY = appId ? `adaptive-ui-sessions-${appId}` : 'adaptive-ui-sessions';
+  sessionIndex = null; // invalidate cache
+  notify();
+}
 
 function notify(): void {
   sessionIndex = null; // invalidate cache
