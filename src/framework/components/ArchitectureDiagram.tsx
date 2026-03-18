@@ -35,7 +35,7 @@ mermaid.initialize({
   flowchart: {
     htmlLabels: true,
     curve: 'basis',
-    padding: 24,
+    padding: 28,
     nodeSpacing: 80,
     rankSpacing: 90,
     useMaxWidth: false,
@@ -215,6 +215,10 @@ export function ArchitectureDiagram({ diagram, title }: ArchitectureDiagramProps
             }
             .architecture-diagram-svg .label foreignObject {
               text-align: center;
+              overflow: visible !important;
+            }
+            .architecture-diagram-svg .node .label foreignObject div {
+              overflow: visible !important;
             }
             .architecture-diagram-svg .node .label {
               text-align: center;

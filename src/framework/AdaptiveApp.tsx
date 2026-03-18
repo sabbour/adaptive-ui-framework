@@ -493,6 +493,33 @@ export function AdaptiveApp({
   const historyRef = useRef<LLMMessage[]>([]);
   const busyRef = useRef(false);
 
+  // Rebuild conversation history from restored turns (page reload / session restore)
+  // Without this, the LLM loses all context when turns are restored from localStorage.
+  useEffect(() => {
+    if (historyRef.current.length > 0 || turns.length === 0) return;
+    const rebuilt: LLMMessage[] = [];
+    for (const turn of turns) {
+      if (turn.userMessage) {
+        const safeData = turn.userData
+          ? Object.fromEntries(Object.entries(turn.userData).filter(([k]) => !k.startsWith('__')))
+          : {};
+        rebuilt.push({
+          role: 'user',
+          content: `User responded: "${turn.userMessage}"\nCurrent collected data: ${JSON.stringify(safeData)}`,
+        });
+      }
+      if (turn.agentSpec) {
+        rebuilt.push({
+          role: 'assistant',
+          content: summarizeSpec(turn.agentSpec),
+        });
+      }
+    }
+    if (rebuilt.length > 0) {
+      historyRef.current = rebuilt;
+    }
+  }, []); // Run once on mount
+
   // Persist turns to localStorage on change
   useEffect(() => {
     if (persistKey && turns.length > 0) {

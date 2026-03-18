@@ -94,6 +94,8 @@ Syntax: "flowchart TD", subgraph id["Label"]...end, A-->B, %%icon:NAME%% prefix 
 5. COMMIT — ask to create PR to GitHub repo
 6. DEPLOY — guide bootstrap
 
+CONFIRMATION/REVIEW steps: When summarizing what you've learned so far, write a short readable paragraph (2-4 sentences) that naturally weaves in the collected details — do NOT use a table or key-value list. Example: "You're building a Go batch agent that scrapes the web 4x daily, stores ~10 articles per run in a database with 7-day retention, and serves results on a dashboard for up to 100 users with OAuth." Then show input fields for any gaps.
+
 Never skip discovery. Never hardcode infra. Always generate reviewable code with deployment strategy.`;
 
 const initialSpec: AdaptiveUISpec = {

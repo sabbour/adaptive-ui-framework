@@ -8,6 +8,30 @@ import { resolveIntent, isAgentIntent } from './intent-resolver';
 import { resetDecisionLog, logDecision, getDecisionLog, type DecisionEntry } from './decision-log';
 import { getToolDefinitions, executeTool, type ToolCall } from './tools';
 
+// ─── Balanced JSON extraction ───
+// Find the first complete top-level JSON object in a string.
+// Handles trailing text after the JSON (e.g. LLM prose after the object).
+function extractBalancedJson(str: string): string | null {
+  const start = str.indexOf('{');
+  if (start === -1) return null;
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+  for (let i = start; i < str.length; i++) {
+    const ch = str[i];
+    if (escape) { escape = false; continue; }
+    if (ch === '\\' && inString) { escape = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (ch === '{') depth++;
+    else if (ch === '}') {
+      depth--;
+      if (depth === 0) return str.slice(start, i + 1);
+    }
+  }
+  return null; // unbalanced
+}
+
 // ─── Truncated JSON repair ───
 // When finish_reason=length, the JSON is cut off mid-stream.
 // Try to close open braces/brackets to salvage a partial object.
@@ -423,42 +447,54 @@ export class OpenAIAdapter implements LLMAdapter {
     try {
       parsed = JSON.parse(jsonStr);
     } catch {
-      // Try to fix common LLM JSON issues before giving up
-      let fixedStr = jsonStr;
+      // Step 1: Try balanced-brace extraction (handles trailing text after JSON)
+      const balanced = extractBalancedJson(jsonStr);
+      if (balanced && balanced !== jsonStr) {
+        try {
+          parsed = JSON.parse(balanced);
+          logDecision('adapter', 'Extracted balanced JSON object — stripped trailing text after the JSON');
+        } catch {
+          // continue to newline fix
+        }
+      }
 
-      // Fix unescaped newlines inside JSON string values.
-      // LLMs often emit raw line breaks inside "code":"..." fields
-      // (e.g. Bicep templates) instead of \\n escapes.
-      fixedStr = fixedStr.replace(
-        /"(?:[^"\\]|\\.)*"/g,
-        (match) => match.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t')
-      );
+      if (!parsed) {
+        // Step 2: Fix unescaped newlines inside JSON string values.
+        // LLMs often emit raw line breaks inside "code":"..." fields
+        // (e.g. Bicep templates) instead of \\n escapes.
+        // The 's' flag makes '.' match newlines so \<newline> is handled by '\\.'.
+        let fixedStr = balanced ?? jsonStr;
+        fixedStr = fixedStr.replace(
+          /"(?:[^"\\]|\\.)*"/gs,
+          (match) => match.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t')
+        );
 
-      try {
-        parsed = JSON.parse(fixedStr);
-        logDecision('adapter', 'Repaired LLM JSON by escaping raw newlines inside string values');
-      } catch {
-        // If truncated (finish_reason=length), try to repair by closing braces
-        if (finishReason === 'length') {
-          const repaired = repairTruncatedJson(fixedStr);
-          if (repaired) {
-            logDecision('adapter', 'Repaired truncated JSON by closing open braces/brackets');
-            parsed = repaired;
+        try {
+          parsed = JSON.parse(fixedStr);
+          logDecision('adapter', 'Repaired LLM JSON by escaping raw newlines inside string values');
+        } catch {
+          // If truncated (finish_reason=length), try to repair by closing braces
+          if (finishReason === 'length') {
+            const repaired = repairTruncatedJson(fixedStr);
+            if (repaired) {
+              logDecision('adapter', 'Repaired truncated JSON by closing open braces/brackets');
+              parsed = repaired;
+            } else {
+              logDecision('adapter', 'Could not repair truncated JSON — showing raw text in agent bubble');
+              parsed = {
+                agentMessage: content.slice(0, 2000) + (content.length > 2000 ? '\n\n*[truncated]*' : ''),
+                layout: { type: 'chatInput', placeholder: 'Type your response...' },
+              };
+            }
           } else {
-            logDecision('adapter', 'Could not repair truncated JSON — showing raw text in agent bubble');
+            // If JSON parse still fails, put all content in the agent bubble
+            console.warn('[AdaptiveUI] LLM returned non-JSON response, showing in agent bubble');
+            logDecision('adapter', 'LLM returned non-JSON text — showing full response in the agent message bubble');
             parsed = {
-              agentMessage: content.slice(0, 2000) + (content.length > 2000 ? '\n\n*[truncated]*' : ''),
+              agentMessage: content.slice(0, 3000),
               layout: { type: 'chatInput', placeholder: 'Type your response...' },
             };
           }
-        } else {
-          // If JSON parse still fails, put all content in the agent bubble
-          console.warn('[AdaptiveUI] LLM returned non-JSON response, showing in agent bubble');
-          logDecision('adapter', 'LLM returned non-JSON text — showing full response in the agent message bubble');
-          parsed = {
-            agentMessage: content.slice(0, 3000),
-            layout: { type: 'chatInput', placeholder: 'Type your response...' },
-          };
         }
       }
     }
