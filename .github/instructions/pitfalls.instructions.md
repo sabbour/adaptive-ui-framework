@@ -1,9 +1,9 @@
 ---
-applyTo: "src/**"
-description: "Common pitfalls and conventions learned from iterative development. Prevents repeating known mistakes."
+applyTo: "packs/**,apps/**"
+description: "Framework-specific pitfalls and conventions. Cross-repo conventions are in the root repo's instructions."
 ---
 
-# Adaptive UI — Pitfalls & Conventions
+# Adaptive UI Framework — Pitfalls & Conventions
 
 ## ES2020 Target
 
@@ -17,7 +17,6 @@ description: "Common pitfalls and conventions learned from iterative development
 ## Mermaid Diagrams
 
 - Use **`flowchart TD`** with `subgraph`. Do **NOT** use `block-beta` or `block:` — it causes parse errors.
-- LLMs frequently emit `block-beta` or `subgraph` in the wrong context. The system prompt must explicitly prohibit `block-beta` with a working `flowchart TD` example.
 
 ## Intent Resolver
 
@@ -26,52 +25,8 @@ description: "Common pitfalls and conventions learned from iterative development
 - `{ type: "component", component: "name" }` wrapper nodes must be unwrapped in the renderer.
 - Unknown component types should degrade to inferred built-ins or a visible placeholder, not `null`.
 
-## State & Sensitive Keys
+## Overflow Clipping
 
-- `__`-prefixed keys are filtered from the LLM context. Display-friendly variants (e.g., `__azureSubscriptionName`) survive UI display but are still hidden from the LLM.
-- The `sendPrompt` function carries a `userDisplayText` parameter to separate what the LLM sees from what the user bubble shows.
-- **`interpolate()` redacts `__`-prefixed keys by default.** Pack components that use `{{state.__key}}` in API paths must pass `{ allowSensitive: true }` as the 5th argument: `interpolate(template, state, undefined, undefined, { allowSensitive: true })`. Without this, API paths get `[REDACTED]` instead of real values.
-- **API keys/credentials belong in `localStorage`, not adaptive state.** Use a module-level getter (e.g., `getStoredApiKey()`) to access them from components and tool handlers. This avoids them being filtered or leaked to the LLM.
-
-## System Prompts
-
-- `"next"` field in intents must be factual data summaries (`"User selected: region: {{state.region}}"`), NOT agent prose (`"Great, I'll set up the resources"`).
-- Components belong in `"ask"`, NEVER in `"show"`. Show is display-only.
-- When tools are registered, `response_format: json_object` is omitted. The adapter retries with `response_format` if the final response isn't JSON.
-
-## Tools vs Components vs Pickers
-
-- **Tools** = read-only queries the LLM calls during inference (before generating UI). Run in the adapter loop. Use ONLY when the LLM needs to SEE the data to make decisions (e.g., check if a file exists, read a config, verify resource state).
-- **Picker components** = client-side dropdowns that fetch and display API data at render time. The LLM never sees the data — it just tells the client what endpoint to call. Use for ANY selection list (orgs, repos, branches, regions, resource groups, SKUs). Examples: `azurePicker`, `githubPicker`. Always auto-paginate. Always register intent resolvers (e.g., `github-orgs`, `azure-regions`) for common picks.
-- **Query components** = client-side API callers for write operations with user confirmation. Use for POST/PUT/DELETE mutations only.
-- **Intent resolvers only fire in Intent mode.** In Adaptive mode, the LLM follows the pack system prompt directly — it must emit picker component nodes in the layout JSON. The pack system prompt must document picker components with full prop examples so the LLM can emit them in both modes. Never rely solely on intent resolvers for picker behavior.
-- **Tool descriptions must NOT mention listing for selection.** If a tool's OpenAI function description says "list repos/regions/SKUs", the LLM will call it instead of using the picker. Tool descriptions must say "Do NOT use for listing — use [picker] instead."
-- **ANTI-PATTERN: Using tools to fetch lists for selection.** If the LLM calls a tool to list 100 repos just to put them in a select dropdown, that's ~3000 wasted tokens. Use a picker component instead — data stays client-side, zero token cost.
-- **ANTI-PATTERN: Using query components for reads.** Query components store results in state but the LLM never sees that data; the user just sees "N items loaded" with no actual list.
-- **Pack system prompts must clearly separate all three.** State which operations use tools (LLM needs the data), which use pickers (selection lists), and which use query components (writes with confirmation).
-
-## Disabled Context (Past Turns)
-
-- Past turns are rendered inside a `DisabledScope` that sets `useAdaptive().disabled = true`.
-- **All pack components with `useEffect` API calls MUST guard with `if (disabled) return;`** at the top of the effect. Without this, past turn layouts will fire HTTP requests on mount (e.g., token validation, subscription loading, repo fetching).
-- Destructure `disabled` from `useAdaptive()`: `const { state, dispatch, disabled } = useAdaptive();`
-- The component still renders its visual output — only side effects are suppressed.
-
-## Pack Registration & Settings
-
-- **`visiblePacks` controls settings panel visibility.** When a demo app passes `visiblePacks` to `AdaptiveApp`, only packs in that array show their settings section. If you register a new pack but don't add its name to `visiblePacks`, its settings UI won't appear.
-- **Self-managed components need their own Continue button.** Components like login cards that handle their own auth flow are marked "self-managed" in the intent resolver (no auto-generated Continue button). But in Adaptive mode, the intent resolver doesn't run — the component must render its own Continue button to advance the conversation. Use `sendPrompt()` from `useAdaptive()`.
-- **Overflow clipping hides dropdowns.** The active turn layout container uses `overflow: hidden` when collapsed. Ensure it uses `overflow: visible` when the turn is active, or absolute-positioned dropdown panels (from `SearchableDropdown`) will be invisible.
-
-## Token Management
-
-- `max_completion_tokens` defaults to 16384. Diagrams can consume 300-500 output tokens per response.
-- Only include diagrams when the architecture changes — not on every step.
-- History is auto-compacted when prompt tokens exceed 80k.
-
-## System Prompt Design
-
-- **Base prompts must be cloud-agnostic.** Never hardcode provider-specific services (Key Vault, Log Analytics, `az deployment group create`, VNet, managed identity) in the architect or framework system prompts. Use generic terms (vault service, centralized logging, workload identity, virtual network, CLI deployment).
-- **Provider-specific guidance belongs in pack system prompts.** Azure-specific IaC (Bicep), CI/CD (Azure Pipelines, Flux on AKS), diagram icons, and deployment commands go in the Azure pack's `AZURE_SYSTEM_PROMPT`. Same principle for any future AWS/GCP packs.
+- The active turn layout container uses `overflow: hidden` when collapsed. Ensure it uses `overflow: visible` when the turn is active, or absolute-positioned dropdown panels will be invisible.
 - **Always include deployment pipelines.** An architecture without a CI/CD pipeline or GitOps workflow is incomplete. The architect prompt must mandate pipeline generation alongside IaC — never leave deployment as an exercise for the reader.
 - **Think like a real architect.** Discovery should cover delivery concerns (Git workflow, environment strategy, approval gates) not just infrastructure. Deliverables include pipeline YAML, Dockerfiles, environment configs, and rollback procedures — not just IaC files.
