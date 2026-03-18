@@ -32,16 +32,9 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@sabbour/adaptive-ui-core/icons': path.resolve(__dirname, '../../packages/core/src/icons'),
-      '@sabbour/adaptive-ui-core/css': path.resolve(__dirname, '../../packages/core/src/css'),
-      '@sabbour/adaptive-ui-core': path.resolve(__dirname, '../../packages/core/src'),
-      '@sabbour/adaptive-ui-azure-pack/diagram-icons': path.resolve(__dirname, '../../packages/azure-pack/src/diagram-icons'),
-      '@sabbour/adaptive-ui-azure-pack': path.resolve(__dirname, '../../packages/azure-pack/src'),
-      '@sabbour/adaptive-ui-github-pack': path.resolve(__dirname, '../../packages/github-pack/src'),
-      '@sabbour/adaptive-ui-google-maps-pack/settings': path.resolve(__dirname, '../../packages/google-maps-pack/src/GoogleMapsSettings'),
-      '@sabbour/adaptive-ui-google-maps-pack': path.resolve(__dirname, '../../packages/google-maps-pack/src'),
-      '@sabbour/adaptive-ui-google-flights-pack': path.resolve(__dirname, '../../packages/google-flights-pack/src'),
-      '@sabbour/adaptive-ui-travel-data-pack': path.resolve(__dirname, '../../packages/travel-data-pack/src'),
+      '@sabbour/adaptive-ui-core/icons': path.resolve(__dirname, '../../packs/core/src/icons'),
+      '@sabbour/adaptive-ui-core/css': path.resolve(__dirname, '../../packs/core/src/css'),
+      '@sabbour/adaptive-ui-core': path.resolve(__dirname, '../../packs/core/src'),
     },
   },
 });

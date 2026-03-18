@@ -19,12 +19,7 @@
     "baseUrl": "."
   },
   "references": [
-    { "path": "packages/core" },
-    { "path": "packages/azure-pack" },
-    { "path": "packages/github-pack" },
-    { "path": "packages/google-maps-pack" },
-    { "path": "packages/google-flights-pack" },
-    { "path": "packages/travel-data-pack" },
+    { "path": "packs/core" },
     { "path": "apps/demo" }
   ],
   "files": []

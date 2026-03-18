@@ -3,13 +3,15 @@
   "private": true,
   "license": "MIT",
   "workspaces": [
-    "packages/*",
+    "packs/*",
     "apps/*"
   ],
   "scripts": {
     "build": "npm run build --workspaces",
     "dev": "npm run dev --workspace=apps/demo",
-    "typecheck": "tsc -b"
+    "typecheck": "tsc -b",
+    "link:packs": "npm link @sabbour/adaptive-ui-azure-pack @sabbour/adaptive-ui-github-pack @sabbour/adaptive-ui-google-maps-pack @sabbour/adaptive-ui-google-flights-pack @sabbour/adaptive-ui-travel-data-pack",
+    "unlink:packs": "npm unlink @sabbour/adaptive-ui-azure-pack @sabbour/adaptive-ui-github-pack @sabbour/adaptive-ui-google-maps-pack @sabbour/adaptive-ui-google-flights-pack @sabbour/adaptive-ui-travel-data-pack && npm install"
   },
   "devDependencies": {
     "@types/node": "^25.5.0",
