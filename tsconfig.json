@@ -16,10 +16,16 @@
     "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true,
     "forceConsistentCasingInFileNames": true,
-    "paths": {
-      "@adaptive-ui/*": ["./src/framework/*"]
-    },
     "baseUrl": "."
   },
-  "include": ["src"]
+  "references": [
+    { "path": "packages/core" },
+    { "path": "packages/azure-pack" },
+    { "path": "packages/github-pack" },
+    { "path": "packages/google-maps-pack" },
+    { "path": "packages/google-flights-pack" },
+    { "path": "packages/travel-data-pack" },
+    { "path": "apps/demo" }
+  ],
+  "files": []
 }

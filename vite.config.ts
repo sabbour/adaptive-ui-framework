@@ -1,38 +1,6 @@
 import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
-import path from 'path';
 
-export default defineConfig({
-  plugins: [react()],
-  server: {
-    host: true,
-    open: true,
-    proxy: {
-      '/auth-proxy': {
-        target: 'https://login.microsoftonline.com',
-        changeOrigin: true,
-        rewrite: (p) => p.replace(/^\/auth-proxy/, ''),
-      },
-      '/github-oauth/device/code': {
-        target: 'https://github.com',
-        changeOrigin: true,
-        rewrite: () => '/login/device/code',
-      },
-      '/github-oauth/access_token': {
-        target: 'https://github.com',
-        changeOrigin: true,
-        rewrite: () => '/login/oauth/access_token',
-      },
-      '/gflights-proxy': {
-        target: 'https://www.google.com',
-        changeOrigin: true,
-        rewrite: (p) => p.replace(/^\/gflights-proxy\/https?:\/\/www\.google\.com/, ''),
-      },
-    },
-  },
-  resolve: {
-    alias: {
-      '@adaptive-ui': path.resolve(__dirname, './src/framework'),
-    },
-  },
-});
+// Root vite.config.ts is not used directly.
+// The demo app has its own vite.config.ts in apps/demo/.
+// Run `npm run dev` to start the demo app via workspace scripts.
+export default defineConfig({});

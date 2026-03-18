@@ -1,0 +1,47 @@
+{
+  "name": "@sabbour/adaptive-ui-core",
+  "version": "0.1.0",
+  "license": "MIT",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./css/adaptive.css": "./src/css/adaptive.css",
+    "./icons/*": "./src/icons/*"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "main": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "exports": {
+      ".": {
+        "import": "./dist/index.js",
+        "types": "./dist/index.d.ts"
+      },
+      "./css/adaptive.css": "./dist/css/adaptive.css"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b --noEmit",
+    "prepublishOnly": "tsc && cp -r src/css dist/css && cp -r src/icons dist/icons"
+  },
+  "dependencies": {
+    "@mermaid-js/layout-elk": "^0.2.1",
+    "@types/prismjs": "^1.26.6",
+    "mermaid": "^11.13.0",
+    "prismjs": "^1.30.0"
+  },
+  "peerDependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sabbour/adaptive-ui-experiment.git",
+    "directory": "packages/core"
+  },
+  "devDependencies": {
+    "vite": "^6.0.0"
+  }
+}
