@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { AdaptiveApp } from '../framework';
 import type { AdaptiveUISpec } from '../framework/schema';
 import { registerApp } from '../framework/app-registry';
-import { registerPackWithSkills } from '../framework/registry';
+import { registerPackWithSkills, clearAllPacks, getActivePackScope, setActivePackScope } from '../framework/registry';
 import { createTravelDataPack } from '../packs/travel-data';
 import { createGoogleMapsPack } from '../packs/google-maps';
 import { createGoogleFlightsPack } from '../packs/google-flights';
@@ -13,10 +13,15 @@ import { generateSessionId, saveSession, deleteSession, setSessionScope } from '
 import { upsertArtifact, getArtifacts, subscribeArtifacts, loadArtifactsForSession, saveArtifactsForSession, deleteArtifactsForSession, setArtifactsScope } from '../framework/artifacts';
 import './css/travel-theme.css';
 
-// Register travel data pack (weather, currency, country info)
-registerPackWithSkills(createTravelDataPack());
-registerPackWithSkills(createGoogleMapsPack());
-registerPackWithSkills(createGoogleFlightsPack());
+// Lazy pack registration — called when this app mounts, clears other app's packs
+function ensureTravelPacks() {
+  if (getActivePackScope() === 'travel') return;
+  clearAllPacks();
+  registerPackWithSkills(createTravelDataPack());
+  registerPackWithSkills(createGoogleMapsPack());
+  registerPackWithSkills(createGoogleFlightsPack());
+  setActivePackScope('travel');
+}
 
 // ─── Travel Planning Agent ───
 // A non-technical demo that showcases Adaptive UI for consumer scenarios.
@@ -229,9 +234,10 @@ function extractPhotosFromLayout(node: any): PhotoRef[] {
 }
 
 function TravelPlannerApp() {
-  // Scope sessions and artifacts to this app
+  // Scope sessions, artifacts, and packs to this app
   setSessionScope('travel');
   setArtifactsScope('travel');
+  ensureTravelPacks();
 
   // ─── Session management ───
   const [sessionId, setSessionId] = useState(() => {

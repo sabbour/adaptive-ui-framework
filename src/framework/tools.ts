@@ -37,6 +37,12 @@ export function registerTool(def: ToolDefinition, handler: ToolHandler): void {
   toolHandlers.set(def.function.name, handler);
 }
 
+/** Clear all registered tools */
+export function clearTools(): void {
+  toolDefinitions.length = 0;
+  toolHandlers.clear();
+}
+
 /** Get all registered tool definitions (for the API request) */
 export function getToolDefinitions(): ToolDefinition[] {
   return toolDefinitions;
