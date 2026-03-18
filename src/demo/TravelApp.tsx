@@ -184,7 +184,6 @@ function TravelPlannerApp() {
           persistKey: 'travel',
           systemPromptSuffix: TRAVEL_SYSTEM_PROMPT,
           visiblePacks: ['travel-data', 'google-maps', 'google-flights'],
-          settingsPosition: { top: '46px', right: '20px' },
           theme: {
             primaryColor: '#0891b2',
             backgroundColor: 'transparent',

@@ -217,6 +217,7 @@ export function ConversationThread({ turns, isLoading, error, tokenUsage, lastRe
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [showDebug, setShowDebug] = useState(false);
   const [isScrolledUp, setIsScrolledUp] = useState(false);
+  const isScrolledUpRef = useRef(false);
   const [hasNewMessage, setHasNewMessage] = useState(false);
 
   // Escape hatch state (lifted from ActiveTurn so it can render in the fixed bottom bar)
@@ -335,19 +336,19 @@ export function ConversationThread({ turns, isLoading, error, tokenUsage, lastRe
     prevTurnCountRef.current = turns.length;
 
     if (newTurnArrived) {
-      if (isScrolledUp) {
+      if (isScrolledUpRef.current) {
         // User is scrolled up — show indicator instead of auto-scrolling
         setHasNewMessage(true);
       } else if (latestTurnRef.current) {
         // At bottom — scroll to the TOP of the new response
         latestTurnRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
-    } else if (isLoading && !isScrolledUp) {
+    } else if (isLoading && !isScrolledUpRef.current) {
       // Keep typing indicator visible only if user is already near the bottom.
       // If they've scrolled up, don't yank the scroll position.
       bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [turns.length, turns[turns.length - 1]?.id, isLoading, isScrolledUp]);
+  }, [turns.length, turns[turns.length - 1]?.id, isLoading]);
 
   // Track scroll position to detect if user scrolled away from bottom
   useEffect(() => {
@@ -355,7 +356,9 @@ export function ConversationThread({ turns, isLoading, error, tokenUsage, lastRe
     if (!el) return;
     const handleScroll = () => {
       const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
-      setIsScrolledUp(!atBottom);
+      const scrolledUp = !atBottom;
+      isScrolledUpRef.current = scrolledUp;
+      setIsScrolledUp(scrolledUp);
       if (atBottom) setHasNewMessage(false);
     };
     el.addEventListener('scroll', handleScroll, { passive: true });

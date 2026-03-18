@@ -160,9 +160,9 @@ function SettingsPanel({
       style: {
         width: '28px', height: '28px', borderRadius: '50%',
         border: 'none', cursor: 'pointer',
-        backgroundColor: isConnected ? 'var(--adaptive-primary)' : 'var(--adaptive-border)',
+        backgroundColor: isConnected ? '#2563eb' : '#d1d5db',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        boxShadow: 'var(--adaptive-shadow-md)',
+        boxShadow: '0 4px 16px rgba(0, 0, 0, 0.08)',
         padding: 0,
       },
       title: isConnected ? 'Settings (Connected)' : 'Settings',
