@@ -2,7 +2,19 @@ import React, { useState, useEffect } from 'react';
 
 const CORS_PROXY_KEY = 'adaptive_google_flights_cors_proxy';
 
+/** Detect if we're running under the Vite dev server (built-in proxy available) */
+function isDevMode(): boolean {
+  try { return import.meta.env?.DEV === true; } catch { return false; }
+}
+
+/** Dev-mode proxy path (matches vite.config.ts) */
+const DEV_PROXY_PREFIX = '/gflights-proxy/';
+
 export function getStoredCorsProxy(): string {
+  // In dev mode, use the built-in Vite proxy automatically
+  if (isDevMode()) {
+    return DEV_PROXY_PREFIX;
+  }
   return localStorage.getItem(CORS_PROXY_KEY) ?? '';
 }
 
@@ -15,7 +27,8 @@ export function storeCorsProxy(proxy: string): void {
 }
 
 export function GoogleFlightsSettings() {
-  const [corsProxy, setCorsProxy] = useState(getStoredCorsProxy());
+  const devMode = isDevMode();
+  const [corsProxy, setCorsProxy] = useState(devMode ? '' : (localStorage.getItem(CORS_PROXY_KEY) ?? ''));
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
@@ -27,7 +40,7 @@ export function GoogleFlightsSettings() {
     setSaved(true);
   };
 
-  const isConfigured = !!getStoredCorsProxy();
+  const isConfigured = devMode || !!localStorage.getItem(CORS_PROXY_KEY);
 
   return React.createElement('div', {
     style: { display: 'flex', flexDirection: 'column', gap: '8px' } as React.CSSProperties,
@@ -44,11 +57,13 @@ export function GoogleFlightsSettings() {
       }),
       React.createElement('span', {
         style: { fontSize: '13px', color: isConfigured ? '#166534' : '#92400e' },
-      }, isConfigured ? 'CORS proxy configured' : 'No CORS proxy (link-only mode)')
+      }, devMode
+        ? 'Using built-in dev proxy'
+        : isConfigured ? 'CORS proxy configured' : 'No CORS proxy (link-only mode)')
     ),
 
-    // CORS proxy input
-    React.createElement('div', {
+    // CORS proxy input (hidden in dev mode — not needed)
+    !devMode && React.createElement('div', {
       style: { display: 'flex', gap: '6px', alignItems: 'center' },
     },
       React.createElement('input', {
@@ -69,11 +84,13 @@ export function GoogleFlightsSettings() {
           backgroundColor: '#2563eb', color: '#fff', fontSize: '12px',
           cursor: 'pointer', fontWeight: 500,
         },
-      }, saved ? '✓ Saved' : 'Save')
+      }, saved ? '\u2713 Saved' : 'Save')
     ),
 
     React.createElement('div', {
       style: { fontSize: '11px', color: '#6b7280' },
-    }, 'Optional: A CORS proxy enables live flight search. Without it, flights will open in a new Google Flights tab.')
+    }, devMode
+      ? 'Live flight search uses the Vite dev proxy automatically.'
+      : 'Optional: A CORS proxy enables live flight search. Without it, flights will open in a new Google Flights tab.')
   );
 }

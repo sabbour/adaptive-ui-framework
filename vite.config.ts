@@ -23,6 +23,11 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: () => '/login/oauth/access_token',
       },
+      '/gflights-proxy': {
+        target: 'https://www.google.com',
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/gflights-proxy\/https?:\/\/www\.google\.com/, ''),
+      },
     },
   },
   resolve: {
