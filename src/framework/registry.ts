@@ -1,6 +1,6 @@
 import React from 'react';
 import type { AdaptiveNode, AdaptiveNodeBase } from './schema';
-import { registerTool } from './tools';
+import { registerTool, clearTools } from './tools';
 
 // ─── Component Registry ───
 // Maps schema `type` strings to React components.
@@ -123,6 +123,22 @@ export function unregisterPack(pack: ComponentPack): void {
     }
   }
 }
+
+/** Clear all registered packs (prompts, tools, resolvers, settings). Components stay. */
+export function clearAllPacks(): void {
+  packPrompts.clear();
+  packSkillPrompts.clear();
+  packSettings.clear();
+  packResolvers.clear();
+  intentResolvers.clear();
+  clearTools();
+}
+
+let _activePackScope: string | null = null;
+/** Get the current pack scope ID */
+export function getActivePackScope(): string | null { return _activePackScope; }
+/** Set the current pack scope ID */
+export function setActivePackScope(id: string): void { _activePackScope = id; }
 
 /** Resolve knowledge skills from all registered packs for a given prompt.
  *  Returns the newly resolved skills text (only fresh content for this turn). */

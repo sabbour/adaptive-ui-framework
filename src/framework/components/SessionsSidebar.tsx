@@ -35,6 +35,12 @@ interface SessionsSidebarProps {
   collapsed?: boolean;
   /** Called when collapsed state changes. */
   onToggleCollapse?: (collapsed: boolean) => void;
+  /** Override the "Sessions" header label (e.g. "Trips"). */
+  sessionsLabel?: string;
+  /** Override the "Files" header label (e.g. "Pages"). */
+  filesLabel?: string;
+  /** Hide the files section entirely (when files are shown elsewhere). */
+  hideFiles?: boolean;
 }
 
 export function SessionsSidebar({
@@ -42,6 +48,9 @@ export function SessionsSidebar({
   onDeleteSession,
   selectedFileId, onSelectFile, onCreatePR,
   collapsed: controlledCollapsed, onToggleCollapse,
+  sessionsLabel = 'Sessions',
+  filesLabel = 'Files',
+  hideFiles = false,
 }: SessionsSidebarProps) {
   const sessions = useSyncExternalStore(subscribeSessions, getSessions);
   const artifacts = useSyncExternalStore(subscribeArtifacts, getArtifacts);
@@ -105,7 +114,7 @@ export function SessionsSidebar({
     },
       React.createElement('span', {
         style: { fontSize: '14px', fontWeight: 600, color: 'var(--adaptive-text, #111827)' },
-      }, 'Sessions'),
+      }, sessionsLabel),
       React.createElement('div', { style: { display: 'flex', gap: '4px' } },
         React.createElement('button', {
           onClick: onNewSession,
@@ -156,7 +165,7 @@ export function SessionsSidebar({
     ),
 
     // ─── Files section ───
-    React.createElement('div', {
+    !hideFiles && React.createElement('div', {
       style: {
         borderTop: '1px solid var(--adaptive-border, #e5e7eb)',
         display: 'flex', flexDirection: 'column',
@@ -175,7 +184,7 @@ export function SessionsSidebar({
       },
         React.createElement('span', {
           style: { fontSize: '14px', fontWeight: 600, color: 'var(--adaptive-text, #111827)' },
-        }, `Files (${artifacts.length})`),
+        }, `${filesLabel} (${artifacts.length})`),
         artifacts.length > 0 && React.createElement('div', { style: { display: 'flex', gap: '4px' } },
           React.createElement('button', {
             onClick: () => downloadAllArtifacts(artifacts),
@@ -219,7 +228,7 @@ export function SessionsSidebar({
       },
         React.createElement('div', {
           style: { fontSize: '14px', color: 'var(--adaptive-text, #111827)', marginBottom: '6px' },
-        }, `Delete all ${artifacts.length} files?`),
+        }, `Delete all ${artifacts.length} ${filesLabel.toLowerCase()}?`),
         React.createElement('div', { style: { display: 'flex', gap: '6px' } },
           React.createElement('button', {
             onClick: () => { clearArtifacts(); setConfirmClearFiles(false); if (selectedFileId) onSelectFile(null); },
@@ -246,7 +255,7 @@ export function SessionsSidebar({
         artifacts.length === 0
           ? React.createElement('div', {
               style: { padding: '12px 10px', fontSize: '14px', color: 'var(--adaptive-text-secondary, #6b7280)', textAlign: 'center' as const },
-            }, 'No files yet')
+            }, `No ${filesLabel.toLowerCase()} yet`)
           : artifacts.map((artifact) =>
               React.createElement(FileItem, {
                 key: artifact.id,

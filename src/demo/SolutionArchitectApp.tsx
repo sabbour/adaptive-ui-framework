@@ -2,20 +2,25 @@ import React, { useState, useCallback, useRef, useSyncExternalStore } from 'reac
 import { AdaptiveApp } from '../framework';
 import type { AdaptiveUISpec } from '../framework/schema';
 import { registerApp } from '../framework/app-registry';
-import { registerPackWithSkills } from '../framework/registry';
+import { registerPackWithSkills, clearAllPacks, getActivePackScope, setActivePackScope } from '../framework/registry';
 import { createAzurePack } from '../packs/azure';
 import { createGitHubPack } from '../packs/github';
 import { SessionsSidebar } from '../framework/components/SessionsSidebar';
 import { FileViewer, FileViewerPlaceholder } from '../framework/components/FileViewer';
 import { ResizeHandle } from '../framework/components/ResizeHandle';
-import { generateSessionId, saveSession, deleteSession } from '../framework/session-manager';
-import { upsertArtifact, getArtifacts, subscribeArtifacts, loadArtifactsForSession, saveArtifactsForSession, deleteArtifactsForSession } from '../framework/artifacts';
+import { generateSessionId, saveSession, deleteSession, setSessionScope } from '../framework/session-manager';
+import { upsertArtifact, getArtifacts, subscribeArtifacts, loadArtifactsForSession, saveArtifactsForSession, deleteArtifactsForSession, setArtifactsScope } from '../framework/artifacts';
 import { registerAzureDiagramIcons } from '../packs/azure/diagram-icons';
 
-// Register packs and diagram icons
-registerPackWithSkills(createAzurePack());
-registerPackWithSkills(createGitHubPack());
-registerAzureDiagramIcons();
+// Lazy pack registration — called when this app mounts, clears other app's packs
+function ensureArchitectPacks() {
+  if (getActivePackScope() === 'architect') return;
+  clearAllPacks();
+  registerPackWithSkills(createAzurePack());
+  registerPackWithSkills(createGitHubPack());
+  registerAzureDiagramIcons();
+  setActivePackScope('architect');
+}
 
 // ─── Solution Architect Coworker ───
 // An AI coworker that helps design and deploy cloud-native solutions.
@@ -228,6 +233,11 @@ function codeBlockToFilename(block: CodeBlock): string {
 }
 
 export function SolutionArchitectApp() {
+  // Scope sessions, artifacts, and packs to this app
+  setSessionScope('architect');
+  setArtifactsScope('architect');
+  ensureArchitectPacks();
+
   const [sessionId, setSessionId] = useState(() => {
     try {
       return localStorage.getItem('adaptive-ui-active-session') || generateSessionId();

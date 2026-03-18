@@ -1,6 +1,6 @@
 import type { ComponentPack } from '../../framework/registry';
 import { trackedFetch } from '../../framework/request-tracker';
-import { WeatherCard, CountryInfoCard, CurrencyConverter, TravelChecklist } from './components';
+import { WeatherCard, CountryInfoCard, CurrencyConverter, TravelChecklist, BudgetTracker } from './components';
 
 // ─── Travel Data Pack ───
 // Provides real-time travel data via free, no-API-key-needed services:
@@ -59,6 +59,16 @@ RULES:
 - ALWAYS use countryInfoCard when introducing a new destination country.
 - Offer currencyConverter when budget is discussed — users love playing with amounts.
 - Generate travelChecklist at the finalize step with weather-appropriate items.
+- Use budgetTracker whenever presenting cost breakdowns — it auto-saves to the Trip Notebook.
+
+budgetTracker — {items, currency?, title?, bind?}
+  Visual budget breakdown with category bars and per-line percentages. Auto-saves items to the Trip Notebook panel.
+  items: array of {category, amount, note?}. Categories: flights, hotel, food, activities, transport, shopping, insurance, visa, other.
+  currency: 3-letter code (default: USD). Supports {{state.key}} interpolation.
+  bind: optional state key to store the total amount.
+  If the user mentioned number of travelers, shows per-person cost automatically.
+  Example: {type:"budgetTracker", currency:"EUR", items:[{category:"flights", amount:800, note:"Round trip JFK→CDG"},{category:"hotel", amount:1200, note:"4 nights boutique hotel"},{category:"food", amount:400, note:"Restaurants & cafes"},{category:"activities", amount:300, note:"Museums & tours"},{category:"transport", amount:150, note:"Metro & taxis"}]}
+  Example with binding: {type:"budgetTracker", currency:"{{state.currency}}", bind:"totalBudget", items:[...]}
 `;
 
 /** Slim down weather response to essential fields */
@@ -116,6 +126,7 @@ export function createTravelDataPack(): ComponentPack {
       countryInfoCard: CountryInfoCard,
       currencyConverter: CurrencyConverter,
       travelChecklist: TravelChecklist,
+      budgetTracker: BudgetTracker,
     },
     systemPrompt: TRAVEL_DATA_PROMPT,
     tools: [

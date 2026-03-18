@@ -18,9 +18,14 @@ const listeners = new Set<Listener>();
 let snapshot: Artifact[] = [];
 let counter = 0;
 
-const STORAGE_KEY = 'adaptive-ui-artifacts';
+let STORAGE_KEY = 'adaptive-ui-artifacts';
 const SESSION_ARTIFACTS_PREFIX = 'adaptive-ui-artifacts-';
 let currentSessionId: string | null = null;
+
+/** Scope artifacts global key to a specific app. Call before any artifact operations. */
+export function setArtifactsScope(appId: string): void {
+  STORAGE_KEY = appId ? `adaptive-ui-artifacts-${appId}` : 'adaptive-ui-artifacts';
+}
 
 /** Persist artifacts to localStorage */
 function persist(): void {

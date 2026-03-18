@@ -304,3 +304,29 @@
     max-width: 100% !important;
   }
 }
+
+/* ── Trip Notebook panel ── */
+.travel-notebook-panel {
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+.travel-notebook-panel ::-webkit-scrollbar {
+  width: 5px;
+}
+
+.travel-notebook-panel ::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.25);
+  border-radius: 3px;
+}
+
+/* ── Sessions sidebar travel tint ── */
+.travel-app .adaptive-session-item:hover {
+  background: rgba(8, 145, 178, 0.06);
+}
+
+.travel-app .adaptive-session-item-active {
+  background: rgba(8, 145, 178, 0.1) !important;
+  border-color: var(--travel-teal) !important;
+}
