@@ -183,14 +183,14 @@ function TravelPlannerApp() {
   // ─── Panel widths ───
   const [sidebarWidth, setSidebarWidth] = useState(220);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
-  const [notebookWidth, setNotebookWidth] = useState(280);
+  const [notebookWidth, setNotebookWidth] = useState(580);
   const [notebookCollapsed, setNotebookCollapsed] = useState(false);
 
   const handleSidebarResize = useCallback((delta: number) => {
     setSidebarWidth((w) => Math.max(160, Math.min(360, w + delta)));
   }, []);
   const handleNotebookResize = useCallback((delta: number) => {
-    setNotebookWidth((w) => Math.max(200, Math.min(450, w - delta)));
+    setNotebookWidth((w) => Math.max(250, Math.min(600, w - delta)));
   }, []);
 
   // ─── Spec change handler: extract places + code blocks → artifacts ───
@@ -343,8 +343,10 @@ function TravelPlannerApp() {
         className: 'travel-app',
         style: {
           width: sidebarCollapsed ? '36px' : `${sidebarWidth}px`,
-          flexShrink: 0, height: '100%', overflow: 'hidden',
+          flexShrink: 0, overflow: 'hidden',
           transition: 'width 0.15s ease',
+          margin: '8px 0 8px 8px',
+          borderRadius: '16px 0 0 16px',
         } as React.CSSProperties,
       },
         React.createElement(SessionsSidebar, {
@@ -356,6 +358,8 @@ function TravelPlannerApp() {
           onSelectFile: () => {},
           collapsed: sidebarCollapsed,
           onToggleCollapse: setSidebarCollapsed,
+          sessionsLabel: 'Trips',
+          hideFiles: true,
         })
       ),
 
@@ -372,7 +376,7 @@ function TravelPlannerApp() {
           flexDirection: 'column',
           overflow: 'hidden',
           margin: '8px 0',
-          borderRadius: sidebarCollapsed ? '20px 0 0 20px' : '0',
+          borderRadius: '0',
         } as React.CSSProperties,
       },
         React.createElement(AdaptiveApp, {
@@ -399,7 +403,7 @@ function TravelPlannerApp() {
         className: 'travel-app',
         style: {
           width: notebookCollapsed ? '36px' : `${notebookWidth}px`,
-          flexShrink: 0, height: '100%', overflow: 'hidden',
+          flexShrink: 0, overflow: 'hidden',
           transition: 'width 0.15s ease',
           margin: '8px 8px 8px 0',
           borderRadius: '0 16px 16px 0',
