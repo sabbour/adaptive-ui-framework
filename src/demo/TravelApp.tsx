@@ -159,6 +159,75 @@ function extractPlacesFromLayout(node: any): PlaceRef[] {
   return places;
 }
 
+// ─── Flight extraction ───
+interface FlightRef { from: string; to: string; date: string; returnDate?: string; trip?: string; seat?: string; adults?: number; }
+
+function extractFlightsFromLayout(node: any): FlightRef[] {
+  if (!node) return [];
+  const flights: FlightRef[] = [];
+  const t = node.type || node.t;
+  if ((t === 'flightSearch' || t === 'flightCard') && node.from && node.to && node.date) {
+    flights.push({ from: node.from, to: node.to, date: node.date, returnDate: node.returnDate, trip: node.trip, seat: node.seat, adults: node.adults });
+  }
+  const kids: any[] = node.children || node.ch || [];
+  for (const child of kids) flights.push(...extractFlightsFromLayout(child));
+  if (Array.isArray(node.items)) for (const item of node.items) flights.push(...extractFlightsFromLayout(item));
+  if (Array.isArray(node.tabs)) for (const tab of node.tabs) { if (tab.children) for (const child of tab.children) flights.push(...extractFlightsFromLayout(child)); }
+  return flights;
+}
+
+// ─── Weather extraction ───
+interface WeatherRef { city: string; }
+
+function extractWeatherFromLayout(node: any): WeatherRef[] {
+  if (!node) return [];
+  const items: WeatherRef[] = [];
+  const t = node.type || node.t;
+  if (t === 'weatherCard' && node.city) {
+    items.push({ city: node.city });
+  }
+  const kids: any[] = node.children || node.ch || [];
+  for (const child of kids) items.push(...extractWeatherFromLayout(child));
+  if (Array.isArray(node.items)) for (const item of node.items) items.push(...extractWeatherFromLayout(item));
+  if (Array.isArray(node.tabs)) for (const tab of node.tabs) { if (tab.children) for (const child of tab.children) items.push(...extractWeatherFromLayout(child)); }
+  return items;
+}
+
+// ─── Checklist extraction ───
+interface ChecklistRef { title: string; items: string[]; bind: string; }
+
+function extractChecklistsFromLayout(node: any): ChecklistRef[] {
+  if (!node) return [];
+  const lists: ChecklistRef[] = [];
+  const t = node.type || node.t;
+  if (t === 'travelChecklist' && node.items) {
+    const items = Array.isArray(node.items) ? node.items : (typeof node.items === 'string' ? node.items.split(',').map((s: string) => s.trim()).filter(Boolean) : []);
+    lists.push({ title: node.title || 'Checklist', items, bind: node.bind || '' });
+  }
+  const kids: any[] = node.children || node.ch || [];
+  for (const child of kids) lists.push(...extractChecklistsFromLayout(child));
+  if (Array.isArray(node.items)) for (const item of node.items) lists.push(...extractChecklistsFromLayout(item));
+  if (Array.isArray(node.tabs)) for (const tab of node.tabs) { if (tab.children) for (const child of tab.children) lists.push(...extractChecklistsFromLayout(child)); }
+  return lists;
+}
+
+// ─── Photo extraction ───
+interface PhotoRef { query: string; caption?: string; }
+
+function extractPhotosFromLayout(node: any): PhotoRef[] {
+  if (!node) return [];
+  const photos: PhotoRef[] = [];
+  const t = node.type || node.t;
+  if (t === 'googlePhotoCard' && node.query) {
+    photos.push({ query: node.query, caption: node.caption });
+  }
+  const kids: any[] = node.children || node.ch || [];
+  for (const child of kids) photos.push(...extractPhotosFromLayout(child));
+  if (Array.isArray(node.items)) for (const item of node.items) photos.push(...extractPhotosFromLayout(item));
+  if (Array.isArray(node.tabs)) for (const tab of node.tabs) { if (tab.children) for (const child of tab.children) photos.push(...extractPhotosFromLayout(child)); }
+  return photos;
+}
+
 function TravelPlannerApp() {
   // Scope sessions and artifacts to this app
   setSessionScope('travel');
@@ -193,13 +262,41 @@ function TravelPlannerApp() {
     setNotebookWidth((w) => Math.max(250, Math.min(600, w - delta)));
   }, []);
 
-  // ─── Spec change handler: extract places + code blocks → artifacts ───
+  // ─── Spec change handler: extract data → artifacts ───
   const handleSpecChange = useCallback((spec: AdaptiveUISpec) => {
     // Extract places
     const places = extractPlacesFromLayout(spec.layout);
     for (const place of places) {
       const slug = place.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+$/, '');
       upsertArtifact(`place-${slug}`, JSON.stringify(place), 'json', place.name);
+    }
+
+    // Extract flights
+    const flights = extractFlightsFromLayout(spec.layout);
+    for (const flight of flights) {
+      const slug = `${flight.from}-${flight.to}-${flight.date}`.toLowerCase();
+      upsertArtifact(`flight-${slug}`, JSON.stringify(flight), 'json', `${flight.from} \u2192 ${flight.to}`);
+    }
+
+    // Extract weather
+    const weather = extractWeatherFromLayout(spec.layout);
+    for (const w of weather) {
+      const slug = w.city.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+$/, '');
+      upsertArtifact(`weather-${slug}`, JSON.stringify(w), 'json', w.city);
+    }
+
+    // Extract checklists
+    const checklists = extractChecklistsFromLayout(spec.layout);
+    for (const cl of checklists) {
+      const slug = cl.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+$/, '');
+      upsertArtifact(`checklist-${slug}`, JSON.stringify(cl), 'json', cl.title);
+    }
+
+    // Extract photos
+    const photos = extractPhotosFromLayout(spec.layout);
+    for (const photo of photos) {
+      const slug = photo.query.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+$/, '');
+      upsertArtifact(`photo-${slug}`, JSON.stringify(photo), 'json', photo.caption || photo.query);
     }
 
     // Extract code blocks (itinerary summaries, etc.)
