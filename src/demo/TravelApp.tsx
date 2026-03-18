@@ -173,7 +173,7 @@ function TravelPlannerApp() {
         className: 'travel-chat-container travel-app',
         style: {
           width: '100%',
-          maxWidth: '720px',
+          maxWidth: '900px',
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
