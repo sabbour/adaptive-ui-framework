@@ -30,6 +30,8 @@ description: "Common pitfalls and conventions learned from iterative development
 
 - `__`-prefixed keys are filtered from the LLM context. Display-friendly variants (e.g., `__azureSubscriptionName`) survive UI display but are still hidden from the LLM.
 - The `sendPrompt` function carries a `userDisplayText` parameter to separate what the LLM sees from what the user bubble shows.
+- **`interpolate()` redacts `__`-prefixed keys by default.** Pack components that use `{{state.__key}}` in API paths must pass `{ allowSensitive: true }` as the 5th argument: `interpolate(template, state, undefined, undefined, { allowSensitive: true })`. Without this, API paths get `[REDACTED]` instead of real values.
+- **API keys/credentials belong in `localStorage`, not adaptive state.** Use a module-level getter (e.g., `getStoredApiKey()`) to access them from components and tool handlers. This avoids them being filtered or leaked to the LLM.
 
 ## System Prompts
 
@@ -54,6 +56,12 @@ description: "Common pitfalls and conventions learned from iterative development
 - **All pack components with `useEffect` API calls MUST guard with `if (disabled) return;`** at the top of the effect. Without this, past turn layouts will fire HTTP requests on mount (e.g., token validation, subscription loading, repo fetching).
 - Destructure `disabled` from `useAdaptive()`: `const { state, dispatch, disabled } = useAdaptive();`
 - The component still renders its visual output — only side effects are suppressed.
+
+## Pack Registration & Settings
+
+- **`visiblePacks` controls settings panel visibility.** When a demo app passes `visiblePacks` to `AdaptiveApp`, only packs in that array show their settings section. If you register a new pack but don't add its name to `visiblePacks`, its settings UI won't appear.
+- **Self-managed components need their own Continue button.** Components like login cards that handle their own auth flow are marked "self-managed" in the intent resolver (no auto-generated Continue button). But in Adaptive mode, the intent resolver doesn't run — the component must render its own Continue button to advance the conversation. Use `sendPrompt()` from `useAdaptive()`.
+- **Overflow clipping hides dropdowns.** The active turn layout container uses `overflow: hidden` when collapsed. Ensure it uses `overflow: visible` when the turn is active, or absolute-positioned dropdown panels (from `SearchableDropdown`) will be invisible.
 
 ## Token Management
 

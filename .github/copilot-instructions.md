@@ -162,8 +162,14 @@ A `ComponentPack` bundles: components, system prompt, knowledge skills resolver,
 ### Creating a new pack
 
 1. Create a directory under `src/packs/your-pack/`.
-2. Export a `create*Pack()` function returning a `ComponentPack`.
-3. Register in `src/main.tsx` via `registerPackWithSkills()`.
+2. Create three files: `index.ts` (pack definition + system prompt + tools), `components.tsx` (component implementations), and optionally a settings file (e.g., `MyPackSettings.tsx` for API key entry).
+3. Export a `create*Pack()` function returning a `ComponentPack`.
+4. Register in the target demo app via `registerPackWithSkills()`.
+5. Add the pack name to the demo app's `visiblePacks` array so its settings UI appears.
+6. The system prompt must follow the three-tier pattern: tools (LLM sees results), picker/selection components (client-side, LLM never sees data), and display components. See the component-authoring skill for details.
+7. Store API keys in `localStorage` with a module-level getter — never in adaptive state.
+8. All components using `useEffect` for API calls must guard with `if (disabled) return;`.
+9. Use `interpolate()` with `{ allowSensitive: true }` for internal API paths referencing `__`-prefixed state.
 
 ### Adding a new demo app
 
