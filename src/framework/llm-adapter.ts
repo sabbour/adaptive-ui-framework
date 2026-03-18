@@ -401,9 +401,13 @@ export class OpenAIAdapter implements LLMAdapter {
     let jsonStr = content.trim();
 
     // Strip markdown code fences: ```json ... ``` or ``` ... ```
-    const fenceMatch = jsonStr.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/);
-    if (fenceMatch) {
-      jsonStr = fenceMatch[1].trim();
+    // Only strip when the ENTIRE response is wrapped in fences (starts with ```).
+    // Do NOT match backtick fences that appear inside JSON string values.
+    if (jsonStr.startsWith('```')) {
+      const fenceMatch = jsonStr.match(/^```(?:json)?\s*\n?([\s\S]*?)\n?\s*```\s*$/);
+      if (fenceMatch) {
+        jsonStr = fenceMatch[1].trim();
+      }
     }
 
     // If still not starting with {, try to find the first { ... last }
@@ -429,9 +433,6 @@ export class OpenAIAdapter implements LLMAdapter {
         /"(?:[^"\\]|\\.)*"/g,
         (match) => match.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t')
       );
-
-      // Remove backticks that the LLM may have embedded in string values
-      fixedStr = fixedStr.replace(/`/g, '');
 
       try {
         parsed = JSON.parse(fixedStr);
