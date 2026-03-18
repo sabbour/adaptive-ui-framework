@@ -4,22 +4,16 @@
 
 A **Pack** is a self-contained extension bundle that adds domain-specific capabilities to Adaptive UI without modifying the framework. Packs bundle components, LLM system prompts, tools, intent resolvers, settings UI, and domain knowledge skills into a single registerable unit.
 
-```
-┌─────────────────────────────────────────────────┐
-│                ComponentPack                     │
-│                                                  │
-│  ┌────────────┐  ┌────────────┐  ┌───────────┐  │
-│  │ Components │  │   Tools    │  │  System   │  │
-│  │ (React)    │  │ (LLM-     │  │  Prompt   │  │
-│  │            │  │  callable) │  │           │  │
-│  └────────────┘  └────────────┘  └───────────┘  │
-│                                                  │
-│  ┌────────────┐  ┌────────────┐  ┌───────────┐  │
-│  │  Intent    │  │  Skills    │  │ Settings  │  │
-│  │ Resolvers  │  │ Resolver   │  │    UI     │  │
-│  │            │  │            │  │           │  │
-│  └────────────┘  └────────────┘  └───────────┘  │
-└─────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph Pack["ComponentPack"]
+        Components["Components<br/>(React)"]
+        Tools["Tools<br/>(LLM-callable)"]
+        Prompt["System<br/>Prompt"]
+        Resolvers["Intent<br/>Resolvers"]
+        Skills["Skills<br/>Resolver"]
+        Settings["Settings<br/>UI"]
+    end
 ```
 
 ## Pack Interface
@@ -76,29 +70,31 @@ Registration performs:
 
 This is the most important architectural decision in the Pack system. Every API interaction falls into one of three categories:
 
-```
-┌──────────────────────────────────────────────────────────────────────┐
-│                                                                      │
-│   TOOL                    PICKER                   QUERY             │
-│   (LLM-side)              (Client-side)            (Client-side)     │
-│                                                                      │
-│   LLM calls during        Component fetches at     Component calls   │
-│   inference                render time              API with user     │
-│                                                     confirmation     │
-│   LLM sees the data       LLM never sees data      LLM never sees   │
-│                                                     data             │
-│   Read-only                Read-only                Write operations  │
-│                            (selection lists)        (PUT/POST/DELETE) │
-│                                                                      │
-│   Token cost: HIGH         Token cost: ZERO         Token cost: ZERO │
-│   (data in context)        (data stays client)      (data stays      │
-│                                                      client)         │
-│                                                                      │
-│   Example:                 Example:                 Example:         │
-│   "Check if AKS cluster    "Show region dropdown"   "Create resource │
-│    exists"                                            group"          │
-│                                                                      │
-└──────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    subgraph Tool["TOOL (LLM-side)"]
+        T1["LLM calls during inference"]
+        T2["LLM sees the data"]
+        T3["Read-only"]
+        T4["Token cost: HIGH"]
+        T5["e.g., Check if AKS<br/>cluster exists"]
+    end
+
+    subgraph Picker["PICKER (Client-side)"]
+        P1["Component fetches at<br/>render time"]
+        P2["LLM never sees data"]
+        P3["Read-only<br/>(selection lists)"]
+        P4["Token cost: ZERO"]
+        P5["e.g., Show region<br/>dropdown"]
+    end
+
+    subgraph Query["QUERY (Client-side)"]
+        Q1["Component calls API<br/>with user confirmation"]
+        Q2["LLM never sees data"]
+        Q3["Write operations<br/>(PUT/POST/DELETE)"]
+        Q4["Token cost: ZERO"]
+        Q5["e.g., Create resource<br/>group"]
+    end
 ```
 
 ### When to Use Each

@@ -4,12 +4,9 @@
 
 Adaptive UI uses a **type-driven component registry**. Every UI element the LLM can produce is identified by a string `type` key (e.g., `"text"`, `"radioGroup"`, `"chatInput"`) mapped to a React component in a global registry.
 
-```
-LLM JSON node          Registry lookup         React render
-─────────────          ───────────────         ────────────
-{ type: "input",   →   registry.get("input")  →  <InputComponent node={...} />
-  label: "Name",
-  bind: "name" }
+```mermaid
+flowchart LR
+    A["LLM JSON node<br/>{type: 'input',<br/>label: 'Name',<br/>bind: 'name'}"] -->|registry.get| B["Registry lookup<br/>registry.get('input')"] -->|render| C["React component<br/>InputComponent"]
 ```
 
 ## Type System

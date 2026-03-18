@@ -4,24 +4,15 @@ A React framework for building **conversational, agent-driven UIs** powered by L
 
 ## How It Works
 
-```
-User clicks / fills form / types
-        │
-        ▼
-┌──────────────────┐     ┌───────────────────┐     ┌──────────────────┐
-│  AdaptiveApp     │────▶│  LLM + Pack Skills │────▶│  AdaptiveUISpec  │
-│  (orchestrator)  │     │  (decides next     │     │  (JSON for this  │
-│                  │     │   step + domain    │     │   step)          │
-│                  │     │   knowledge)       │     │                  │
-└──────────────────┘     └───────────────────┘     └──────────────────┘
-        │                                                   │
-        ▼                                                   ▼
-┌──────────────────┐                              ┌──────────────────┐
-│  Conversation    │◀─────────────────────────────│  Component       │
-│  Thread          │                              │  Registry        │
-│  (turn history)  │                              │  (built-in +     │
-│                  │                              │   pack + custom) │
-└──────────────────┘                              └──────────────────┘
+```mermaid
+flowchart TD
+    User["User clicks / fills form / types"]
+    User --> App["AdaptiveApp<br/>(orchestrator)"]
+    App --> LLM["LLM + Pack Skills<br/>(decides next step +<br/>domain knowledge)"]
+    LLM --> Spec["AdaptiveUISpec<br/>(JSON for this step)"]
+    Spec --> Registry["Component Registry<br/>(built-in + pack + custom)"]
+    Registry --> Thread["Conversation Thread<br/>(turn history)"]
+    Thread --> User
 ```
 
 ## Quick Start
@@ -182,10 +173,48 @@ The Azure pack (`src/packs/azure/`) demonstrates all pack features:
 
 - **`azureLogin`** — inline sign-in card (MSAL popup → ARM token)
 - **`azureResourceForm`** — dynamically generates forms from ARM resource provider metadata
+- **`azurePicker`** — client-side dropdown fetching from ARM API (regions, resource groups, SKUs)
+- **`azureQuery`** — ARM API caller for write operations with confirm dialog
 - **Knowledge skills** — fetches Azure docs from the [agent-skills catalog](https://github.com/MicrosoftDocs/agent-skills)
+- **`azure_arm_get` tool** — LLM reads ARM API data during inference
 - **Settings UI** — sign-in/sign-out injected into the settings panel
 
-No hardcoded schemas — everything discovered from ARM APIs at runtime.
+### GitHub Pack (included)
+
+- **`githubLogin`** — OAuth Device Flow sign-in
+- **`githubPicker`** — org/repo/branch pickers with auto-pagination
+- **`githubQuery`** — write operations (create repos, branches) with confirm dialog
+- **`githubCreatePR`** — commits generated artifacts and opens a PR
+- **`github_api_get` tool** — LLM reads GitHub API during inference
+
+### Google Maps Pack (included)
+
+- **`googleMaps`** — embedded maps (place, search, directions, view, streetview modes)
+- **`googlePlacesSearch`** — place search with selectable results
+- **`googleNearby`** — photo grid of nearby places with ratings and price levels
+- **`googlePhotoCard`** — hero photo card with place info overlay
+- **`google_places_search` / `google_place_details` / `google_geocode` tools**
+
+### Google Flights Pack (included)
+
+- **`flightSearch`** — live flight results or Google Flights deep link (protobuf-encoded URL)
+- **`flightCard`** — styled link card for itinerary summaries
+- **`search_flights` tool** — real prices/schedules for LLM recommendations
+
+### Travel Data Pack (included)
+
+- **`weatherCard`** — visual weather forecast with 3-day strip
+- **`countryInfoCard`** — country facts with flag, capital, languages, currency
+- **`currencyConverter`** — interactive converter widget with live rates
+- **`travelChecklist`** — checkable packing/prep list with progress bar
+- **`get_weather` / `get_exchange_rate` / `get_country_info` / `get_time_zone` tools**
+
+## Demo Apps
+
+| App | Packs | Description |
+|-----|-------|-------------|
+| **Solution Architect** | Azure, GitHub | AI coworker for cloud-native architecture design + IaC + CI/CD |
+| **Travel Concierge** | Travel Data, Google Maps, Google Flights | AI travel advisor with maps, flights, weather, and real place data |
 
 ## Crash Recovery
 
@@ -211,8 +240,15 @@ src/
 │   └── components/
 │       ├── builtins.tsx            # 24 built-in components
 │       └── ConversationThread.tsx  # Memoized turn thread
-├── packs/azure/                   # Azure component pack
-└── demo/                          # Demo app
+├── packs/
+│   ├── azure/                     # Azure cloud pack
+│   ├── github/                    # GitHub pack
+│   ├── google-maps/               # Google Maps + Places pack
+│   ├── google-flights/            # Google Flights pack
+│   └── travel-data/               # Weather, currency, country info pack
+└── demo/
+    ├── SolutionArchitectApp.tsx    # Solution Architect demo
+    └── TravelApp.tsx              # Travel Concierge demo
 ```
 
 ## Extending
@@ -223,4 +259,17 @@ src/
 4. **Custom actions** — `onCustomAction` prop on `AdaptiveApp`
 5. **Theming** — `theme` prop or per-spec
 6. **State access** — `useAdaptive()` hook in custom components
+
+## Scaffolding with Copilot
+
+This repo includes built-in VS Code Copilot customizations to quickly create packs and components:
+
+| Command | What it does |
+|---------|--------------|
+| `/add-pack <name> — <description>` | Scaffolds a complete pack (directory, components, system prompt, registration) |
+| `/add-component <name> — <description>` | Scaffolds a built-in component (schema, implementation, registration, compact mappings) |
+
+Additional customizations: a **component-authoring skill** (loaded automatically for component tasks), an **azure-pack-dev agent** (specialized for Azure pack work), and **auto-applied instructions** that enforce codebase conventions when editing `builtins.tsx`, `schema.ts`, or any `src/**` file.
+
+See [docs/onboarding.md](docs/onboarding.md#fast-track-creating-packs--components-with-copilot) for full details.
 

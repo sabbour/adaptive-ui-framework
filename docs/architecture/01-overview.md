@@ -8,21 +8,23 @@ The framework sits between the LLM and the user — it translates structured JSO
 
 ## System Context
 
-```
-┌──────────────┐       ┌───────────────────────────────┐       ┌──────────────┐
-│              │       │        Adaptive UI             │       │              │
-│   LLM API    │◄─────►│  (React + TypeScript client)   │◄─────►│     User     │
-│  (OpenAI /   │ JSON  │                               │  UI   │              │
-│  Azure AI)   │       │  ┌─────────┐  ┌────────────┐  │       │              │
-│              │       │  │ Adapter │  │  Renderer  │  │       │              │
-│              │       │  └─────────┘  └────────────┘  │       │              │
-└──────────────┘       │  ┌─────────┐  ┌────────────┐  │       └──────────────┘
-                       │  │  Packs  │  │   State    │  │
-       ┌───────────┐   │  └─────────┘  └────────────┘  │
-       │ External  │◄──│                               │
-       │   APIs    │   └───────────────────────────────┘
-       │(ARM, GH)  │
-       └───────────┘
+```mermaid
+flowchart LR
+    LLM["LLM API<br/>(OpenAI / Azure AI)"]
+    UI["Adaptive UI<br/>(React + TypeScript)"]
+    User["User"]
+    APIs["External APIs<br/>(ARM, GitHub, Google)"]
+
+    LLM <-->|JSON| UI
+    UI <-->|UI| User
+    UI -->|API calls| APIs
+
+    subgraph UI_Inner["Adaptive UI"]
+        Adapter["Adapter"]
+        Renderer["Renderer"]
+        Packs["Packs"]
+        State["State"]
+    end
 ```
 
 ## Two Operating Modes
@@ -80,10 +82,14 @@ src/
 │
 ├── packs/                        # Extension bundles
 │   ├── azure/                    # Azure cloud pack (ARM, MSAL, Bicep)
-│   └── github/                   # GitHub pack (OAuth, repos, PRs)
+│   ├── github/                   # GitHub pack (OAuth, repos, PRs)
+│   ├── google-maps/              # Google Maps + Places pack
+│   ├── google-flights/           # Google Flights pack (protobuf)
+│   └── travel-data/              # Travel data pack (weather, currency, country)
 │
 └── demo/
-    └── BasicApp.tsx              # Solution Architect demo app
+    ├── SolutionArchitectApp.tsx   # Solution Architect demo app
+    └── TravelApp.tsx             # Travel Concierge demo app
 ```
 
 ## Key Design Principles

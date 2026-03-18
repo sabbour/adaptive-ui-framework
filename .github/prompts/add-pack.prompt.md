@@ -57,7 +57,7 @@ export function create<Name>Pack(): ComponentPack {
 
 ### 3. Register in the demo app
 
-Add to `src/demo/BasicApp.tsx` (or whichever app uses it):
+Add to the target demo app (e.g., `src/demo/SolutionArchitectApp.tsx` or `src/demo/TravelApp.tsx`):
 
 ```typescript
 import { registerPackWithSkills } from '../framework/registry';

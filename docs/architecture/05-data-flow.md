@@ -6,71 +6,31 @@ Adaptive UI manages state through a centralized React Context with a reducer pat
 
 ## State Architecture
 
-```
-┌─────────────────────────────────────────────────┐
-│              AdaptiveProvider                     │
-│                                                  │
-│  ┌───────────────────────────────────────────┐   │
-│  │              State Store                   │   │
-│  │  {                                        │   │
-│  │    store: {                               │   │
-│  │      region: "eastus",                    │   │
-│  │      tier: "Standard",                    │   │
-│  │      __azureToken: "eyJ...",  ← hidden    │   │
-│  │      __githubUser: "alice",   ← hidden    │   │
-│  │    },                                     │   │
-│  │    spec: AdaptiveUISpec | null,            │   │
-│  │    isLoading: boolean,                    │   │
-│  │    error: string | null                   │   │
-│  │  }                                        │   │
-│  └───────────────────────────────────────────┘   │
-│                                                  │
-│  Dispatch actions:                               │
-│    SET    (key, value)     → set single key       │
-│    MERGE  (values)         → merge object          │
-│    SET_SPEC (spec)         → set current spec      │
-│    SET_LOADING (bool)      → loading state         │
-│    SET_ERROR (string|null) → error state           │
-│    RESET  ()               → clear all state       │
-│                                                  │
-└─────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph Provider["AdaptiveProvider"]
+        subgraph Store["State Store"]
+            S1["store: {<br/>  region: 'eastus',<br/>  tier: 'Standard',<br/>  __azureToken: '...' (hidden),<br/>  __githubUser: 'alice' (hidden)<br/>}"]
+            S2["spec: AdaptiveUISpec | null"]
+            S3["isLoading: boolean"]
+            S4["error: string | null"]
+        end
+        Actions["Dispatch actions:<br/>SET (key, value)<br/>MERGE (values)<br/>SET_SPEC (spec)<br/>SET_LOADING (bool)<br/>SET_ERROR (string|null)<br/>RESET ()"]
+    end
 ```
 
 ## Data Flow Cycle
 
-```
-┌──────────────────────────────────────────────────────────────────┐
-│ 1. LLM produces spec with initial state                          │
-│    { state: { region: "", tier: "" }, layout: { ... } }          │
-└─────────────────────────┬────────────────────────────────────────┘
-                          ▼
-┌──────────────────────────────────────────────────────────────────┐
-│ 2. Reducer merges initial state + sets spec                      │
-│    dispatch({ type: 'MERGE', values: spec.state })               │
-│    dispatch({ type: 'SET_SPEC', spec })                          │
-└─────────────────────────┬────────────────────────────────────────┘
-                          ▼
-┌──────────────────────────────────────────────────────────────────┐
-│ 3. Renderer walks the spec tree                                  │
-│    Interpolates {{state.key}} in all string props                │
-│    Evaluates visibility conditions                               │
-│    Renders components via registry lookup                        │
-└─────────────────────────┬────────────────────────────────────────┘
-                          ▼
-┌──────────────────────────────────────────────────────────────────┐
-│ 4. User interacts with components                                │
-│    Input change → dispatch({ type: 'SET', key: 'region',        │
-│                              value: 'eastus' })                  │
-│    Reducer updates store                                         │
-│    React re-renders affected components                          │
-└─────────────────────────┬────────────────────────────────────────┘
-                          ▼
-┌──────────────────────────────────────────────────────────────────┐
-│ 5. User clicks "Continue"                                        │
-│    Button action: sendPrompt("User selected: region=eastus...")   │
-│    Current state snapshot sent to LLM (with __ keys filtered)    │
-│    Cycle repeats from step 1                                     │
-└──────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    D1["1. LLM produces spec with initial state<br/>{state: {region:'', tier:''}, layout: {...}}"]
+    D2["2. Reducer merges initial state + sets spec<br/>MERGE + SET_SPEC dispatched"]
+    D3["3. Renderer walks the spec tree<br/>Interpolates state, evaluates visibility,<br/>renders via registry lookup"]
+    D4["4. User interacts with components<br/>Input → SET dispatch → store update<br/>React re-renders"]
+    D5["5. User clicks Continue<br/>sendPrompt with state snapshot<br/>(__ keys filtered)<br/>Cycle repeats"]
+
+    D1 --> D2 --> D3 --> D4 --> D5
+    D5 -->|"next turn"| D1
 ```
 
 ## Template Interpolation
@@ -204,7 +164,7 @@ adaptive-ui-sessions             Session index (JSON array)
 adaptive-ui-session-{id}         Full turn history for session
 adaptive-ui-artifacts            Saved code/file artifacts
 adaptive-ui-active-session       Current active session ID
-adaptive-ui-turns-{sessionId}    Turn data for BasicApp
+adaptive-ui-turns-{sessionId}    Turn data for demo apps
 adaptive-ui-settings             LLM config (endpoint, model, etc.)
 ```
 

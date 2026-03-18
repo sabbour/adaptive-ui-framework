@@ -886,7 +886,7 @@ function CodeBlockComponent({ node }: AdaptiveComponentProps<CodeBlockNode>) {
   };
 
   const handleSave = () => {
-    // Generate filename from label (same logic as BasicApp codeBlockToFilename)
+    // Generate filename from label (same logic as SolutionArchitectApp codeBlockToFilename)
     const ext = ({ bicep: 'bicep', json: 'json', yaml: 'yaml', yml: 'yaml', typescript: 'ts', javascript: 'js', python: 'py', bash: 'sh', shell: 'sh', dockerfile: 'Dockerfile', hcl: 'tf', terraform: 'tf' } as Record<string, string>)[node.language || ''] || node.language || 'txt';
     const filename = node.label && node.label.includes('.') ? node.label : node.label ? node.label.toLowerCase().replace(/[^a-z0-9/]+/g, '-').replace(/-+$/, '') + '.' + ext : `artifact.${ext}`;
     upsertArtifact(filename, node.code, node.language || '', node.label);

@@ -59,8 +59,12 @@ Enable intent mode with `useIntents: true` in `OpenAIAdapterConfig`. The resolve
 |---|---|
 | `src/framework/` | Core runtime (rendering, schema, registry, context, hooks) |
 | `src/framework/components/` | Built-in components + conversation UI |
-| `src/packs/` | Extension bundles (Azure pack ships as reference) |
-| `src/demo/` | Example apps (Solution Architect demo) |
+| `src/packs/azure/` | Azure cloud pack (ARM, MSAL, Bicep, diagram icons) |
+| `src/packs/github/` | GitHub pack (OAuth, repos, PRs, file commits) |
+| `src/packs/google-maps/` | Google Maps + Places pack (maps, nearby, photos) |
+| `src/packs/google-flights/` | Google Flights pack (protobuf encoder, search, cards) |
+| `src/packs/travel-data/` | Travel data pack (weather, currency, country, checklist) |
+| `src/demo/` | Demo apps (Solution Architect, Travel Concierge) |
 | `src/framework/css/` | Design tokens + component styles |
 
 ## Conventions

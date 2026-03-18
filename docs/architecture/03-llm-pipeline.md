@@ -6,91 +6,21 @@ Every user interaction that reaches the LLM follows a structured pipeline: promp
 
 ## Request Lifecycle
 
-```
-┌────────────────────────────────────────────────────────────────────┐
-│  1. USER INPUT                                                     │
-│     User types text or clicks "Continue" button                    │
-│     → sendPrompt(prompt, currentState) called                      │
-└──────────────────────────┬─────────────────────────────────────────┘
-                           ▼
-┌────────────────────────────────────────────────────────────────────┐
-│  2. SKILL RESOLUTION                                               │
-│     resolvePackSkills(prompt) → fetches domain knowledge           │
-│     e.g., user mentions "AKS" → Azure pack injects ARM templates  │
-│     Only new/changed skills are appended (not resent)              │
-└──────────────────────────┬─────────────────────────────────────────┘
-                           ▼
-┌────────────────────────────────────────────────────────────────────┐
-│  3. SYSTEM PROMPT ASSEMBLY                                         │
-│     Base prompt (Intent or Full-Spec mode)                         │
-│     + Compact notation rules                                       │
-│     + Intent resolver prompts (if intent mode)                     │
-│     + All registered pack system prompts                           │
-│     + Custom suffix (from app config)                              │
-│     + Skills (domain knowledge fetched in step 2)                  │
-└──────────────────────────┬─────────────────────────────────────────┘
-                           ▼
-┌────────────────────────────────────────────────────────────────────┐
-│  4. STATE FILTERING                                                │
-│     Remove __-prefixed keys from state before sending              │
-│     Remove keys matching: token, apiKey, secret, password, etc.    │
-│     Filtered state becomes part of the user message context        │
-└──────────────────────────┬─────────────────────────────────────────┘
-                           ▼
-┌────────────────────────────────────────────────────────────────────┐
-│  5. API REQUEST                                                    │
-│     POST to OpenAI / Azure OpenAI / Azure AI Foundry               │
-│     Includes: messages array, tool definitions, model config       │
-│     Endpoint auto-detected from URL pattern                        │
-└──────────────────────────┬─────────────────────────────────────────┘
-                           ▼
-┌────────────────────────────────────────────────────────────────────┐
-│  6. TOOL-CALL LOOP (up to 5 rounds)                                │
-│     If response has tool_calls:                                    │
-│       → Execute each tool (fetch_webpage, azure_arm_get, etc.)     │
-│       → Append tool results to messages                            │
-│       → Re-request from LLM                                       │
-│     Repeat until LLM returns content (not tool calls)              │
-└──────────────────────────┬─────────────────────────────────────────┘
-                           ▼
-┌────────────────────────────────────────────────────────────────────┐
-│  7. JSON PARSING & REPAIR                                          │
-│     Strip markdown fences (```json ... ```)                        │
-│     Escape unescaped newlines in string values                     │
-│     If truncated → close open braces/brackets                      │
-│     If still non-JSON → show raw text in agent bubble              │
-└──────────────────────────┬─────────────────────────────────────────┘
-                           ▼
-┌────────────────────────────────────────────────────────────────────┐
-│  8. COMPACT EXPANSION                                              │
-│     expandCompact() recursively expands abbreviated keys           │
-│     e.g., { t: "rg", l: "Region", b: "region" }                   │
-│       → { type: "radioGroup", label: "Region", bind: "region" }    │
-└──────────────────────────┬─────────────────────────────────────────┘
-                           ▼
-┌────────────────────────────────────────────────────────────────────┐
-│  9. MODE-SPECIFIC RESOLUTION                                       │
-│     Intent mode: isAgentIntent(obj)?                               │
-│       → resolveIntent() maps ask/show → AdaptiveUISpec             │
-│     Full-spec mode: use expanded spec directly                     │
-└──────────────────────────┬─────────────────────────────────────────┘
-                           ▼
-┌────────────────────────────────────────────────────────────────────┐
-│  10. SANITIZATION                                                  │
-│      sanitizeSpec() walks the entire spec tree                     │
-│      → Block javascript:/vbscript: URLs                            │
-│      → Strip expression() from CSS                                 │
-│      → Mask sensitive state key interpolation in URLs              │
-└──────────────────────────┬─────────────────────────────────────────┘
-                           ▼
-┌────────────────────────────────────────────────────────────────────┐
-│  11. RENDER                                                        │
-│      AdaptiveProvider dispatches SET_SPEC                          │
-│      ConversationThread renders active turn                        │
-│      AdaptiveRenderer recursively builds React tree                │
-│      Components bind to state, collect user input                  │
-│      User interacts → cycle repeats from step 1                    │
-└────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    S1["1. USER INPUT<br/>User types text or clicks Continue<br/>sendPrompt(prompt, currentState)"]
+    S2["2. SKILL RESOLUTION<br/>resolvePackSkills(prompt) → domain knowledge<br/>e.g., AKS → Azure pack injects ARM templates"]
+    S3["3. SYSTEM PROMPT ASSEMBLY<br/>Base prompt + Compact rules + Intent resolvers<br/>+ Pack prompts + Custom suffix + Skills"]
+    S4["4. STATE FILTERING<br/>Remove __-prefixed keys<br/>Remove token/apiKey/secret/password"]
+    S5["5. API REQUEST<br/>POST to OpenAI / Azure OpenAI / Azure AI Foundry<br/>Messages + tools + model config"]
+    S6["6. TOOL-CALL LOOP (up to 5 rounds)<br/>Execute tools → append results → re-request<br/>Repeat until LLM returns content"]
+    S7["7. JSON PARSING & REPAIR<br/>Strip markdown fences, escape newlines<br/>Close truncated braces, fallback to raw text"]
+    S8["8. COMPACT EXPANSION<br/>expandCompact() expands abbreviated keys<br/>e.g., {t:'rg', b:'region'} → {type:'radioGroup', bind:'region'}"]
+    S9["9. MODE-SPECIFIC RESOLUTION<br/>Intent mode: resolveIntent() maps ask/show → spec<br/>Full-spec mode: use expanded spec directly"]
+    S10["10. SANITIZATION<br/>Block javascript:/vbscript: URLs<br/>Strip expression() from CSS<br/>Mask sensitive state in URLs"]
+    S11["11. RENDER<br/>SET_SPEC → ConversationThread → AdaptiveRenderer<br/>Components bind to state → user interacts → repeat"]
+
+    S1 --> S2 --> S3 --> S4 --> S5 --> S6 --> S7 --> S8 --> S9 --> S10 --> S11
 ```
 
 ## Endpoint Auto-Detection
