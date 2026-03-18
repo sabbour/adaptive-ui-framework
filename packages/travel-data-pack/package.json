@@ -1,0 +1,24 @@
+{
+  "name": "@sabbour/adaptive-ui-travel-data-pack",
+  "version": "0.1.0",
+  "license": "MIT",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "scripts": {
+    "build": "tsc -b --noEmit"
+  },
+  "peerDependencies": {
+    "@sabbour/adaptive-ui-core": "^0.1.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sabbour/adaptive-ui-experiment.git",
+    "directory": "packages/travel-data-pack"
+  }
+}

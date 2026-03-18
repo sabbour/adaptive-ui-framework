@@ -1,0 +1,54 @@
+name: Publish Packages
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://npm.pkg.github.com
+
+      - run: npm ci
+
+      - run: npx tsc -b --noEmit
+
+      - name: Publish @sabbour/adaptive-ui-core
+        run: npm publish --workspace=packages/core
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish @sabbour/adaptive-ui-azure-pack
+        run: npm publish --workspace=packages/azure-pack
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish @sabbour/adaptive-ui-github-pack
+        run: npm publish --workspace=packages/github-pack
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish @sabbour/adaptive-ui-google-maps-pack
+        run: npm publish --workspace=packages/google-maps-pack
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish @sabbour/adaptive-ui-google-flights-pack
+        run: npm publish --workspace=packages/google-flights-pack
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish @sabbour/adaptive-ui-travel-data-pack
+        run: npm publish --workspace=packages/travel-data-pack
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

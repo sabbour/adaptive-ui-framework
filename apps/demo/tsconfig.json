@@ -1,0 +1,30 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "composite": true,
+    "noEmit": false,
+    "emitDeclarationOnly": true,
+    "rootDir": "src",
+    "outDir": "dist",
+    "paths": {
+      "@sabbour/adaptive-ui-core": ["../../packages/core/src/index.ts"],
+      "@sabbour/adaptive-ui-core/*": ["../../packages/core/src/*"],
+      "@sabbour/adaptive-ui-azure-pack": ["../../packages/azure-pack/src/index.ts"],
+      "@sabbour/adaptive-ui-azure-pack/*": ["../../packages/azure-pack/src/*"],
+      "@sabbour/adaptive-ui-github-pack": ["../../packages/github-pack/src/index.ts"],
+      "@sabbour/adaptive-ui-google-maps-pack": ["../../packages/google-maps-pack/src/index.ts"],
+      "@sabbour/adaptive-ui-google-maps-pack/settings": ["../../packages/google-maps-pack/src/GoogleMapsSettings.tsx"],
+      "@sabbour/adaptive-ui-google-flights-pack": ["../../packages/google-flights-pack/src/index.ts"],
+      "@sabbour/adaptive-ui-travel-data-pack": ["../../packages/travel-data-pack/src/index.ts"]
+    }
+  },
+  "include": ["src"],
+  "references": [
+    { "path": "../../packages/core" },
+    { "path": "../../packages/azure-pack" },
+    { "path": "../../packages/github-pack" },
+    { "path": "../../packages/google-maps-pack" },
+    { "path": "../../packages/google-flights-pack" },
+    { "path": "../../packages/travel-data-pack" }
+  ]
+}
