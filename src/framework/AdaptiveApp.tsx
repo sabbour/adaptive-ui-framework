@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState, useMemo, useSyncExternalStore } from 'react';
+import { createPortal } from 'react-dom';
 import type { AdaptiveUISpec, AdaptiveTheme, ConversationTurn } from './schema';
 import type { StateStore } from './interpolation';
 import type { LLMAdapter, LLMMessage } from './llm-adapter';
@@ -124,12 +125,14 @@ function SettingsPanel({
   onDisconnect,
   appSettingsComponents,
   visiblePacks,
+  settingsPosition,
 }: {
   isConnected: boolean;
   onConnect: (config: { endpoint: string; apiKey: string; model: string }) => void;
   onDisconnect: () => void;
   appSettingsComponents?: React.ComponentType[];
   visiblePacks?: string[];
+  settingsPosition?: { top?: string; right?: string };
 }) {
   const [open, setOpen] = useState(false);
   const [config, setConfig] = useState(loadLLMConfig);
@@ -143,9 +146,9 @@ function SettingsPanel({
     onConnect(config);
   };
 
-  return React.createElement('div', {
+  return createPortal(React.createElement('div', {
     className: 'adaptive-settings-wrapper',
-    style: { position: 'fixed', top: '6px', right: '12px', zIndex: 1001 },
+    style: { position: 'fixed', top: settingsPosition?.top ?? '6px', right: settingsPosition?.right ?? '12px', zIndex: 1001 },
   },
     open && React.createElement('div', {
       onClick: () => setOpen(false),
@@ -243,7 +246,7 @@ function SettingsPanel({
         }, React.createElement(Comp))
       )
     )
-  );
+  ), document.body);
 }
 
 function ShellActivityIndicator() {
@@ -386,6 +389,9 @@ export interface AdaptiveAppProps {
 
   /** Restrict which pack settings appear in the settings panel. Defaults to none — explicitly list pack names to show. */
   visiblePacks?: string[];
+
+  /** Override the settings gear position. Defaults to { top: '6px', right: '12px' }. */
+  settingsPosition?: { top?: string; right?: string };
 }
 
 let turnCounter = Date.now();
@@ -408,6 +414,7 @@ export function AdaptiveApp({
   useIntents,
   sendPromptRef,
   visiblePacks,
+  settingsPosition,
 }: AdaptiveAppProps) {
   // ─── Internal adapter management ───
   const [isConnected, setIsConnected] = useState(() => {
@@ -749,6 +756,7 @@ export function AdaptiveApp({
       onDisconnect: handleDisconnect,
       appSettingsComponents: settingsComponents,
       visiblePacks,
+      settingsPosition,
     }),
 
     // Main content

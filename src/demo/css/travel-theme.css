@@ -305,13 +305,8 @@
   }
 }
 
-/* ── Settings button: reposition into branded header next to clock ── */
-.travel-app .adaptive-settings-wrapper {
-  top: 46px !important;
-  right: 20px !important;
-}
-
-.travel-app .adaptive-settings-wrapper button:first-of-type {
+/* ── Settings button: frosted glass style for branded header ── */
+.adaptive-settings-wrapper button:first-of-type {
   background: rgba(255, 255, 255, 0.2) !important;
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
