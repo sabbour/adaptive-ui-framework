@@ -70,7 +70,7 @@ interface GitHubLoginNode extends AdaptiveNodeBase {
 }
 
 export function GitHubLogin({ node }: AdaptiveComponentProps<GitHubLoginNode>) {
-  const { state, dispatch, sendPrompt, disabled } = useAdaptive();
+  const { state, dispatch, disabled } = useAdaptive();
   const token = (state.__githubToken as string) || undefined;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -165,20 +165,9 @@ export function GitHubLogin({ node }: AdaptiveComponentProps<GitHubLoginNode>) {
             user.name
           )
         )
-      ),
-      // Continue button — advances the conversation after sign-in
-      React.createElement('button', {
-        onClick: () => sendPrompt(
-          `Signed in to GitHub as ${user.login}`,
-          null
-        ),
-        style: {
-          marginTop: '12px', width: '100%', padding: '10px',
-          borderRadius: '8px', border: 'none',
-          fontSize: '14px', fontWeight: 500, cursor: 'pointer',
-          backgroundColor: 'var(--adaptive-primary, #2563eb)', color: '#fff',
-        },
-      }, 'Continue')
+      )
+      // Login complete — the intent resolver's Continue button handles submission.
+      // State __githubUser is already set by the useEffect above.
     );
   }
 
@@ -267,8 +256,8 @@ interface GitHubQueryNode extends AdaptiveNodeBase {
   loadingLabel?: string;
   /** Show raw result */
   showResult?: boolean;
-  /** Require confirmation for write operations */
-  confirm?: boolean;
+  /** Require confirmation for write operations. String value becomes the button label. */
+  confirm?: boolean | string;
 }
 
 export function GitHubQuery({ node }: AdaptiveComponentProps<GitHubQueryNode>) {
@@ -383,7 +372,7 @@ export function GitHubQuery({ node }: AdaptiveComponentProps<GitHubQueryNode>) {
             border: 'none', backgroundColor: '#24292e', color: '#fff',
             fontSize: '13px', fontWeight: 500, cursor: 'pointer',
           },
-        }, React.createElement('img', { src: iconGitHubWhite, alt: '', width: 14, height: 14 }), `Execute ${method}`),
+        }, React.createElement('img', { src: iconGitHubWhite, alt: '', width: 14, height: 14 }), typeof node.confirm === 'string' ? node.confirm : `Execute ${method}`),
         React.createElement('button', {
           onClick: () => dispatch({ type: 'SET', key: `${node.bind}_cancelled`, value: 'true' }),
           style: {

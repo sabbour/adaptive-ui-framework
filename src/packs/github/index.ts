@@ -36,6 +36,13 @@ githubLogin — {title?,description?}
 
 githubQuery — {api,bind,method?,body?,loadingLabel?,showResult?,confirm?}
   GitHub API caller for WRITES (POST/PUT/PATCH/DELETE) with user confirmation. NOT for reads.
+  IMPORTANT: Place githubQuery as a DIRECT child node in the layout. Do NOT wrap it inside a button onClick — buttons only support sendPrompt/setState actions, not component rendering.
+  The component renders its own confirmation UI with an "Execute" button when confirm is true or a string.
+  Set confirm to a string to customize the button label (e.g. confirm:"Create Repository").
+  Examples:
+  - Create repo: {type:"githubQuery", api:"/user/repos", method:"POST", body:"{\\\"name\\\":\\\"{{state.githubRepo}}\\\",\\\"private\\\":true}", bind:"repoCreateResult", confirm:"Create Repository", loadingLabel:"Creating repository..."}
+  - Create org repo: {type:"githubQuery", api:"/orgs/{{state.githubOrg}}/repos", method:"POST", body:"{\\\"name\\\":\\\"{{state.githubRepo}}\\\",\\\"private\\\":true}", bind:"repoCreateResult", confirm:"Create Repository"}
+  - Set default branch: {type:"githubQuery", api:"/repos/{{state.githubOrg}}/{{state.githubRepo}}", method:"PATCH", body:"{\\\"default_branch\\\":\\\"{{state.branch}}\\\"}", bind:"branchResult", confirm:"Set Default Branch"}
 
 githubPicker — {api,bind,label?,labelKey?,valueKey?,descriptionKey?,labelBind?,loadingLabel?,includePersonal?}
   Dropdown fetching from GitHub API at render time. Auto-paginates (up to 300). ALWAYS use for orgs/repos/branches — never use github_api_get for selection lists.
@@ -50,6 +57,11 @@ githubRepoInfo — {repo:"owner/repo"}
 
 githubCreatePR — {title?,baseBranch?,owner?,repo?}
   Creates PR with all generated artifacts. Shows file list, confirms, creates branch, commits, opens PR URL. Reads owner/repo from props → state (githubOrg/githubRepo) → __githubUser.
+
+RULES:
+- NEVER put githubQuery inside a button onClick. Buttons only support actions (sendPrompt, setState), not components.
+- For write operations, place githubQuery directly in the layout with confirm set to a descriptive label string.
+- Do NOT create custom components for specific operations — use githubQuery with the appropriate API path, method, and body.
 
 Flow: 1) githubLogin if no token → 2) githubPicker for org/repo/branch → 3) github_api_get tool for reads LLM needs → 4) githubQuery for writes → 5) githubCreatePR for committing files`;
 

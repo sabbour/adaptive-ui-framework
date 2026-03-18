@@ -82,7 +82,7 @@ interface AzureLoginNode extends AdaptiveNodeBase {
 }
 
 export function AzureLogin({ node }: AdaptiveComponentProps<AzureLoginNode>) {
-  const { state, dispatch, sendPrompt, disabled } = useAdaptive();
+  const { state, dispatch, disabled } = useAdaptive();
   const token = (state.__azureToken as string) || undefined;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -174,21 +174,9 @@ export function AzureLogin({ node }: AdaptiveComponentProps<AzureLoginNode>) {
           filterValue: 'Enabled',
           loadingLabel: 'Loading subscriptions...',
         } as any,
-      }),
-
-      // Continue button — advances the conversation after sign-in
-      state.__azureSubscription && React.createElement('button', {
-        onClick: () => sendPrompt(
-          `Signed in to Azure. Subscription: ${state.__azureSubscriptionName || state.__azureSubscription}`,
-          null
-        ),
-        style: {
-          marginTop: '12px', width: '100%', padding: '10px',
-          borderRadius: '8px', border: 'none',
-          fontSize: '14px', fontWeight: 500, cursor: 'pointer',
-          backgroundColor: 'var(--adaptive-primary, #2563eb)', color: '#fff',
-        },
-      }, 'Continue')
+      })
+      // Login complete — the intent resolver's Continue button handles submission.
+      // No separate Continue button to avoid skipping sibling asks.
     );
   }
 
