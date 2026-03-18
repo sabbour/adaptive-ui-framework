@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { AdaptiveApp } from '../framework';
 import type { AdaptiveUISpec } from '../framework/schema';
 import { registerApp } from '../framework/app-registry';
@@ -6,6 +6,11 @@ import { registerPackWithSkills } from '../framework/registry';
 import { createTravelDataPack } from '../packs/travel-data';
 import { createGoogleMapsPack } from '../packs/google-maps';
 import { createGoogleFlightsPack } from '../packs/google-flights';
+import { SessionsSidebar } from '../framework/components/SessionsSidebar';
+import { ResizeHandle } from '../framework/components/ResizeHandle';
+import { TripNotebook } from './TripNotebook';
+import { generateSessionId, saveSession, deleteSession } from '../framework/session-manager';
+import { upsertArtifact, getArtifacts, subscribeArtifacts, loadArtifactsForSession, saveArtifactsForSession, deleteArtifactsForSession } from '../framework/artifacts';
 import './css/travel-theme.css';
 
 // Register travel data pack (weather, currency, country info)
@@ -19,6 +24,7 @@ registerPackWithSkills(createGoogleFlightsPack());
 // builds day-by-day itineraries, and helps with booking decisions.
 
 const TRAVEL_SYSTEM_PROMPT = `You are a Travel Concierge — friendly, knowledgeable travel advisor helping plan memorable trips.
+The user has a Trip Notebook panel on the right that auto-collects destinations, budget breakdowns, and itinerary files as you generate them.
 
 ═══ DISCOVERY ═══
 Ask over 2-3 warm, conversational turns (don't dump all at once):
@@ -57,9 +63,17 @@ FLIGHTS:
 - Use flightCard in final itinerary summaries for quick booking reference
 - Use 3-letter IATA airport codes (JFK, LAX, NRT, CDG, LHR, etc.)
 
+BUDGET:
+- Use budgetTracker component for cost breakdowns — it auto-saves to the Trip Notebook
+- Include categories: flights, hotel, food, activities, transport, shopping
+- Show budgetTracker whenever presenting cost estimates or after finalizing plans
+- Example: {type:"budgetTracker", currency:"EUR", items:[{category:"flights", amount:800, note:"Round trip"},{category:"hotel", amount:1200, note:"4 nights"},{category:"food", amount:400},{category:"activities", amount:300}]}
+
 FINALIZE:
 - Use columns to pair travelChecklist + currencyConverter side by side
 - Generate a travelChecklist with weather-appropriate packing items + travel documents
+- Generate a codeBlock(language:"markdown") summary with a filename label — this saves as a downloadable itinerary file
+- Show a final budgetTracker with all costs
 
 ═══ PRESENTATION ═══
 - Use columns to pair related content side by side — e.g. {type:"columns", children:[weatherCard, currencyConverter]}
@@ -68,7 +82,7 @@ FINALIZE:
 - columns(sizes:["2","1"]) for a main + sidebar layout (e.g. map on left, details on right)
 - radioGroup/select for preferences, table for budgets, accordion for day-by-day
 - alert(info) for pro tips, alert(warning) for notices, badge for "Must See"/"Hidden Gem"
-- codeBlock(language:"markdown") with filename label for downloadable summaries
+- codeBlock(language:"markdown") with filename label for downloadable summaries — they auto-save to the notebook
 - Be specific: real restaurant names (verified via Places), real ratings, "local secret" tips
 
 ═══ WORKFLOW ═══
@@ -76,8 +90,9 @@ FINALIZE:
 2. DISCOVER — preferences over 2-3 turns
 3. SUGGEST — if "surprise me", propose 2-3 options, each in columns: {type:"columns", children:[googlePhotoCard, countryInfoCard]} per option
 4. PLAN — day-by-day itinerary with route maps, googleNearby for restaurants, weatherCard
-5. REFINE — adjust on feedback
-6. FINALIZE — downloadable summary + travelChecklist + currencyConverter
+5. BUDGET — show budgetTracker with estimated costs
+6. REFINE — adjust on feedback
+7. FINALIZE — downloadable itinerary summary + travelChecklist + currencyConverter + final budgetTracker
 
 Enthusiastic but not overwhelming. Emojis sparingly.`;
 
@@ -92,7 +107,159 @@ const initialSpec: AdaptiveUISpec = {
   },
 };
 
+// ─── Code block extraction (reused from SolutionArchitectApp pattern) ───
+interface CodeBlock { code: string; language: string; label?: string; }
+
+function extractCodeBlocksFromLayout(node: any): CodeBlock[] {
+  if (!node) return [];
+  const blocks: CodeBlock[] = [];
+  if ((node.type === 'codeBlock' || node.type === 'cb') && typeof node.code === 'string') {
+    blocks.push({ code: node.code, language: node.language || '', label: node.label });
+  }
+  const kids: any[] = node.children || node.ch || [];
+  for (const child of kids) blocks.push(...extractCodeBlocksFromLayout(child));
+  if (Array.isArray(node.items)) {
+    for (const item of node.items) blocks.push(...extractCodeBlocksFromLayout(item));
+  }
+  if (Array.isArray(node.tabs)) {
+    for (const tab of node.tabs) {
+      if (tab.children) for (const child of tab.children) blocks.push(...extractCodeBlocksFromLayout(child));
+    }
+  }
+  return blocks;
+}
+
+// ─── Place extraction from layout ───
+// Extract destination/place mentions from googlePhotoCard, googleMaps place nodes, countryInfoCard
+
+interface PlaceRef { name: string; type: 'destination' | 'hotel' | 'restaurant' | 'attraction'; query: string; }
+
+function extractPlacesFromLayout(node: any): PlaceRef[] {
+  if (!node) return [];
+  const places: PlaceRef[] = [];
+  const nodeType = node.type || node.t;
+
+  if (nodeType === 'countryInfoCard' && node.country) {
+    places.push({ name: node.country, type: 'destination', query: node.country });
+  }
+  if (nodeType === 'googleMaps' && node.mode === 'place' && node.query) {
+    places.push({ name: node.query, type: 'attraction', query: node.query });
+  }
+
+  const kids: any[] = node.children || node.ch || [];
+  for (const child of kids) places.push(...extractPlacesFromLayout(child));
+  if (Array.isArray(node.items)) {
+    for (const item of node.items) places.push(...extractPlacesFromLayout(item));
+  }
+  if (Array.isArray(node.tabs)) {
+    for (const tab of node.tabs) {
+      if (tab.children) for (const child of tab.children) places.push(...extractPlacesFromLayout(child));
+    }
+  }
+  return places;
+}
+
 function TravelPlannerApp() {
+  // ─── Session management ───
+  const [sessionId, setSessionId] = useState(() => {
+    try {
+      return localStorage.getItem('adaptive-ui-travel-session') || generateSessionId();
+    } catch { return generateSessionId(); }
+  });
+
+  const sendPromptRef = useRef<((prompt: string) => void) | null>(null);
+
+  // Load artifacts for initial session on mount
+  const initialLoadRef = useRef(false);
+  if (!initialLoadRef.current) {
+    initialLoadRef.current = true;
+    loadArtifactsForSession(sessionId);
+  }
+
+  // ─── Panel widths ───
+  const [sidebarWidth, setSidebarWidth] = useState(220);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
+  const [notebookWidth, setNotebookWidth] = useState(280);
+  const [notebookCollapsed, setNotebookCollapsed] = useState(false);
+
+  const handleSidebarResize = useCallback((delta: number) => {
+    setSidebarWidth((w) => Math.max(160, Math.min(360, w + delta)));
+  }, []);
+  const handleNotebookResize = useCallback((delta: number) => {
+    setNotebookWidth((w) => Math.max(200, Math.min(450, w - delta)));
+  }, []);
+
+  // ─── Spec change handler: extract places + code blocks → artifacts ───
+  const handleSpecChange = useCallback((spec: AdaptiveUISpec) => {
+    // Extract places
+    const places = extractPlacesFromLayout(spec.layout);
+    for (const place of places) {
+      const slug = place.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+$/, '');
+      upsertArtifact(`place-${slug}`, JSON.stringify(place), 'json', place.name);
+    }
+
+    // Extract code blocks (itinerary summaries, etc.)
+    const codeBlocks = extractCodeBlocksFromLayout(spec.layout);
+    for (const block of codeBlocks) {
+      if (block.label) {
+        const filename = block.label.includes('.') ? block.label : `${block.label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.${block.language || 'md'}`;
+        upsertArtifact(filename, block.code, block.language, block.label);
+      }
+    }
+  }, []);
+
+  // ─── Session management handlers ───
+  const handleNewSession = useCallback(() => {
+    saveArtifactsForSession(sessionId);
+    try {
+      const raw = localStorage.getItem(`adaptive-ui-turns-${sessionId}`);
+      if (raw) {
+        const { turns } = JSON.parse(raw);
+        if (turns && turns.length > 1) {
+          const name = turns[turns.length - 1]?.agentSpec?.title || 'Trip';
+          saveSession(sessionId, name, turns);
+        }
+      }
+    } catch {}
+
+    const newId = generateSessionId();
+    setSessionId(newId);
+    try { localStorage.setItem('adaptive-ui-travel-session', newId); } catch {}
+    saveSession(newId, 'New trip', []);
+    loadArtifactsForSession(newId);
+  }, [sessionId]);
+
+  const handleSelectSession = useCallback((id: string) => {
+    saveArtifactsForSession(sessionId);
+    setSessionId(id);
+    loadArtifactsForSession(id);
+    try { localStorage.setItem('adaptive-ui-travel-session', id); } catch {}
+  }, [sessionId]);
+
+  const handleDeleteSession = useCallback((id: string) => {
+    deleteSession(id);
+    deleteArtifactsForSession(id);
+    if (id === sessionId) {
+      const newId = generateSessionId();
+      setSessionId(newId);
+      saveSession(newId, 'New trip', []);
+      loadArtifactsForSession(newId);
+      try { localStorage.setItem('adaptive-ui-travel-session', newId); } catch {}
+    }
+  }, [sessionId]);
+
+  const handleSpecChangeWithSave = useCallback((spec: AdaptiveUISpec) => {
+    handleSpecChange(spec);
+    const name = spec.title || spec.agentMessage?.slice(0, 40) || 'Trip';
+    try {
+      const raw = localStorage.getItem(`adaptive-ui-turns-${sessionId}`);
+      if (raw) {
+        const { turns } = JSON.parse(raw);
+        saveSession(sessionId, name, turns);
+      }
+    } catch {}
+  }, [sessionId, handleSpecChange]);
+
   // Randomize the greeting tagline on mount
   const [tagline] = useState(() => {
     const lines = [
@@ -105,7 +272,7 @@ function TravelPlannerApp() {
     return lines[Math.floor(Math.random() * lines.length)];
   });
 
-  // Clock showing current local time — adds a live "concierge desk" feel
+  // Clock showing current local time
   const [time, setTime] = useState(() => new Date());
   useEffect(() => {
     const id = setInterval(() => setTime(new Date()), 60000);
@@ -156,32 +323,59 @@ function TravelPlannerApp() {
       }, timeStr)
     ),
 
-    // ── Main content area ──
+    // ── Main 3-panel layout ──
     React.createElement('div', {
       style: {
         flex: 1,
         minHeight: 0,
         display: 'flex',
-        justifyContent: 'center',
-        padding: '12px 16px 16px',
         overflow: 'hidden',
+        padding: '0 0 0 0',
       } as React.CSSProperties,
     },
 
-      // ── Frosted glass chat card ──
+      // ─ Left: Sessions sidebar ─
+      React.createElement('div', {
+        className: 'travel-app',
+        style: {
+          width: sidebarCollapsed ? '36px' : `${sidebarWidth}px`,
+          flexShrink: 0, height: '100%', overflow: 'hidden',
+          transition: 'width 0.15s ease',
+        } as React.CSSProperties,
+      },
+        React.createElement(SessionsSidebar, {
+          activeSessionId: sessionId,
+          onSelectSession: handleSelectSession,
+          onNewSession: handleNewSession,
+          onDeleteSession: handleDeleteSession,
+          selectedFileId: null,
+          onSelectFile: () => {},
+          collapsed: sidebarCollapsed,
+          onToggleCollapse: setSidebarCollapsed,
+        })
+      ),
+
+      // Resize handle: sidebar ↔ chat
+      !sidebarCollapsed && React.createElement(ResizeHandle, { direction: 'vertical', onResize: handleSidebarResize }),
+
+      // ─ Center: Chat ─
       React.createElement('div', {
         className: 'travel-chat-container travel-app',
         style: {
-          width: '100%',
-          maxWidth: '900px',
+          flex: 1,
+          minWidth: 0,
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
+          margin: '8px 0',
+          borderRadius: sidebarCollapsed ? '20px 0 0 20px' : '0',
         } as React.CSSProperties,
       },
         React.createElement(AdaptiveApp, {
+          key: sessionId,
           initialSpec,
-          persistKey: 'travel',
+          persistKey: sessionId,
+          sendPromptRef,
           systemPromptSuffix: TRAVEL_SYSTEM_PROMPT,
           visiblePacks: ['travel-data', 'google-maps', 'google-flights'],
           theme: {
@@ -189,6 +383,27 @@ function TravelPlannerApp() {
             backgroundColor: 'transparent',
             surfaceColor: 'rgba(255, 255, 255, 0.95)',
           },
+          onSpecChange: handleSpecChangeWithSave,
+        })
+      ),
+
+      // Resize handle: chat ↔ notebook
+      !notebookCollapsed && React.createElement(ResizeHandle, { direction: 'vertical', onResize: handleNotebookResize }),
+
+      // ─ Right: Trip Notebook ─
+      React.createElement('div', {
+        className: 'travel-app',
+        style: {
+          width: notebookCollapsed ? '36px' : `${notebookWidth}px`,
+          flexShrink: 0, height: '100%', overflow: 'hidden',
+          transition: 'width 0.15s ease',
+          margin: '8px 8px 8px 0',
+          borderRadius: '0 16px 16px 0',
+        } as React.CSSProperties,
+      },
+        React.createElement(TripNotebook, {
+          collapsed: notebookCollapsed,
+          onToggleCollapse: setNotebookCollapsed,
         })
       )
     )

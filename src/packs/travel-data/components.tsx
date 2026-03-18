@@ -4,6 +4,7 @@ import type { AdaptiveNodeBase } from '../../framework/schema';
 import { useAdaptive } from '../../framework/context';
 import { interpolate } from '../../framework/interpolation';
 import { trackedFetch } from '../../framework/request-tracker';
+import { upsertArtifact } from '../../framework/artifacts';
 
 // ─── Helpers ───
 
@@ -573,5 +574,163 @@ export function TravelChecklist({ node }: AdaptiveComponentProps<TravelChecklist
         );
       })
     )
+  );
+}
+
+// ═══════════════════════════════════════
+// Budget Tracker
+// ═══════════════════════════════════════
+
+interface BudgetItemInput {
+  category: string;
+  amount: number;
+  note?: string;
+}
+
+interface BudgetTrackerNode extends AdaptiveNodeBase {
+  type: 'budgetTracker';
+  /** Budget line items provided by the LLM */
+  items: BudgetItemInput[];
+  /** Currency code (default: USD) */
+  currency?: string;
+  /** Title override */
+  title?: string;
+  /** State key to store the total */
+  bind?: string;
+}
+
+export function BudgetTracker({ node }: AdaptiveComponentProps<BudgetTrackerNode>) {
+  const { state, dispatch, disabled } = useAdaptive();
+
+  const currency = node.currency
+    ? interpolate(node.currency, state)
+    : 'USD';
+
+  const items: BudgetItemInput[] = Array.isArray(node.items) ? node.items : [];
+  const total = items.reduce((sum, i) => sum + (i.amount || 0), 0);
+
+  // Store total in state if bind is set
+  useEffect(() => {
+    if (node.bind && total > 0) {
+      dispatch({ type: 'SET', key: node.bind, value: String(total) });
+    }
+  }, [total, node.bind, dispatch]);
+
+  // Save budget items as artifacts for the TripNotebook panel
+  useEffect(() => {
+    if (disabled) return;
+    for (const item of items) {
+      if (item.amount > 0) {
+        const filename = `budget-${item.category.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+        upsertArtifact(filename, JSON.stringify({
+          category: item.category,
+          amount: item.amount,
+          currency,
+          note: item.note,
+        }), 'json', `${item.category}: ${currency} ${item.amount.toLocaleString()}`);
+      }
+    }
+  }, [items.length, disabled, currency]);
+
+  const categoryEmoji: Record<string, string> = {
+    flights: '\u2708\uFE0F', hotel: '\uD83C\uDFE8', accommodation: '\uD83C\uDFE8',
+    food: '\uD83C\uDF7D\uFE0F', dining: '\uD83C\uDF7D\uFE0F', restaurants: '\uD83C\uDF7D\uFE0F',
+    activities: '\uD83C\uDFAF', entertainment: '\uD83C\uDFAD', sightseeing: '\uD83D\uDDFC',
+    transport: '\uD83D\uDE95', taxi: '\uD83D\uDE95', transit: '\uD83D\uDE87',
+    shopping: '\uD83D\uDECD\uFE0F', souvenirs: '\uD83C\uDF81',
+    insurance: '\uD83D\uDEE1\uFE0F', visa: '\uD83D\uDCC4',
+    other: '\uD83D\uDCE6', misc: '\uD83D\uDCE6', tips: '\uD83D\uDCB5',
+  };
+
+  const categoryColors: Record<string, string> = {
+    flights: '#0891b2', hotel: '#8b5cf6', accommodation: '#8b5cf6',
+    food: '#f97066', dining: '#f97066', restaurants: '#f97066',
+    activities: '#f59e0b', entertainment: '#f59e0b', sightseeing: '#f59e0b',
+    transport: '#059669', taxi: '#059669', transit: '#059669',
+    shopping: '#ec4899', souvenirs: '#ec4899',
+    insurance: '#6366f1', visa: '#6366f1',
+    other: '#6b7280', misc: '#6b7280', tips: '#6b7280',
+  };
+
+  return React.createElement('div', {
+    style: {
+      borderRadius: '12px', border: '1px solid #e5e7eb',
+      backgroundColor: '#fff', overflow: 'hidden',
+      ...node.style,
+    } as React.CSSProperties,
+  },
+    // Header with total
+    React.createElement('div', {
+      style: {
+        padding: '14px 20px', backgroundColor: '#f8fafc',
+        borderBottom: '1px solid #e5e7eb',
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+      },
+    },
+      React.createElement('div', {
+        style: { fontSize: '14px', fontWeight: 600, color: '#374151' },
+      }, node.title ?? '\uD83D\uDCB0 Trip Budget'),
+      React.createElement('div', {
+        style: { fontSize: '16px', fontWeight: 700, color: '#0891b2' },
+      }, `${currency} ${total.toLocaleString()}`)
+    ),
+
+    // Category breakdown bar
+    items.length > 1 && React.createElement('div', {
+      style: { display: 'flex', height: '4px', gap: '1px' },
+    },
+      ...items.map((item, i) =>
+        React.createElement('div', {
+          key: `bar-${i}`,
+          title: `${item.category}: ${item.amount.toLocaleString()}`,
+          style: {
+            flex: item.amount,
+            backgroundColor: categoryColors[item.category.toLowerCase()] || '#6b7280',
+            minWidth: '3px',
+          },
+        })
+      )
+    ),
+
+    // Line items
+    React.createElement('div', {
+      style: { padding: '8px 12px' },
+    },
+      ...items.map((item, i) => {
+        const pct = total > 0 ? Math.round((item.amount / total) * 100) : 0;
+        return React.createElement('div', {
+          key: `item-${i}`,
+          style: {
+            display: 'flex', alignItems: 'center', gap: '10px',
+            padding: '8px', borderRadius: '6px',
+          },
+        },
+          React.createElement('span', { style: { fontSize: '16px', flexShrink: 0 } },
+            categoryEmoji[item.category.toLowerCase()] || '\uD83D\uDCE6'),
+          React.createElement('div', { style: { flex: 1, minWidth: 0 } },
+            React.createElement('div', {
+              style: { fontSize: '14px', fontWeight: 500, color: '#374151' },
+            }, item.note || item.category),
+            React.createElement('div', {
+              style: { fontSize: '12px', color: '#9ca3af', marginTop: '1px' },
+            }, `${pct}% of total`)
+          ),
+          React.createElement('span', {
+            style: {
+              fontSize: '14px', fontWeight: 600, color: '#374151',
+              fontVariantNumeric: 'tabular-nums', flexShrink: 0,
+            },
+          }, `${currency} ${item.amount.toLocaleString()}`)
+        );
+      })
+    ),
+
+    // Per-person note if more than 1 traveler
+    state['travelers'] && Number(state['travelers']) > 1 && React.createElement('div', {
+      style: {
+        padding: '8px 20px 12px', fontSize: '12px', color: '#6b7280',
+        borderTop: '1px solid #f1f5f9',
+      },
+    }, `\u2248 ${currency} ${Math.round(total / Number(state['travelers'])).toLocaleString()} per person (${state['travelers']} travelers)`)
   );
 }
