@@ -134,6 +134,75 @@ export async function loginWithPAT(token: string): Promise<{ login: string; name
   return { login: data.login, name: data.name, avatar_url: data.avatar_url };
 }
 
+export interface GitHubTokenInspection {
+  ok: boolean;
+  status: number;
+  login: string;
+  scopes: string[];
+  acceptedScopes: string[];
+  hasWorkflowScope: boolean;
+  tokenPreview: string;
+  message?: string;
+}
+
+function parseScopes(value: string | null): string[] {
+  if (!value) return [];
+  return value
+    .split(',')
+    .map((v) => v.trim())
+    .filter(Boolean);
+}
+
+function previewToken(token: string): string {
+  if (token.length <= 8) return '***';
+  return `${token.slice(0, 4)}...${token.slice(-4)}`;
+}
+
+/** Inspect stored GitHub token (without exposing full token value). */
+export async function inspectStoredToken(): Promise<GitHubTokenInspection> {
+  const token = getStoredToken();
+  if (!token) {
+    return {
+      ok: false,
+      status: 0,
+      login: '',
+      scopes: [],
+      acceptedScopes: [],
+      hasWorkflowScope: false,
+      tokenPreview: '',
+      message: 'No stored GitHub token found.',
+    };
+  }
+
+  const res = await fetch('https://api.github.com/user', {
+    headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json' },
+  });
+
+  const scopes = parseScopes(res.headers.get('x-oauth-scopes'));
+  const acceptedScopes = parseScopes(res.headers.get('x-accepted-oauth-scopes'));
+
+  let login = '';
+  let message: string | undefined;
+  if (res.ok) {
+    const data = await res.json().catch(() => ({}));
+    login = String((data as any)?.login || '');
+  } else {
+    const err = await res.json().catch(() => ({}));
+    message = String((err as any)?.message || `Authentication failed (${res.status})`);
+  }
+
+  return {
+    ok: res.ok,
+    status: res.status,
+    login,
+    scopes,
+    acceptedScopes,
+    hasWorkflowScope: scopes.indexOf('workflow') !== -1,
+    tokenPreview: previewToken(token),
+    message,
+  };
+}
+
 // ─── OAuth Device Flow ───
 
 export interface DeviceCodeResponse {
@@ -155,7 +224,7 @@ export async function requestDeviceCode(clientId: string): Promise<DeviceCodeRes
     },
     body: JSON.stringify({
       client_id: clientId,
-      scope: 'repo read:user read:org',
+      scope: 'repo workflow read:user read:org',
     }),
   });
   if (!res.ok) {

@@ -42,21 +42,25 @@ githubQuery — {api,bind,method?,body?,loadingLabel?,showResult?,confirm?}
   Examples:
   - Create repo: {type:"githubQuery", api:"/user/repos", method:"POST", body:"{\\\"name\\\":\\\"{{state.githubRepo}}\\\",\\\"private\\\":true}", bind:"repoCreateResult", confirm:"Create Repository", loadingLabel:"Creating repository..."}
   - Create org repo: {type:"githubQuery", api:"/orgs/{{state.githubOrg}}/repos", method:"POST", body:"{\\\"name\\\":\\\"{{state.githubRepo}}\\\",\\\"private\\\":true}", bind:"repoCreateResult", confirm:"Create Repository"}
+  IMPORTANT: For personal accounts (when githubOrg equals the logged-in username), use api:"/user/repos" instead of "/orgs/...". The org picker marks personal accounts with "(personal)" in the label.
   - Set default branch: {type:"githubQuery", api:"/repos/{{state.githubOrg}}/{{state.githubRepo}}", method:"PATCH", body:"{\\\"default_branch\\\":\\\"{{state.branch}}\\\"}", bind:"branchResult", confirm:"Set Default Branch"}
 
 githubPicker — {api,bind,label?,labelKey?,valueKey?,descriptionKey?,labelBind?,loadingLabel?,includePersonal?}
   Dropdown fetching from GitHub API at render time. Auto-paginates (up to 300). ALWAYS use for orgs/repos/branches — never use github_api_get for selection lists.
   Examples:
   - Orgs: {type:"githubPicker", api:"/user/orgs", bind:"githubOrg", label:"GitHub account", labelKey:"login", valueKey:"login", includePersonal:true}
-  - Repos: {type:"githubPicker", api:"/orgs/{{state.githubOrg}}/repos?sort=updated", bind:"githubRepo", label:"Repository", labelKey:"name", valueKey:"name", descriptionKey:"description"}
+  - Repos: {type:"githubPicker", api:"/users/{{state.githubOrg}}/repos?sort=updated&type=owner", bind:"githubRepo", label:"Repository", labelKey:"name", valueKey:"name", descriptionKey:"description"}
+  NOTE: Use /users/ (not /orgs/) — it works for both personal accounts and organization members.
   - Personal repos: {type:"githubPicker", api:"/user/repos?sort=updated&type=owner", bind:"githubRepo", label:"Repository", labelKey:"name", valueKey:"name"}
   - Branches: {type:"githubPicker", api:"/repos/{{state.githubOrg}}/{{state.githubRepo}}/branches", bind:"branch", label:"Branch", labelKey:"name", valueKey:"name"}
 
 githubRepoInfo — {repo:"owner/repo"}
   Rich repo card (name, description, language, stars, forks, issues). Supports {{state.key}} in repo prop.
 
-githubCreatePR — {title?,baseBranch?,owner?,repo?}
+githubCreatePR — {title?,baseBranch?,owner?,repo?,commitToSameBranch?}
   Creates PR with all generated artifacts. Shows file list, confirms, creates branch, commits, opens PR URL. Reads owner/repo from props → state (githubOrg/githubRepo) → __githubUser.
+  If commitToSameBranch:true, commits directly to baseBranch and skips PR creation.
+  IMPORTANT: githubCreatePR automatically initializes empty repos (creates a README + main branch) if needed. Do NOT manually initialize repos with githubQuery — just use githubCreatePR directly after repo selection/creation.
 
 RULES:
 - NEVER put githubQuery inside a button onClick. Buttons only support actions (sendPrompt, setState), not components.
@@ -181,11 +185,10 @@ export function createGitHubPack(): ComponentPack {
         props: 'key, label?, org?',
         resolve: (ask) => {
           const org = (ask.org as string) || '{{state.githubOrg}}';
-          // If the selected org matches the user's personal account, use /user/repos
-          // The component will interpolate {{state.githubOrg}} at render time
+          // Use /users/ endpoint which works for both personal accounts and orgs
           return {
             type: 'githubPicker',
-            api: `/orgs/${org}/repos?sort=updated`,
+            api: `/users/${org}/repos?sort=updated&type=owner`,
             bind: (ask.key ?? ask.bind) as string,
             label: (ask.label as string) ?? 'Repository',
             labelKey: 'name',

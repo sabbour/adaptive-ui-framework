@@ -44,10 +44,36 @@ export function expandCompact(obj: any): any {
   if (typeof obj !== 'object') return obj;
   if (Array.isArray(obj)) return obj.map(expandCompact);
 
+  // Preserve arbitrary data-object keys for table rows/list items.
+  // Expanding keys like `v` -> `version` inside data payloads breaks
+  // column lookups such as row["v"] and results in blank table cells.
+  const preserveDataKeys = (value: any): any => {
+    if (value === null || value === undefined) return value;
+    if (typeof value !== 'object') return value;
+    if (Array.isArray(value)) return value.map(preserveDataKeys);
+    const result: Record<string, any> = {};
+    for (const [k, v] of Object.entries(value)) {
+      result[k] = preserveDataKeys(v);
+    }
+    return result;
+  };
+
+  const rawType = typeof obj.t === 'string'
+    ? obj.t
+    : (typeof obj.type === 'string' ? obj.type : undefined);
+  const expandedType = rawType ? (TYPE_MAP[rawType] ?? rawType) : undefined;
+
   const result: Record<string, any> = {};
   for (const [key, value] of Object.entries(obj)) {
     const fullKey = KEY_MAP[key] ?? key;
-    let expanded = expandCompact(value);
+    const shouldPreserveDataKeys =
+      (expandedType === 'table' && fullKey === 'rows') ||
+      (expandedType === 'list' && fullKey === 'items');
+
+    let expanded = shouldPreserveDataKeys
+      ? preserveDataKeys(value)
+      : expandCompact(value);
+
     if (fullKey === 'type' && typeof expanded === 'string') {
       expanded = TYPE_MAP[expanded] ?? expanded;
     }

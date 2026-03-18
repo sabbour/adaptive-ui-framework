@@ -16,6 +16,11 @@ import { trackedFetch } from '../../framework/request-tracker';
 
 // ─── Helpers ───
 
+// Module-level subscription ID so the azure_arm_get tool handler can access it
+let _activeSubscriptionId: string | undefined;
+export function getActiveSubscriptionId(): string | undefined { return _activeSubscriptionId; }
+export function setActiveSubscriptionId(id: string | undefined): void { _activeSubscriptionId = id; }
+
 function useAzureToken(): string | undefined {
   const { state } = useAdaptive();
   return (state.__azureToken as string) || undefined;
@@ -65,6 +70,7 @@ async function fetchAndStoreSubscriptions(
     if (enabled.length === 1) {
       dispatch({ type: 'SET', key: '__azureSubscription', value: enabled[0].id });
       dispatch({ type: 'SET', key: '__azureSubscriptionName', value: enabled[0].displayName });
+      setActiveSubscriptionId(enabled[0].id);
     }
   } catch {
     // Silently fail — subscriptions are optional
@@ -82,7 +88,7 @@ interface AzureLoginNode extends AdaptiveNodeBase {
 }
 
 export function AzureLogin({ node }: AdaptiveComponentProps<AzureLoginNode>) {
-  const { state, dispatch, disabled } = useAdaptive();
+  const { state, dispatch, disabled, sendPrompt } = useAdaptive();
   const token = (state.__azureToken as string) || undefined;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -92,6 +98,10 @@ export function AzureLogin({ node }: AdaptiveComponentProps<AzureLoginNode>) {
   useEffect(() => {
     if (disabled) return;
     if (token) {
+      // Sync module-level subscription ID from state
+      if (state.__azureSubscription) {
+        setActiveSubscriptionId(state.__azureSubscription as string);
+      }
       // Already have token — fetch subscriptions if not loaded
       if (!state.__azureSubscriptions) {
         fetchAndStoreSubscriptions(token, dispatch, state.__azureSubscription as string | undefined);
@@ -174,9 +184,24 @@ export function AzureLogin({ node }: AdaptiveComponentProps<AzureLoginNode>) {
           filterValue: 'Enabled',
           loadingLabel: 'Loading subscriptions...',
         } as any,
-      })
-      // Login complete — the intent resolver's Continue button handles submission.
-      // No separate Continue button to avoid skipping sibling asks.
+      }),
+
+      // Continue button — needed in Adaptive mode where the intent resolver doesn't add one
+      state.__azureSubscription && React.createElement('button', {
+        onClick: () => {
+          const subName = state.__azureSubscriptionName || state.__azureSubscription;
+          sendPrompt(
+            `User signed in to Azure. Subscription: ${subName}`,
+            'Continue'
+          );
+        },
+        style: {
+          marginTop: '12px', padding: '10px 24px', borderRadius: '8px',
+          border: 'none', fontSize: '14px', fontWeight: 500,
+          cursor: 'pointer',
+          backgroundColor: 'var(--adaptive-primary, #2563eb)', color: '#fff',
+        },
+      }, 'Continue')
     );
   }
 
@@ -397,7 +422,7 @@ export function AzureQuery({ node }: AdaptiveComponentProps<AzureQueryNode>) {
 
   const method = node.method ?? 'GET';
   const needsConfirm = node.confirm ?? method !== 'GET';
-  const resolvedApi = interpolate(node.api, state);
+  const resolvedApi = interpolate(node.api, state, undefined, undefined, { allowSensitive: true });
   const templateStateKeys = Array.from(node.api.matchAll(/{{\s*(?:state|st)\.([a-zA-Z0-9_]+)\s*}}/g)).map((m) => m[1]);
   const missingStateKeys = templateStateKeys.filter((k) => {
     const v = state[k];
@@ -435,7 +460,7 @@ export function AzureQuery({ node }: AdaptiveComponentProps<AzureQueryNode>) {
       const fetchOpts: RequestInit = { method, headers };
 
       if (node.body && (method === 'PUT' || method === 'POST' || method === 'PATCH')) {
-        fetchOpts.body = interpolate(node.body, state);
+        fetchOpts.body = interpolate(node.body, state, undefined, undefined, { allowSensitive: true });
       }
 
       const res = await trackedFetch(url, fetchOpts);
@@ -527,6 +552,7 @@ export function AzureQuery({ node }: AdaptiveComponentProps<AzureQueryNode>) {
               if (selectedSub) {
                 dispatch({ type: 'SET', key: '__azureSubscription', value: selectedSub.id });
                 dispatch({ type: 'SET', key: '__azureSubscriptionName', value: selectedSub.name });
+                setActiveSubscriptionId(selectedSub.id);
               }
             },
             placeholder: `— Choose from ${subscriptions.length} subscriptions —`,
@@ -585,8 +611,8 @@ export function AzureQuery({ node }: AdaptiveComponentProps<AzureQueryNode>) {
             wordBreak: 'break-all' as const,
           },
         }, (() => {
-          try { return JSON.stringify(JSON.parse(interpolate(node.body!, state as Record<string, string>)), null, 2); }
-          catch { return interpolate(node.body!, state as Record<string, string>); }
+          try { return JSON.stringify(JSON.parse(interpolate(node.body!, state as Record<string, string>, undefined, undefined, { allowSensitive: true })), null, 2); }
+          catch { return interpolate(node.body!, state as Record<string, string>, undefined, undefined, { allowSensitive: true }); }
         })())
       ),
       React.createElement('div', { style: { display: 'flex', gap: '8px' } },
@@ -734,7 +760,7 @@ export function AzurePicker({ node }: AdaptiveComponentProps<AzurePickerNode>) {
   const [error, setError] = useState<string | null>(null);
   const [options, setOptions] = useState<Array<{ label: string; value: string }>>([]);
 
-  const api = interpolate(node.api, state as Record<string, string>);
+  const api = interpolate(node.api, state as Record<string, string>, undefined, undefined, { allowSensitive: true });
   const ARM_BASE_URL = 'https://management.azure.com';
 
   useEffect(() => {
@@ -814,6 +840,9 @@ export function AzurePicker({ node }: AdaptiveComponentProps<AzurePickerNode>) {
         dispatch({ type: 'SET', key: node.bind, value: val });
         if (node.labelBind && selected) {
           dispatch({ type: 'SET', key: node.labelBind, value: selected.label });
+        }
+        if (node.bind === '__azureSubscription') {
+          setActiveSubscriptionId(val);
         }
       },
       placeholder: `— Select (${options.length} available) —`,

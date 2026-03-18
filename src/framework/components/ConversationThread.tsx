@@ -164,7 +164,8 @@ function ActiveTurn({ turn }: { turn: ConversationTurn }) {
         // Skip rendering if layout is a bare chatInput (it renders in the fixed bottom bar)
         !isBareChatInput(turn.agentSpec.layout) && React.createElement('div', {
           style: {
-            marginLeft: '38px', marginBottom: '8px', minWidth: 0, overflow: 'hidden',
+            marginLeft: '38px', marginBottom: '8px', minWidth: 0,
+            overflow: isCollapsed ? 'hidden' : 'visible',
             ...(isCollapsed ? { opacity: 0.5, pointerEvents: 'none' as const, userSelect: 'none' as const } : {}),
           },
         },
@@ -341,8 +342,9 @@ export function ConversationThread({ turns, isLoading, error, tokenUsage, lastRe
         // At bottom — scroll to the TOP of the new response
         latestTurnRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
-    } else if (isLoading) {
-      // User just sent a message / loading — scroll to bottom to show typing indicator
+    } else if (isLoading && !isScrolledUp) {
+      // Keep typing indicator visible only if user is already near the bottom.
+      // If they've scrolled up, don't yank the scroll position.
       bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
   }, [turns.length, turns[turns.length - 1]?.id, isLoading, isScrolledUp]);

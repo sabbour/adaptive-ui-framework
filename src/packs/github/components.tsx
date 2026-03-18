@@ -195,7 +195,7 @@ export function GitHubLogin({ node }: AdaptiveComponentProps<GitHubLoginNode>) {
           node.title ?? 'Connect to GitHub'
         ),
         React.createElement('div', { style: { fontSize: '13px', color: '#6b7280' } },
-          node.description ?? 'Sign in with your GitHub account to access repos, issues, and workflows.'
+          node.description ?? 'Sign in with your GitHub account to access repos, issues, and workflows (token scopes: repo, workflow, read:user, read:org).'
         )
       )
     ),
@@ -643,6 +643,8 @@ interface GitHubCreatePRNode extends AdaptiveNodeBase {
   owner?: string;
   /** Repository name — falls back to state.githubRepo */
   repo?: string;
+  /** If true, commit directly to base branch and skip PR creation */
+  commitToSameBranch?: boolean;
 }
 
 export function GitHubCreatePR({ node }: AdaptiveComponentProps<GitHubCreatePRNode>) {
@@ -653,6 +655,7 @@ export function GitHubCreatePR({ node }: AdaptiveComponentProps<GitHubCreatePRNo
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
   const [prUrl, setPrUrl] = useState<string | null>(null);
+  const [commitToSameBranch, setCommitToSameBranch] = useState(!!node.commitToSameBranch);
 
   // Resolve owner/repo from: node props > state > localStorage > __githubUser
   const owner = node.owner || (state.githubOrg as string) || getStoredOrg()
@@ -690,15 +693,28 @@ export function GitHubCreatePR({ node }: AdaptiveComponentProps<GitHubCreatePRNo
     setBusy(true);
     setStatus(null);
     try {
-      const result = await createPullRequest(codeArtifacts, token, owner, repo, baseBranch, prTitle, setStatus);
+      const result = await createPullRequest(
+        codeArtifacts,
+        token,
+        owner,
+        repo,
+        baseBranch,
+        prTitle,
+        setStatus,
+        { commitToSameBranch }
+      );
       setPrUrl(result.url);
       setDone(true);
-      setStatus(`\u2713 Pull request created successfully`);
-      // Store branch info so files can be updated on the same PR later
-      dispatch({ type: 'SET', key: '__githubPRBranch', value: result.branchName });
-      dispatch({ type: 'SET', key: '__githubPRUrl', value: result.url });
-      dispatch({ type: 'SET', key: '__githubPROwner', value: owner });
-      dispatch({ type: 'SET', key: '__githubPRRepo', value: repo });
+      if (result.createdPullRequest) {
+        setStatus(`\u2713 Pull request created successfully`);
+        // Store branch info so files can be updated on the same PR later
+        dispatch({ type: 'SET', key: '__githubPRBranch', value: result.branchName });
+        dispatch({ type: 'SET', key: '__githubPRUrl', value: result.url });
+        dispatch({ type: 'SET', key: '__githubPROwner', value: owner });
+        dispatch({ type: 'SET', key: '__githubPRRepo', value: repo });
+      } else {
+        setStatus(`\u2713 Committed directly to ${result.branchName}`);
+      }
       window.open(result.url, '_blank', 'noopener,noreferrer');
     } catch (err) {
       setStatus(`Error: ${err instanceof Error ? err.message : String(err)}`);
@@ -745,7 +761,9 @@ export function GitHubCreatePR({ node }: AdaptiveComponentProps<GitHubCreatePRNo
       } as React.CSSProperties,
     },
       React.createElement('div', { style: { fontSize: '14px', fontWeight: 500, color: '#166534', marginBottom: '8px' } },
-        isUpdate ? '\u2713 Pull request updated' : '\u2713 Pull request created'),
+        isUpdate
+          ? '\u2713 Pull request updated'
+          : (commitToSameBranch ? '\u2713 Changes committed to branch' : '\u2713 Pull request created')),
       React.createElement('a', {
         href: prUrl, target: '_blank', rel: 'noopener noreferrer',
         style: { fontSize: '13px', color: '#2563eb', textDecoration: 'none', wordBreak: 'break-all' as const },
@@ -788,7 +806,20 @@ export function GitHubCreatePR({ node }: AdaptiveComponentProps<GitHubCreatePRNo
     React.createElement('div', { style: { fontSize: '13px', color: '#6b7280', marginBottom: '12px' } },
       hasExistingPR
         ? `${codeArtifacts.length} file${codeArtifacts.length > 1 ? 's' : ''} will be committed to branch "${existingBranch}"`
-        : `${codeArtifacts.length} file${codeArtifacts.length > 1 ? 's' : ''} will be committed to a new branch based on "${baseBranch}"`),
+        : (commitToSameBranch
+          ? `${codeArtifacts.length} file${codeArtifacts.length > 1 ? 's' : ''} will be committed directly to "${baseBranch}"`
+          : `${codeArtifacts.length} file${codeArtifacts.length > 1 ? 's' : ''} will be committed to a new branch based on "${baseBranch}"`)),
+    !hasExistingPR && React.createElement('label', {
+      style: { display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#374151', marginBottom: '12px' },
+    },
+      React.createElement('input', {
+        type: 'checkbox',
+        checked: commitToSameBranch,
+        onChange: (e: React.ChangeEvent<HTMLInputElement>) => setCommitToSameBranch(e.target.checked),
+        disabled: busy,
+      }),
+      'Commit directly to base branch (skip creating a PR branch)'
+    ),
     React.createElement('div', {
       style: { fontSize: '12px', color: '#6b7280', marginBottom: '12px', fontFamily: 'monospace' },
     },
@@ -829,6 +860,15 @@ export function GitHubCreatePR({ node }: AdaptiveComponentProps<GitHubCreatePRNo
         opacity: busy ? 0.7 : 1,
         display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
       },
-    }, busy && !hasExistingPR ? 'Creating pull request...' : React.createElement(React.Fragment, null, React.createElement('img', { src: hasExistingPR ? iconGitHubBlack : iconGitHubWhite, alt: '', width: 18, height: 18 }), hasExistingPR ? 'Create New Pull Request' : 'Create Pull Request'))
+    }, busy && !hasExistingPR
+      ? (commitToSameBranch ? 'Committing...' : 'Creating pull request...')
+      : React.createElement(
+          React.Fragment,
+          null,
+          React.createElement('img', { src: hasExistingPR ? iconGitHubBlack : iconGitHubWhite, alt: '', width: 18, height: 18 }),
+          hasExistingPR
+            ? 'Create New Pull Request'
+            : (commitToSameBranch ? `Commit to ${baseBranch}` : 'Create Pull Request')
+        ))
   );
 }

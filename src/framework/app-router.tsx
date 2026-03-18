@@ -26,6 +26,21 @@ export function AppRouter() {
   const apps = getApps();
   const [activeId, navigate] = useHashRoute();
 
+  useEffect(() => {
+    if (apps.length === 0) {
+      document.title = 'Adaptive UI';
+      return;
+    }
+
+    if (!activeId) {
+      document.title = 'Adaptive UI - App Launcher';
+      return;
+    }
+
+    const active = apps.find((a) => a.id === activeId) ?? apps[0];
+    document.title = `${active.name} - Adaptive UI`;
+  }, [apps, activeId]);
+
   // If no apps registered, show message
   if (apps.length === 0) {
     return React.createElement('div', {

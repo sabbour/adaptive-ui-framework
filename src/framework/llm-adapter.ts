@@ -11,8 +11,8 @@ import { getToolDefinitions, executeTool, type ToolCall } from './tools';
 // ─── Balanced JSON extraction ───
 // Find the first complete top-level JSON object in a string.
 // Handles trailing text after the JSON (e.g. LLM prose after the object).
-function extractBalancedJson(str: string): string | null {
-  const start = str.indexOf('{');
+function extractBalancedJson(str: string, startIndex = 0): string | null {
+  const start = str.indexOf('{', startIndex);
   if (start === -1) return null;
   let depth = 0;
   let inString = false;
@@ -30,6 +30,62 @@ function extractBalancedJson(str: string): string | null {
     }
   }
   return null; // unbalanced
+}
+
+// Try to extract the JSON object that looks like an AdaptiveUISpec.
+// Useful when the model returns extra JSON objects (examples, logs, history)
+// before the actual spec payload.
+function extractLikelySpecJson(str: string): string | null {
+  const keyPattern = /"(?:ly|layout)"\s*:/g;
+  const starts: number[] = [];
+  let match: RegExpExecArray | null;
+
+  while ((match = keyPattern.exec(str)) !== null) {
+    const keyIndex = match.index;
+    const braceIndex = str.lastIndexOf('{', keyIndex);
+    if (braceIndex !== -1) starts.push(braceIndex);
+  }
+
+  for (const start of starts) {
+    const candidate = extractBalancedJson(str, start);
+    if (!candidate) continue;
+    try {
+      const parsed = JSON.parse(candidate) as Record<string, unknown>;
+      if (parsed && typeof parsed === 'object' && ('layout' in parsed || 'ly' in parsed)) {
+        return candidate;
+      }
+    } catch {
+      // Keep scanning other candidates.
+    }
+  }
+
+  return null;
+}
+
+// ─── Extra-brace repair ───
+// LLMs sometimes emit one extra } or ] mid-stream, especially after long
+// string values (e.g. embedded code). This uses the JSON.parse error position
+// to locate and remove the spurious character, then retries parsing.
+function repairExtraBraces(str: string): unknown | null {
+  // Try up to 3 rounds of removing a single extra } or ] at the error position
+  let s = str;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      return JSON.parse(s);
+    } catch (e) {
+      const msg = (e as Error).message || '';
+      // Node/V8: "... at position 1234"
+      const posMatch = msg.match(/position\s+(\d+)/);
+      if (!posMatch) return null;
+      const pos = parseInt(posMatch[1], 10);
+      if (pos <= 0 || pos >= s.length) return null;
+      const ch = s[pos];
+      if (ch !== '}' && ch !== ']') return null;
+      // Remove the extra closing character
+      s = s.slice(0, pos) + s.slice(pos + 1);
+    }
+  }
+  try { return JSON.parse(s); } catch { return null; }
 }
 
 // ─── Truncated JSON repair ───
@@ -135,7 +191,8 @@ Rules:
 - Preserve collected state on re-adaptation; pre-fill known values.
 - Parse free-text responses; adapt UI keeping reusable data.
 - codeBlock label = filename (e.g., "main.bicep"). Auto-saved as downloadable file.
-- Use tools (fetch_webpage) for accurate docs; never guess API schemas.`;
+- Use tools (fetch_webpage) for accurate docs; never guess API schemas.
+- VALIDATE your JSON before responding: count every { and } (must match), every [ and ] (must match). Code blocks with multi-line strings are especially error-prone — double-check brace counts after long code values.`;
 
 // ─── Intent-based system prompt (~400 tokens vs ~1,200 for full spec) ───
 export const INTENT_SYSTEM_PROMPT = `You drive multi-step workflows by asking questions and presenting choices. Respond ONLY with valid JSON.
@@ -167,7 +224,8 @@ Rules:
 - Do NOT pre-select defaults unless user explicitly provided them.
 - Preserve collected state on re-adaptation.
 - Use tools for docs lookup; never guess API schemas.
-- Prefer standard ask types; for custom shapes include key/bind, label, options, children, rows/columns, or content for client fallback.`;
+- Prefer standard ask types; for custom shapes include key/bind, label, options, children, rows/columns, or content for client fallback.
+- VALIDATE your JSON before responding: count every { and } (must match), every [ and ] (must match). Code blocks with multi-line strings are especially error-prone — double-check brace counts after long code values.`;
 
 // ─── Endpoint normalization ───
 // Handles various endpoint formats:
@@ -458,6 +516,20 @@ export class OpenAIAdapter implements LLMAdapter {
         }
       }
 
+      // Step 1b: If output includes multiple JSON objects, extract the one that
+      // looks like an AdaptiveUISpec (contains layout/ly).
+      if (!parsed) {
+        const likelySpec = extractLikelySpecJson(jsonStr);
+        if (likelySpec && likelySpec !== jsonStr) {
+          try {
+            parsed = JSON.parse(likelySpec);
+            logDecision('adapter', 'Extracted likely AdaptiveUISpec object from mixed JSON output');
+          } catch {
+            // continue to newline fix
+          }
+        }
+      }
+
       if (!parsed) {
         // Step 2: Fix unescaped newlines inside JSON string values.
         // LLMs often emit raw line breaks inside "code":"..." fields
@@ -473,8 +545,14 @@ export class OpenAIAdapter implements LLMAdapter {
           parsed = JSON.parse(fixedStr);
           logDecision('adapter', 'Repaired LLM JSON by escaping raw newlines inside string values');
         } catch {
-          // If truncated (finish_reason=length), try to repair by closing braces
-          if (finishReason === 'length') {
+          // Step 3: Try removing extra closing braces/brackets at the error position.
+          // LLMs lose track of nesting depth after long embedded strings (code blocks).
+          const extraBraceRepaired = repairExtraBraces(fixedStr);
+          if (extraBraceRepaired) {
+            parsed = extraBraceRepaired;
+            logDecision('adapter', 'Repaired LLM JSON by removing extra closing brace(s) — LLM miscounted nesting after long code strings');
+          } else if (finishReason === 'length') {
+          // Step 4: If truncated (finish_reason=length), try to repair by closing braces
             const repaired = repairTruncatedJson(fixedStr);
             if (repaired) {
               logDecision('adapter', 'Repaired truncated JSON by closing open braces/brackets');

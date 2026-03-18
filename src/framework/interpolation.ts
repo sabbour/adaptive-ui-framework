@@ -8,12 +8,15 @@ export type StateStore = Record<string, AdaptiveValue | AdaptiveValue[] | Record
 /** Keys that are considered sensitive and must not be interpolated into rendered output */
 const SENSITIVE_KEY_RE = /^__|password|secret|token|apiKey|credential|connectionString/i;
 
-/** Interpolate {{state.xxx}} / {{st.xxx}} and {{item.xxx}} in a string */
+/** Interpolate {{state.xxx}} / {{st.xxx}} and {{item.xxx}} in a string.
+ *  By default, sensitive keys (__-prefixed, tokens, etc.) are redacted.
+ *  Pass `allowSensitive: true` for internal/API use (e.g. pack component API paths). */
 export function interpolate(
   template: string,
   state: StateStore,
   itemContext?: Record<string, AdaptiveValue>,
-  itemIndex?: number
+  itemIndex?: number,
+  options?: { allowSensitive?: boolean }
 ): string {
   return template.replace(/\{\{(.+?)\}\}/g, (_match, expr: string) => {
     const trimmed = expr.trim();
@@ -26,11 +29,16 @@ export function interpolate(
       const key = trimmed.slice(5);
       return String(itemContext[key] ?? '');
     }
+    // Preserve {{item.*}} placeholders when no itemContext — they'll be
+    // resolved later when the list component renders each item.
+    if (trimmed.startsWith('item.') && !itemContext) {
+      return _match;
+    }
 
     if (trimmed.startsWith('state.') || trimmed.startsWith('st.')) {
       const key = trimmed.startsWith('state.') ? trimmed.slice(6) : trimmed.slice(3);
       // Block sensitive state keys from leaking into rendered output
-      if (SENSITIVE_KEY_RE.test(key)) return '[REDACTED]';
+      if (!options?.allowSensitive && SENSITIVE_KEY_RE.test(key)) return '[REDACTED]';
       const val = state[key];
       if (val === null || val === undefined) return '';
       if (typeof val === 'object') return JSON.stringify(val);
@@ -53,7 +61,9 @@ export function resolveValue(
   return resolved === 'true' || resolved === '1';
 }
 
-/** Deep-interpolate all string values in an object */
+/** Deep-interpolate all string values in an object.
+ *  Skips {{item.*}} placeholders when no itemContext is provided,
+ *  so list templates survive parent-level interpolation. */
 export function interpolateDeep<T>(
   obj: T,
   state: StateStore,

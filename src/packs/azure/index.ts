@@ -1,6 +1,7 @@
 import type { ComponentPack, IntentResolverEntry } from '../../framework/registry';
 import type { AdaptiveNode } from '../../framework/schema';
-import { AzureResourceForm, AzureLogin, AzureQuery, AzurePicker } from './components';
+import { AzureResourceForm, AzureLogin, AzureQuery, AzurePicker, getActiveSubscriptionId, setActiveSubscriptionId } from './components';
+import { fetchSubscriptions } from './arm-introspection';
 import { AzureSettings } from './AzureSettings';
 import { resolveAzureSkills } from './skills-resolver';
 import { trackedFetch } from '../../framework/request-tracker';
@@ -143,7 +144,7 @@ export function createAzurePack(): ComponentPack {
               properties: {
                 path: {
                   type: 'string',
-                  description: 'ARM API path starting with /subscriptions/... Include api-version parameter. Example: /subscriptions/{sub-id}/resourceGroups?api-version=2022-09-01',
+                  description: 'ARM API path starting with /subscriptions/... Include api-version parameter. Use {sub-id} as a placeholder for the active subscription ID — it will be resolved automatically. Example: /subscriptions/{sub-id}/resourceGroups?api-version=2022-09-01',
                 },
               },
               required: ['path'],
@@ -153,7 +154,25 @@ export function createAzurePack(): ComponentPack {
         handler: async (args: Record<string, unknown>) => {
           const acct = await getActiveAccount();
           if (!acct) return 'Error: User is not signed in to Azure. Show the azureLogin component first.';
-          const path = String(args.path);
+          let path = String(args.path);
+          // Auto-inject the active subscription ID into placeholder patterns
+          let subId = getActiveSubscriptionId();
+          // If not set yet (e.g. session restored before component mounted), resolve from API
+          if (!subId && path.includes('{sub-id}') || path.includes('{subscription-id}') || path.includes('{subscriptionId}')) {
+            try {
+              const subs = await fetchSubscriptions(acct.accessToken);
+              const enabled = subs.filter((s) => s.state === 'Enabled');
+              if (enabled.length > 0) {
+                subId = enabled[0].id;
+                setActiveSubscriptionId(subId);
+              }
+            } catch { /* fall through — placeholder will remain and ARM will return a clear error */ }
+          }
+          if (subId) {
+            path = path.split('{sub-id}').join(subId)
+              .split('{subscription-id}').join(subId)
+              .split('{subscriptionId}').join(subId);
+          }
           const url = `https://management.azure.com${path.startsWith('/') ? '' : '/'}${path}`;
           try {
             const res = await trackedFetch(url, {

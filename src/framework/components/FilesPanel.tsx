@@ -5,6 +5,40 @@
 import React, { useSyncExternalStore, useState } from 'react';
 import { getArtifacts, subscribeArtifacts, downloadArtifact, removeArtifact, clearArtifacts, type Artifact } from '../artifacts';
 
+function stringifyGithubErrors(errors: unknown): string {
+  if (!Array.isArray(errors) || errors.length === 0) return '';
+  const lines = errors
+    .map((item) => {
+      if (!item || typeof item !== 'object') return '';
+      const o = item as Record<string, unknown>;
+      const code = typeof o.code === 'string' ? o.code : '';
+      const field = typeof o.field === 'string' ? o.field : '';
+      const message = typeof o.message === 'string' ? o.message : '';
+      return [code, field, message].filter(Boolean).join(': ');
+    })
+    .filter(Boolean);
+  return lines.join(' | ');
+}
+
+async function formatGithubError(res: Response): Promise<string> {
+  const err = await res.json().catch(() => ({} as Record<string, unknown>));
+  const message = (err as any)?.message || `HTTP ${res.status}`;
+  const doc = (err as any)?.documentation_url || '';
+  const nested = stringifyGithubErrors((err as any)?.errors);
+  const acceptedScopes = res.headers.get('x-accepted-oauth-scopes') || '';
+  const tokenScopes = res.headers.get('x-oauth-scopes') || '';
+
+  const parts = [
+    `${message} (status ${res.status})`,
+    nested ? `details: ${nested}` : '',
+    doc ? `docs: ${doc}` : '',
+    acceptedScopes ? `accepted scopes: ${acceptedScopes}` : '',
+    tokenScopes ? `token scopes: ${tokenScopes}` : '',
+  ].filter(Boolean);
+
+  return parts.join(' | ');
+}
+
 /** Download all artifacts as individual files (triggers multiple downloads) */
 export function downloadAllArtifacts(artifacts: Artifact[]) {
   for (const artifact of artifacts) {
@@ -30,14 +64,26 @@ export async function updatePullRequestBranch(
   const api = (path: string, opts?: RequestInit) =>
     fetch(`https://api.github.com${path}`, { ...opts, headers });
 
+  const encodeContentPath = (path: string) =>
+    path.split('/').map((seg) => encodeURIComponent(seg)).join('/');
+
+  const buildCommitError = async (res: Response, filename: string): Promise<string> => {
+    const details = await formatGithubError(res);
+    if (res.status === 404 && filename.startsWith('.github/workflows/')) {
+      return `Failed to update ${filename}: ${details}. This can also happen when repo rules or org policies block workflow file writes.`;
+    }
+    return `Failed to update ${filename}: ${details}`;
+  };
+
   for (let i = 0; i < artifacts.length; i++) {
     const artifact = artifacts[i];
     onProgress?.(`Updating ${artifact.filename} (${i + 1}/${artifacts.length})...`);
 
     let sha: string | undefined;
     try {
+      const encodedPath = encodeContentPath(artifact.filename);
       const checkRes = await api(
-        `/repos/${owner}/${repo}/contents/${artifact.filename}?ref=${branchName}`
+        `/repos/${owner}/${repo}/contents/${encodedPath}?ref=${encodeURIComponent(branchName)}`
       );
       if (checkRes.ok) {
         const existing = await checkRes.json();
@@ -52,13 +98,13 @@ export async function updatePullRequestBranch(
     };
     if (sha) body.sha = sha;
 
-    const res = await api(`/repos/${owner}/${repo}/contents/${artifact.filename}`, {
+    const encodedPath = encodeContentPath(artifact.filename);
+    const res = await api(`/repos/${owner}/${repo}/contents/${encodedPath}`, {
       method: 'PUT',
       body: JSON.stringify(body),
     });
     if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(`Failed to update ${artifact.filename}: ${(err as any)?.message || res.status}`);
+      throw new Error(await buildCommitError(res, artifact.filename));
     }
   }
 }
@@ -71,8 +117,9 @@ export async function createPullRequest(
   repo: string,
   baseBranch: string,
   commitMessage: string,
-  onProgress?: (msg: string) => void
-): Promise<{ url: string; branchName: string }> {
+  onProgress?: (msg: string) => void,
+  options?: { commitToSameBranch?: boolean }
+): Promise<{ url: string; branchName: string; createdPullRequest: boolean }> {
   const headers = {
     Authorization: `Bearer ${token}`,
     Accept: 'application/vnd.github+json',
@@ -80,24 +127,56 @@ export async function createPullRequest(
   };
   const api = (path: string, opts?: RequestInit) =>
     fetch(`https://api.github.com${path}`, { ...opts, headers });
+  const commitToSameBranch = options?.commitToSameBranch === true;
 
-  // 1. Get the base branch SHA
+  const encodeContentPath = (path: string) =>
+    path.split('/').map((seg) => encodeURIComponent(seg)).join('/');
+
+  const buildCommitError = async (res: Response, filename: string, targetBranch: string): Promise<string> => {
+    const details = await formatGithubError(res);
+    if (res.status === 404 && filename.startsWith('.github/workflows/')) {
+      return `Failed to commit ${filename} on branch "${targetBranch}": ${details}. This can also happen when repo rules or org policies block workflow file writes.`;
+    }
+    return `Failed to commit ${filename} on branch "${targetBranch}": ${details}`;
+  };
+
+  // 1. Get the base branch SHA (initialize repo if empty)
   onProgress?.('Getting base branch...');
-  const refRes = await api(`/repos/${owner}/${repo}/git/ref/heads/${baseBranch}`);
-  if (!refRes.ok) throw new Error(`Base branch "${baseBranch}" not found (${refRes.status})`);
+  let refRes = await api(`/repos/${owner}/${repo}/git/ref/heads/${baseBranch}`);
+  if (!refRes.ok) {
+    // Repo may be empty (no commits). Initialize with a README so branches exist.
+    onProgress?.('Initializing empty repository...');
+    const initRes = await api(`/repos/${owner}/${repo}/contents/README.md`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        message: 'Initial commit',
+        content: btoa(`# ${repo}\n`),
+      }),
+    });
+    if (!initRes.ok) {
+      throw new Error(`Base branch "${baseBranch}" not found and repo could not be initialized (${initRes.status})`);
+    }
+    // Retry getting the base branch
+    refRes = await api(`/repos/${owner}/${repo}/git/ref/heads/${baseBranch}`);
+    if (!refRes.ok) throw new Error(`Base branch "${baseBranch}" not found after initialization (${refRes.status})`);
+  }
   const refData = await refRes.json();
   const baseSha = refData.object.sha;
 
-  // 2. Create a new branch
-  const branchName = `adaptive-ui/${Date.now()}`;
-  onProgress?.(`Creating branch ${branchName}...`);
-  const createBranchRes = await api(`/repos/${owner}/${repo}/git/refs`, {
-    method: 'POST',
-    body: JSON.stringify({ ref: `refs/heads/${branchName}`, sha: baseSha }),
-  });
-  if (!createBranchRes.ok) {
-    const err = await createBranchRes.json().catch(() => ({}));
-    throw new Error(`Failed to create branch: ${(err as any)?.message || createBranchRes.status}`);
+  // 2. Determine target branch
+  const branchName = commitToSameBranch ? baseBranch : `adaptive-ui/${Date.now()}`;
+  if (!commitToSameBranch) {
+    onProgress?.(`Creating branch ${branchName}...`);
+    const createBranchRes = await api(`/repos/${owner}/${repo}/git/refs`, {
+      method: 'POST',
+      body: JSON.stringify({ ref: `refs/heads/${branchName}`, sha: baseSha }),
+    });
+    if (!createBranchRes.ok) {
+      const err = await createBranchRes.json().catch(() => ({}));
+      throw new Error(`Failed to create branch: ${(err as any)?.message || createBranchRes.status}`);
+    }
+  } else {
+    onProgress?.(`Committing directly to ${baseBranch}...`);
   }
 
   // 3. Commit each file to the new branch
@@ -105,33 +184,54 @@ export async function createPullRequest(
     const artifact = artifacts[i];
     onProgress?.(`Committing ${artifact.filename} (${i + 1}/${artifacts.length})...`);
 
-    // Check if file exists on the branch (to get SHA for updates)
-    let sha: string | undefined;
-    try {
-      const checkRes = await api(
-        `/repos/${owner}/${repo}/contents/${artifact.filename}?ref=${branchName}`
-      );
-      if (checkRes.ok) {
-        const existing = await checkRes.json();
-        sha = existing.sha;
+    // Retry logic: sequential commits via Contents API can hit transient 404/409
+    // due to GitHub's eventual consistency (each PUT creates a new commit on the branch).
+    let committed = false;
+    for (let attempt = 0; attempt < 3 && !committed; attempt++) {
+      if (attempt > 0) await new Promise(r => setTimeout(r, 1500 * attempt));
+
+      // Check if file exists on the branch (to get SHA for updates)
+      let sha: string | undefined;
+      try {
+        const encodedPath = encodeContentPath(artifact.filename);
+        const checkRes = await api(
+          `/repos/${owner}/${repo}/contents/${encodedPath}?ref=${encodeURIComponent(branchName)}`
+        );
+        if (checkRes.ok) {
+          const existing = await checkRes.json();
+          sha = existing.sha;
+        }
+      } catch { /* file doesn't exist */ }
+
+      const body: Record<string, unknown> = {
+        message: `${commitMessage}: ${artifact.filename}`,
+        content: btoa(unescape(encodeURIComponent(artifact.content))),
+        branch: branchName,
+      };
+      if (sha) body.sha = sha;
+
+      const encodedPath = encodeContentPath(artifact.filename);
+      const res = await api(`/repos/${owner}/${repo}/contents/${encodedPath}`, {
+        method: 'PUT',
+        body: JSON.stringify(body),
+      });
+      if (res.ok) {
+        committed = true;
+      } else if ((res.status === 404 || res.status === 409 || res.status === 422) && attempt < 2) {
+        onProgress?.(`Retrying ${artifact.filename} (attempt ${attempt + 2}/3)...`);
+      } else {
+        throw new Error(await buildCommitError(res, artifact.filename, branchName));
       }
-    } catch { /* file doesn't exist */ }
-
-    const body: Record<string, unknown> = {
-      message: `${commitMessage}: ${artifact.filename}`,
-      content: btoa(unescape(encodeURIComponent(artifact.content))),
-      branch: branchName,
-    };
-    if (sha) body.sha = sha;
-
-    const res = await api(`/repos/${owner}/${repo}/contents/${artifact.filename}`, {
-      method: 'PUT',
-      body: JSON.stringify(body),
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(`Failed to commit ${artifact.filename}: ${(err as any)?.message || res.status}`);
     }
+  }
+
+  if (commitToSameBranch) {
+    onProgress?.(`Committed ${artifacts.length} file${artifacts.length === 1 ? '' : 's'} to ${baseBranch}.`);
+    return {
+      url: `https://github.com/${owner}/${repo}/tree/${encodeURIComponent(baseBranch)}`,
+      branchName,
+      createdPullRequest: false,
+    };
   }
 
   // 4. Create the pull request
@@ -150,7 +250,7 @@ export async function createPullRequest(
     throw new Error(`Failed to create PR: ${(err as any)?.message || prRes.status}`);
   }
   const prData = await prRes.json();
-  return { url: prData.html_url, branchName };
+  return { url: prData.html_url, branchName, createdPullRequest: true };
 }
 
 export function FilesPanel() {
@@ -161,6 +261,7 @@ export function FilesPanel() {
   const [commitBranch, setCommitBranch] = useState('main');
   const [committing, setCommitting] = useState(false);
   const [commitStatus, setCommitStatus] = useState<string | null>(null);
+  const [commitToSameBranch, setCommitToSameBranch] = useState(false);
   const selected = selectedId ? artifacts.find((a) => a.id === selectedId) : null;
 
   if (selected) {
@@ -288,6 +389,16 @@ export function FilesPanel() {
         placeholder: 'PR title / commit message',
         style: { width: '100%', padding: '4px 8px', fontSize: '11px', marginBottom: '6px', borderRadius: '4px', border: '1px solid #d1d5db' },
       }),
+      React.createElement('label', {
+        style: { display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px', fontSize: '11px', color: '#374151' },
+      },
+        React.createElement('input', {
+          type: 'checkbox',
+          checked: commitToSameBranch,
+          onChange: (e: React.ChangeEvent<HTMLInputElement>) => setCommitToSameBranch(e.target.checked),
+        }),
+        'Commit directly to base branch (skip creating a PR branch)'
+      ),
       commitStatus && React.createElement('div', {
         style: {
           fontSize: '10px', marginBottom: '4px', padding: '4px',
@@ -320,9 +431,19 @@ export function FilesPanel() {
             setCommitting(true);
             setCommitStatus(null);
             try {
-              const result = await createPullRequest(artifacts, token, owner, repo, commitBranch, commitMsg, setCommitStatus);
-              setCommitStatus(`\u2713 PR created: ${result.url}`);
-              // Open PR in new tab
+              const result = await createPullRequest(
+                artifacts,
+                token,
+                owner,
+                repo,
+                commitBranch,
+                commitMsg,
+                setCommitStatus,
+                { commitToSameBranch }
+              );
+              setCommitStatus(result.createdPullRequest
+                ? `\u2713 PR created: ${result.url}`
+                : `\u2713 Committed to ${result.branchName}: ${result.url}`);
               window.open(result.url, '_blank', 'noopener,noreferrer');
             } catch (err) {
               setCommitStatus(`Error: ${err instanceof Error ? err.message : String(err)}`);
@@ -336,7 +457,11 @@ export function FilesPanel() {
             backgroundColor: '#24292e', color: '#fff', fontSize: '10px', fontWeight: 500,
             cursor: committing ? 'wait' : 'pointer', opacity: committing ? 0.6 : 1,
           },
-        }, committing ? 'Creating PR...' : `Create PR (${artifacts.length} files)`),
+        }, committing
+          ? (commitToSameBranch ? 'Committing...' : 'Creating PR...')
+          : (commitToSameBranch
+            ? `Commit to ${commitBranch} (${artifacts.length} files)`
+            : `Create PR (${artifacts.length} files)`)),
         React.createElement('button', {
           onClick: () => { setShowCommit(false); setCommitStatus(null); },
           style: {
