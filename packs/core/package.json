@@ -27,9 +27,7 @@
     "prepublishOnly": "tsc && cp -r src/css dist/css && cp -r src/icons dist/icons"
   },
   "dependencies": {
-    "@mermaid-js/layout-elk": "^0.2.1",
     "@types/prismjs": "^1.26.6",
-    "mermaid": "^11.13.0",
     "prismjs": "^1.30.0"
   },
   "peerDependencies": {

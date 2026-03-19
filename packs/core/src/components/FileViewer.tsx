@@ -5,7 +5,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import type { Artifact } from '../artifacts';
 import { downloadArtifact, upsertArtifact } from '../artifacts';
-import { ArchitectureDiagram } from './ArchitectureDiagram';
+import { getDiagramRenderer } from '../diagram-registry';
 import Prism from 'prismjs';
 import 'prismjs/components/prism-json';
 import 'prismjs/components/prism-yaml';
@@ -178,10 +178,14 @@ export function FileViewer({ artifact, onArtifactUpdate }: FileViewerProps) {
       ? React.createElement('div', {
           style: { flex: 1, minHeight: 0, overflow: 'hidden' } as React.CSSProperties,
         },
-          React.createElement(ArchitectureDiagram, {
-            diagram: artifact.content,
-            title: artifact.label || 'Architecture',
-          })
+          getDiagramRenderer()
+            ? React.createElement(getDiagramRenderer()!, {
+                diagram: artifact.content,
+                title: artifact.label || 'Architecture',
+              })
+            : React.createElement('div', {
+                style: { padding: '24px', color: 'var(--adaptive-text-secondary, #6b7280)', fontSize: '13px', textAlign: 'center' as const },
+              }, 'No diagram renderer registered. The app needs to call registerDiagramRenderer() to display .mmd files.')
         )
       : editing
         // Edit mode — plain textarea

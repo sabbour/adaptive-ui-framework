@@ -19,8 +19,7 @@
     "baseUrl": "."
   },
   "references": [
-    { "path": "packs/core" },
-    { "path": "apps/demo" }
+    { "path": "packs/core" }
   ],
   "files": []
 }

@@ -1,3 +1,5 @@
+/// <reference path="./vite-env.d.ts" />
+
 // ─── Adaptive UI Framework ───
 // Public API exports
 
@@ -130,4 +132,5 @@ export { trackedFetch } from './request-tracker';
 // Re-exported component utilities (used by packs)
 export { SearchableDropdown } from './components/builtins';
 export { createPullRequest, updatePullRequestBranch } from './components/FilesPanel';
-export { registerDiagramIcons } from './components/ArchitectureDiagram';
+export { registerDiagramIcons, registerDiagramRenderer, getDiagramRenderer, getDiagramIconUrl, getRegisteredIconNames, getDiagramIconRegistry } from './diagram-registry';
+export type { DiagramRendererProps } from './diagram-registry';
