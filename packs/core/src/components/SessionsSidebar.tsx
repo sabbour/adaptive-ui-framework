@@ -20,6 +20,13 @@ import iconDelete from '../icons/fluent/delete.svg?url';
 import iconChatAdd from '../icons/fluent/chat-add.svg?url';
 import iconChevronLeft from '../icons/fluent/chevron-left.svg?url';
 import iconChevronRight from '../icons/fluent/chevron-right.svg?url';
+import iconChevronDown from '../icons/fluent/chevron-down.svg?url';
+import iconFolder from '../icons/fluent/folder.svg?url';
+import iconFolderOpen from '../icons/fluent/folder-open.svg?url';
+import iconDocument from '../icons/fluent/document.svg?url';
+import iconDiagram from '../icons/fluent/diagram.svg?url';
+import iconDocumentYml from '../icons/fluent/document-yml.svg?url';
+import iconCode from '../icons/fluent/code.svg?url';
 
 interface SessionsSidebarProps {
   activeSessionId: string | null;
@@ -41,6 +48,8 @@ interface SessionsSidebarProps {
   filesLabel?: string;
   /** Hide the files section entirely (when files are shown elsewhere). */
   hideFiles?: boolean;
+  /** Show files as a folder tree instead of a flat list. */
+  fileTreeMode?: boolean;
 }
 
 export function SessionsSidebar({
@@ -51,6 +60,7 @@ export function SessionsSidebar({
   sessionsLabel = 'Sessions',
   filesLabel = 'Files',
   hideFiles = false,
+  fileTreeMode = false,
 }: SessionsSidebarProps) {
   const sessions = useSyncExternalStore(subscribeSessions, getSessions);
   const artifacts = useSyncExternalStore(subscribeArtifacts, getArtifacts);
@@ -256,8 +266,16 @@ export function SessionsSidebar({
           ? React.createElement('div', {
               style: { padding: '12px 10px', fontSize: '14px', color: 'var(--adaptive-text-secondary, #6b7280)', textAlign: 'center' as const },
             }, `No ${filesLabel.toLowerCase()} yet`)
-          : artifacts.map((artifact) =>
-              React.createElement(FileItem, {
+          : fileTreeMode
+            ? React.createElement(FileTreeView, {
+                artifacts,
+                selectedFileId,
+                onSelectFile: onSelectFile,
+                onRemove: (id: string) => { removeArtifact(id); if (selectedFileId === id) onSelectFile(null); },
+                onDownload: (artifact: Artifact) => downloadArtifact(artifact),
+              })
+            : artifacts.map((artifact) =>
+                React.createElement(FileItem, {
                 key: artifact.id,
                 artifact,
                 isSelected: artifact.id === selectedFileId,
@@ -393,9 +411,7 @@ function FileItem({
   onDownload: () => void;
 }) {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
-  const icon = artifact.filename.endsWith('.mmd') ? '\uD83D\uDCC8'
-    : artifact.filename.endsWith('.md') ? '\uD83D\uDCC4'
-    : '\uD83D\uDCBE';
+  const fileIcon = getFileIcon(artifact.filename);
 
   if (confirmingDelete) {
     return React.createElement('div', {
@@ -440,7 +456,7 @@ function FileItem({
       fontSize: '14px',
     } as React.CSSProperties,
   },
-    React.createElement('span', { style: { fontSize: '14px', flexShrink: 0 } }, icon),
+    React.createElement('img', { src: fileIcon, alt: 'File', width: 14, height: 14, style: { opacity: 0.6, flexShrink: 0 } }),
     React.createElement('div', {
       style: {
         flex: 1, minWidth: 0,
@@ -472,6 +488,178 @@ function FileItem({
           display: 'flex', alignItems: 'center',
         },
       }, React.createElement('img', { src: iconDelete, alt: 'Delete', width: 13, height: 13, style: { opacity: 0.5 } }))
+    )
+  );
+}
+
+// ─── File Tree Utilities ───
+
+interface TreeNode {
+  name: string;
+  fullPath: string;
+  isFolder: boolean;
+  children: TreeNode[];
+  artifact?: Artifact;
+}
+
+function getFileIcon(filename: string): string {
+  if (filename.endsWith('.mmd')) return iconDiagram;
+  if (filename.endsWith('.yaml') || filename.endsWith('.yml')) return iconDocumentYml;
+  if (filename.endsWith('.ts') || filename.endsWith('.js') || filename.endsWith('.py')
+    || filename.endsWith('.bicep') || filename.endsWith('.tf') || filename.endsWith('.sh')) return iconCode;
+  return iconDocument;
+}
+
+function buildFileTree(artifacts: Artifact[]): TreeNode[] {
+  const root: TreeNode[] = [];
+  const folderMap = new Map<string, TreeNode>();
+
+  const getOrCreateFolder = (parts: string[]): TreeNode[] => {
+    if (parts.length === 0) return root;
+    const fullPath = parts.join('/');
+    const existing = folderMap.get(fullPath);
+    if (existing) return existing.children;
+    // Ensure parent exists
+    const parentChildren = parts.length > 1 ? getOrCreateFolder(parts.slice(0, -1)) : root;
+    const folder: TreeNode = {
+      name: parts[parts.length - 1],
+      fullPath,
+      isFolder: true,
+      children: [],
+    };
+    parentChildren.push(folder);
+    folderMap.set(fullPath, folder);
+    return folder.children;
+  };
+
+  for (const artifact of artifacts) {
+    const parts = artifact.filename.split('/');
+    if (parts.length === 1) {
+      root.push({ name: parts[0], fullPath: artifact.filename, isFolder: false, children: [], artifact });
+    } else {
+      const dirParts = parts.slice(0, -1);
+      const parent = getOrCreateFolder(dirParts);
+      parent.push({ name: parts[parts.length - 1], fullPath: artifact.filename, isFolder: false, children: [], artifact });
+    }
+  }
+
+  // Sort: folders first, then files, alphabetically within each group
+  const sortNodes = (nodes: TreeNode[]): void => {
+    nodes.sort((a, b) => {
+      if (a.isFolder && !b.isFolder) return -1;
+      if (!a.isFolder && b.isFolder) return 1;
+      return a.name.localeCompare(b.name);
+    });
+    nodes.forEach((n) => { if (n.isFolder) sortNodes(n.children); });
+  };
+  sortNodes(root);
+  return root;
+}
+
+function FileTreeView({ artifacts, selectedFileId, onSelectFile, onRemove, onDownload }: {
+  artifacts: Artifact[];
+  selectedFileId: string | null;
+  onSelectFile: (id: string | null) => void;
+  onRemove: (id: string) => void;
+  onDownload: (artifact: Artifact) => void;
+}) {
+  const tree = buildFileTree(artifacts);
+  return React.createElement('div', null,
+    tree.map((node) =>
+      React.createElement(TreeNodeItem, {
+        key: node.fullPath, node, depth: 0,
+        selectedFileId, onSelectFile, onRemove, onDownload,
+      })
+    )
+  );
+}
+
+function TreeNodeItem({ node, depth, selectedFileId, onSelectFile, onRemove, onDownload }: {
+  node: TreeNode;
+  depth: number;
+  selectedFileId: string | null;
+  onSelectFile: (id: string | null) => void;
+  onRemove: (id: string) => void;
+  onDownload: (artifact: Artifact) => void;
+}): React.ReactElement {
+  const [expanded, setExpanded] = useState(true);
+  const paddingLeft = 12 + depth * 16;
+
+  if (node.isFolder) {
+    return React.createElement('div', null,
+      React.createElement('div', {
+        onClick: () => setExpanded(!expanded),
+        style: {
+          padding: '4px 8px 4px ' + paddingLeft + 'px',
+          cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px',
+          fontSize: '13px', fontWeight: 600,
+          color: 'var(--adaptive-text, #111827)',
+          userSelect: 'none' as const,
+        } as React.CSSProperties,
+      },
+        React.createElement('img', {
+          src: expanded ? iconChevronDown : iconChevronRight,
+          alt: expanded ? 'Collapse' : 'Expand',
+          width: 12, height: 12, style: { opacity: 0.6, flexShrink: 0 },
+        }),
+        React.createElement('img', {
+          src: expanded ? iconFolderOpen : iconFolder,
+          alt: 'Folder', width: 14, height: 14, style: { opacity: 0.7, flexShrink: 0 },
+        }),
+        React.createElement('span', null, node.name)
+      ),
+      expanded && node.children.map((child) =>
+        React.createElement(TreeNodeItem, {
+          key: child.fullPath, node: child, depth: depth + 1,
+          selectedFileId, onSelectFile, onRemove, onDownload,
+        })
+      )
+    );
+  }
+
+  // File node
+  const artifact = node.artifact!;
+  const isSelected = artifact.id === selectedFileId;
+  return React.createElement('div', {
+    onClick: () => onSelectFile(artifact.id),
+    style: {
+      padding: '4px 8px 4px ' + (paddingLeft + 16) + 'px',
+      cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px',
+      fontSize: '13px',
+      backgroundColor: isSelected ? 'rgba(37, 99, 235, 0.08)' : 'transparent',
+      color: 'var(--adaptive-text, #111827)',
+    } as React.CSSProperties,
+  },
+    React.createElement('img', {
+      src: getFileIcon(node.name), alt: 'File',
+      width: 14, height: 14, style: { opacity: 0.6, flexShrink: 0 },
+    }),
+    React.createElement('span', {
+      style: {
+        flex: 1, minWidth: 0, fontFamily: 'monospace',
+        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const,
+      },
+    }, node.name),
+    React.createElement('div', {
+      style: { display: 'flex', gap: '2px', flexShrink: 0 },
+      onClick: (e: React.MouseEvent) => e.stopPropagation(),
+    },
+      React.createElement('button', {
+        onClick: () => onDownload(artifact),
+        title: 'Download',
+        style: {
+          background: 'none', border: 'none', cursor: 'pointer', padding: '2px',
+          display: 'flex', alignItems: 'center',
+        },
+      }, React.createElement('img', { src: iconArrowDownload, alt: 'Download', width: 11, height: 11, style: { opacity: 0.4 } })),
+      React.createElement('button', {
+        onClick: () => onRemove(artifact.id),
+        title: 'Delete',
+        style: {
+          background: 'none', border: 'none', cursor: 'pointer', padding: '2px',
+          display: 'flex', alignItems: 'center',
+        },
+      }, React.createElement('img', { src: iconDelete, alt: 'Delete', width: 11, height: 11, style: { opacity: 0.4 } }))
     )
   );
 }
