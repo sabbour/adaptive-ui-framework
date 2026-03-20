@@ -134,7 +134,3 @@ export { SearchableDropdown } from './components/builtins';
 export { createPullRequest, updatePullRequestBranch } from './components/FilesPanel';
 export { registerDiagramIcons, registerDiagramRenderer, getDiagramRenderer, getDiagramIconUrl, getRegisteredIconNames, getDiagramIconRegistry } from './diagram-registry';
 export type { DiagramRendererProps } from './diagram-registry';
-
-// K8s validation
-export { validateK8sManifest, formatViolationsMarkdown } from './k8s-validator';
-export type { SafeguardViolation } from './k8s-validator';
