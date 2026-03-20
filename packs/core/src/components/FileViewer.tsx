@@ -1,8 +1,9 @@
 // ─── File Viewer ───
 // Center panel that shows the content of a selected artifact.
 // Renders Mermaid diagrams for .mmd files, syntax-highlighted + editable code for everything else.
+// Supports two editor modes: 'prism' (default, lightweight) and 'monaco' (VS Code-like experience).
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, lazy, Suspense } from 'react';
 import type { Artifact } from '../artifacts';
 import { downloadArtifact, upsertArtifact } from '../artifacts';
 import { getDiagramRenderer } from '../diagram-registry';
@@ -21,6 +22,9 @@ import 'prismjs/components/prism-css';
 import 'prismjs/components/prism-sql';
 import 'prismjs/themes/prism-tomorrow.css';
 
+// Lazy-load Monaco so it's only downloaded when editorMode='monaco'
+const MonacoEditor = lazy(() => import('@monaco-editor/react').then((mod) => ({ default: mod.default })));
+
 /** Map our language keys to Prism grammar names */
 const LANG_MAP: Record<string, string> = {
   bicep: 'bicep', json: 'json', yaml: 'yaml', yml: 'yaml',
@@ -33,8 +37,25 @@ const LANG_MAP: Record<string, string> = {
   css: 'css', sql: 'sql', markdown: 'markdown', md: 'markdown',
 };
 
+/** Map our language keys to Monaco language IDs */
+const MONACO_LANG_MAP: Record<string, string> = {
+  bicep: 'bicep', json: 'json', yaml: 'yaml', yml: 'yaml',
+  bash: 'shell', sh: 'shell', shell: 'shell',
+  dockerfile: 'dockerfile', docker: 'dockerfile',
+  hcl: 'hcl', terraform: 'hcl', tf: 'hcl',
+  typescript: 'typescript', ts: 'typescript',
+  javascript: 'javascript', js: 'javascript',
+  python: 'python', py: 'python',
+  css: 'css', sql: 'sql', markdown: 'markdown', md: 'markdown',
+  html: 'html', xml: 'xml',
+};
+
 function getPrismLang(language: string): string {
   return LANG_MAP[language] || language || 'plaintext';
+}
+
+function getMonacoLang(language: string): string {
+  return MONACO_LANG_MAP[language] || language || 'plaintext';
 }
 
 function highlight(code: string, language: string): string {
@@ -51,10 +72,15 @@ function escapeHtml(s: string): string {
 interface FileViewerProps {
   artifact: Artifact;
   onArtifactUpdate?: (artifact: Artifact) => void;
+  /** Editor engine: 'prism' (default) for lightweight Prism.js, 'monaco' for VS Code-like editing */
+  editorMode?: 'prism' | 'monaco';
+  /** Optional validation banner rendered below the header */
+  validationBanner?: React.ReactNode;
 }
 
-export function FileViewer({ artifact, onArtifactUpdate }: FileViewerProps) {
+export function FileViewer({ artifact, onArtifactUpdate, editorMode = 'prism', validationBanner }: FileViewerProps) {
   const isMermaid = artifact.filename.endsWith('.mmd');
+  const useMonaco = editorMode === 'monaco' && !isMermaid;
   const [editing, setEditing] = useState(false);
   const [editContent, setEditContent] = useState(artifact.content);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -79,8 +105,19 @@ export function FileViewer({ artifact, onArtifactUpdate }: FileViewerProps) {
   const handleEdit = useCallback(() => {
     setEditContent(artifact.content);
     setEditing(true);
-    setTimeout(() => textareaRef.current?.focus(), 50);
-  }, [artifact.content]);
+    if (!useMonaco) {
+      setTimeout(() => textareaRef.current?.focus(), 50);
+    }
+  }, [artifact.content, useMonaco]);
+
+  // Monaco-specific save via Ctrl+S
+  const handleMonacoMount = useCallback((editor: any) => {
+    editor.addCommand(
+      // KeyMod.CtrlCmd | KeyCode.KeyS = 2048 + 49
+      2048 + 49,
+      () => { handleSave(); }
+    );
+  }, [handleSave]);
 
   return React.createElement('div', {
     style: {
@@ -173,6 +210,9 @@ export function FileViewer({ artifact, onArtifactUpdate }: FileViewerProps) {
       )
     ),
 
+    // Validation banner (optional, e.g. Deployment Safeguards)
+    validationBanner,
+
     // Content area
     isMermaid
       ? React.createElement('div', {
@@ -187,7 +227,42 @@ export function FileViewer({ artifact, onArtifactUpdate }: FileViewerProps) {
                 style: { padding: '24px', color: 'var(--adaptive-text-secondary, #6b7280)', fontSize: '13px', textAlign: 'center' as const },
               }, 'No diagram renderer registered. The app needs to call registerDiagramRenderer() to display .mmd files.')
         )
-      : editing
+      : useMonaco
+        // Monaco editor mode
+        ? React.createElement('div', {
+            style: { flex: 1, minHeight: 0, overflow: 'hidden' } as React.CSSProperties,
+          },
+            React.createElement(Suspense, {
+              fallback: React.createElement('div', {
+                style: { padding: '24px', color: 'var(--adaptive-text-secondary, #6b7280)', fontSize: '14px', textAlign: 'center' as const },
+              }, 'Loading editor...'),
+            },
+              React.createElement(MonacoEditor, {
+                key: artifact.id + (editing ? '-edit' : '-view'),
+                value: editing ? editContent : artifact.content,
+                language: getMonacoLang(artifact.language),
+                theme: 'vs-dark',
+                options: {
+                  readOnly: !editing,
+                  minimap: { enabled: editing },
+                  lineNumbers: 'on' as const,
+                  scrollBeyondLastLine: false,
+                  fontSize: 14,
+                  fontFamily: 'Consolas, "Courier New", monospace',
+                  wordWrap: 'on' as const,
+                  automaticLayout: true,
+                  renderValidationDecorations: 'on' as const,
+                  scrollbar: {
+                    verticalScrollbarSize: 10,
+                    horizontalScrollbarSize: 10,
+                  },
+                },
+                onChange: editing ? (value: string | undefined) => { setEditContent(value || ''); } : undefined,
+                onMount: editing ? handleMonacoMount : undefined,
+              })
+            )
+          )
+        : editing
         // Edit mode — plain textarea
         ? React.createElement('textarea', {
             ref: textareaRef,
