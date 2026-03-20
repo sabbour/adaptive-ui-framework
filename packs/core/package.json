@@ -32,8 +32,7 @@
     "@monaco-editor/react": "^4.7.0",
     "@types/prismjs": "^1.26.6",
     "monaco-editor": "^0.52.0",
-    "prismjs": "^1.30.0",
-    "yaml": "^2.6.0"
+    "prismjs": "^1.30.0"
   },
   "peerDependencies": {
     "react": "^18.3.1",
