@@ -1,5 +1,7 @@
 # Adaptive UI Framework
 
+[![CI](https://github.com/sabbour/adaptive-ui-framework/actions/workflows/ci.yml/badge.svg)](https://github.com/sabbour/adaptive-ui-framework/actions/workflows/ci.yml)
+
 A React framework for building **conversational, agent-driven UIs** powered by LLMs. An AI agent drives a multi-turn conversation — asking questions, presenting forms, choices, and interactive components — dynamically generating the next step based on user responses.
 
 ## How It Works
