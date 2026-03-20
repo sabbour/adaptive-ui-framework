@@ -36,8 +36,8 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/sabbour/adaptive-ui-framework.git",
-    "directory": "packages/core"
+    "url": "git+https://github.com/sabbour/adaptive-ui-framework.git",
+    "directory": "packs/core"
   },
   "devDependencies": {
     "react": "^18.3.1",
