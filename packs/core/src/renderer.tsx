@@ -121,7 +121,9 @@ export function AdaptiveRenderer({ node, itemContext, itemIndex }: RendererProps
   if (!visible) return null;
 
   // Interpolate all string values in the node for dynamic content
-  const resolved = interpolateDeep(node, state, itemContext, itemIndex);
+  // allowSensitive: true because the renderer is trusted runtime code — sensitive
+  // keys must resolve to real values for pack component API paths to work.
+  const resolved = interpolateDeep(node, state, itemContext, itemIndex, { allowSensitive: true });
 
   // Handle { type: "component", component: "actualName" } wrapper pattern
   // This occurs when the LLM uses the intent ask format in Adaptive mode or in show items

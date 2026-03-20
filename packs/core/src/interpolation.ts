@@ -68,18 +68,19 @@ export function interpolateDeep<T>(
   obj: T,
   state: StateStore,
   itemContext?: Record<string, AdaptiveValue>,
-  itemIndex?: number
+  itemIndex?: number,
+  options?: { allowSensitive?: boolean }
 ): T {
   if (typeof obj === 'string') {
-    return interpolate(obj, state, itemContext, itemIndex) as unknown as T;
+    return interpolate(obj, state, itemContext, itemIndex, options) as unknown as T;
   }
   if (Array.isArray(obj)) {
-    return obj.map((item) => interpolateDeep(item, state, itemContext, itemIndex)) as unknown as T;
+    return obj.map((item) => interpolateDeep(item, state, itemContext, itemIndex, options)) as unknown as T;
   }
   if (obj && typeof obj === 'object') {
     const result: Record<string, unknown> = {};
     for (const [key, val] of Object.entries(obj)) {
-      result[key] = interpolateDeep(val, state, itemContext, itemIndex);
+      result[key] = interpolateDeep(val, state, itemContext, itemIndex, options);
     }
     return result as T;
   }
