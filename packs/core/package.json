@@ -30,7 +30,8 @@
   },
   "dependencies": {
     "@types/prismjs": "^1.26.6",
-    "prismjs": "^1.30.0"
+    "prismjs": "^1.30.0",
+    "yaml": "^2.6.0"
   },
   "peerDependencies": {
     "react": "^18.3.1",
