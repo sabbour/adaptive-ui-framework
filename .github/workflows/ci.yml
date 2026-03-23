@@ -11,7 +11,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write
     steps:
       - uses: actions/checkout@v4
 
@@ -23,18 +22,3 @@ jobs:
       - run: npm install
 
       - run: npx tsc -b --noEmit
-
-      - name: Publish @sabbour/adaptive-ui-core (if new version)
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        working-directory: packs/core
-        run: |
-          NAME=$(node -p "require('./package.json').name")
-          VERSION=$(node -p "require('./package.json').version")
-          if npm view "${NAME}@${VERSION}" version 2>/dev/null; then
-            echo "✓ ${NAME}@${VERSION} already published — skipping"
-          else
-            npm publish
-            echo "✓ Published ${NAME}@${VERSION}"
-          fi
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
