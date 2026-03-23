@@ -125,7 +125,7 @@ import type {
   TextNode, ButtonNode, InputNode, SelectNode, ImageNode,
   ContainerNode, ColumnsNode, CardNode, ListNode, TableNode, FormNode,
   TabsNode, ProgressNode, AlertNode, ChatInputNode, MarkdownNode,
-  RadioGroupNode, MultiSelectNode, ComboboxNode, ToggleNode, SliderNode,
+  RadioGroupNode, MultiSelectNode, ComboboxNode, QuestionnaireNode, ToggleNode, SliderNode,
   DividerNode, BadgeNode, AccordionNode, CodeBlockNode, LinkNode,
   AdaptiveValue,
 } from '../schema';
@@ -370,6 +370,188 @@ function ComboboxComponent({ node }: AdaptiveComponentProps<ComboboxNode>) {
         )
       )
     )
+  );
+}
+
+// ─── Questionnaire ───
+// A stepped question card shown one question at a time with radio options + freeform text.
+// Inspired by ChatGPT's task intake UI: floating card, step indicator, pagination.
+function QuestionnaireComponent({ node }: AdaptiveComponentProps<QuestionnaireNode>) {
+  const { state, dispatch, handleAction } = useAdaptive();
+  const questions = node.questions || [];
+  const [step, setStep] = useState(0);
+  const [dismissed, setDismissed] = useState(false);
+
+  if (dismissed || questions.length === 0) return null;
+
+  const q = questions[step];
+  const currentValue = (state[q.bind] as string) ?? '';
+  const isLast = step === questions.length - 1;
+  const allAnswered = questions.every((qq) => {
+    const v = state[qq.bind] as string;
+    return v && v.trim() !== '';
+  });
+
+  const handleOptionSelect = (value: string) => {
+    dispatch({ type: 'SET', key: q.bind, value });
+    // Auto-advance to next question after a short delay
+    if (!isLast) {
+      setTimeout(() => setStep((s) => Math.min(s + 1, questions.length - 1)), 200);
+    } else if (allAnswered || value.trim()) {
+      // On last question, auto-submit if all answered
+      setTimeout(() => {
+        handleAction(node.onComplete);
+        setDismissed(true);
+      }, 300);
+    }
+  };
+
+  const handleFreeformSubmit = (text: string) => {
+    if (!text.trim()) return;
+    dispatch({ type: 'SET', key: q.bind, value: text.trim() });
+    if (!isLast) {
+      setTimeout(() => setStep((s) => Math.min(s + 1, questions.length - 1)), 200);
+    } else {
+      setTimeout(() => {
+        handleAction(node.onComplete);
+        setDismissed(true);
+      }, 300);
+    }
+  };
+
+  return React.createElement('div', {
+    style: {
+      border: '1px solid var(--adaptive-border, #e5e7eb)',
+      borderRadius: '12px',
+      backgroundColor: 'var(--adaptive-surface, #fff)',
+      boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+      overflow: 'hidden',
+    } as React.CSSProperties,
+  },
+    // Header: question + step indicator + close
+    React.createElement('div', {
+      style: {
+        padding: '16px 16px 12px',
+        display: 'flex', alignItems: 'flex-start', gap: '12px',
+      },
+    },
+      // Question text
+      React.createElement('div', {
+        style: {
+          flex: 1, fontSize: '14px', fontWeight: 600,
+          color: 'var(--adaptive-text, #111827)', lineHeight: 1.4,
+        },
+      }, q.question),
+      // Step indicator + navigation
+      React.createElement('div', {
+        style: {
+          display: 'flex', alignItems: 'center', gap: '4px',
+          flexShrink: 0, fontSize: '12px', color: 'var(--adaptive-text-secondary, #6b7280)',
+        },
+      },
+        // Back arrow
+        step > 0 && React.createElement('button', {
+          onClick: () => setStep((s) => s - 1),
+          style: {
+            background: 'none', border: 'none', cursor: 'pointer',
+            padding: '2px', fontSize: '14px', color: 'var(--adaptive-text-secondary, #6b7280)',
+            display: 'flex', alignItems: 'center',
+          },
+          title: 'Previous question',
+        }, '\u2039'),
+        // Step count
+        React.createElement('span', null, (step + 1) + '/' + questions.length),
+        // Forward arrow
+        !isLast && currentValue && React.createElement('button', {
+          onClick: () => setStep((s) => s + 1),
+          style: {
+            background: 'none', border: 'none', cursor: 'pointer',
+            padding: '2px', fontSize: '14px', color: 'var(--adaptive-text-secondary, #6b7280)',
+            display: 'flex', alignItems: 'center',
+          },
+          title: 'Next question',
+        }, '\u203A'),
+        // Close button
+        React.createElement('button', {
+          onClick: () => setDismissed(true),
+          style: {
+            background: 'none', border: 'none', cursor: 'pointer',
+            padding: '2px', fontSize: '16px', color: 'var(--adaptive-text-secondary, #6b7280)',
+            display: 'flex', alignItems: 'center', marginLeft: '4px',
+          },
+          title: 'Dismiss',
+        }, '\u00D7')
+      )
+    ),
+
+    // Radio options
+    q.options && q.options.length > 0 && React.createElement('div', {
+      style: { padding: '0 16px 8px' } as React.CSSProperties,
+    },
+      q.options.map((opt) =>
+        React.createElement('label', {
+          key: opt.value,
+          onClick: () => handleOptionSelect(opt.value),
+          style: {
+            display: 'flex', alignItems: 'center', gap: '10px',
+            padding: '8px 0', cursor: 'pointer',
+            fontSize: '14px', color: 'var(--adaptive-text, #111827)',
+          } as React.CSSProperties,
+        },
+          // Radio circle
+          React.createElement('div', {
+            style: {
+              width: '18px', height: '18px', borderRadius: '50%',
+              border: currentValue === opt.value
+                ? '5px solid var(--adaptive-primary, #2563eb)'
+                : '2px solid var(--adaptive-border, #d1d5db)',
+              backgroundColor: 'var(--adaptive-surface, #fff)',
+              flexShrink: 0, boxSizing: 'border-box' as const,
+              transition: 'border 0.15s',
+            },
+          }),
+          React.createElement('span', null, opt.label)
+        )
+      )
+    ),
+
+    // Freeform text input
+    React.createElement(QuestionnaireInput, {
+      placeholder: q.freeformPlaceholder || 'Type anything to help me get it right',
+      onSubmit: handleFreeformSubmit,
+    })
+  );
+}
+
+// Separate component for the input to manage its own local state
+function QuestionnaireInput({ placeholder, onSubmit }: { placeholder: string; onSubmit: (text: string) => void }) {
+  const [text, setText] = useState('');
+  return React.createElement('div', {
+    style: {
+      padding: '8px 16px 16px',
+    },
+  },
+    React.createElement('input', {
+      type: 'text',
+      value: text,
+      onChange: (e: React.ChangeEvent<HTMLInputElement>) => setText(e.target.value),
+      onKeyDown: (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter' && text.trim()) {
+          onSubmit(text.trim());
+          setText('');
+        }
+      },
+      placeholder,
+      style: {
+        width: '100%', padding: '10px 12px',
+        borderRadius: '8px',
+        border: '1px solid var(--adaptive-border, #e5e7eb)',
+        fontSize: '14px', outline: 'none',
+        backgroundColor: 'var(--adaptive-bg, #f5f5f5)',
+        color: 'var(--adaptive-text, #111827)',
+        boxSizing: 'border-box' as const,
+      },
+    })
   );
 }
 
@@ -1119,6 +1301,7 @@ export function registerBuiltinComponents(): void {
     input: InputComponent,
     select: SelectComponent,
     combobox: ComboboxComponent,
+    questionnaire: QuestionnaireComponent,
     image: ImageComponent,
     container: ContainerComponent,    columns: ColumnsComponent,    card: CardComponent,
     list: ListComponent,

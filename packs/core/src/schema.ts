@@ -247,6 +247,23 @@ export interface ComboboxNode extends AdaptiveNodeBase {
   allowCustom?: boolean;
 }
 
+export interface QuestionnaireNode extends AdaptiveNodeBase {
+  type: 'questionnaire';
+  /** Array of questions to present one at a time */
+  questions: Array<{
+    /** Question text displayed as the card title */
+    question: string;
+    /** Radio options to choose from */
+    options?: Array<{ label: string; value: string }>;
+    /** State key to bind the answer to */
+    bind: string;
+    /** Placeholder for the freeform text input */
+    freeformPlaceholder?: string;
+  }>;
+  /** Action to trigger when all questions are answered (typically sendPrompt) */
+  onComplete: AdaptiveAction;
+}
+
 export interface ToggleNode extends AdaptiveNodeBase {
   type: 'toggle';
   label?: string;
@@ -314,6 +331,7 @@ export type AdaptiveNode =
   | RadioGroupNode
   | MultiSelectNode
   | ComboboxNode
+  | QuestionnaireNode
   | ToggleNode
   | SliderNode
   | DividerNode
