@@ -11,6 +11,7 @@ import { getPackSettingsComponents } from './registry';
 import { getActiveRequests, subscribe as subscribeRequests } from './request-tracker';
 import { logDecision } from './decision-log';
 import type { DecisionEntry } from './decision-log';
+import { entraLogin, entraLogout, entraGetActiveAccount, entraGetAccessToken } from './entra-auth';
 
 // Icons
 import iconGear from './icons/commands/gear.svg?url';
@@ -104,15 +105,28 @@ function summarizeUserSelections(currentState: StateStore): string | null {
 }
 
 // ─── LLM Config persistence ───
-function loadLLMConfig(): { endpoint: string; apiKey: string; model: string } {
-  try {
-    const raw = localStorage.getItem('adaptive-ui-config');
-    if (raw) return JSON.parse(raw);
-  } catch { /* ignore */ }
-  return { endpoint: '', apiKey: '', model: 'gpt-4o' };
+type AuthMode = 'apiKey' | 'entraId';
+
+interface LLMConfig {
+  endpoint: string;
+  apiKey: string;
+  model: string;
+  authMode: AuthMode;
+  entraAccount?: string;
 }
 
-function saveLLMConfig(config: { endpoint: string; apiKey: string; model: string }) {
+function loadLLMConfig(): LLMConfig {
+  try {
+    const raw = localStorage.getItem('adaptive-ui-config');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return { authMode: 'apiKey', ...parsed };
+    }
+  } catch { /* ignore */ }
+  return { endpoint: '', apiKey: '', model: 'gpt-4o', authMode: 'apiKey' };
+}
+
+function saveLLMConfig(config: LLMConfig) {
   localStorage.setItem('adaptive-ui-config', JSON.stringify(config));
 }
 
@@ -128,7 +142,7 @@ function SettingsPanel({
   settingsPosition,
 }: {
   isConnected: boolean;
-  onConnect: (config: { endpoint: string; apiKey: string; model: string }) => void;
+  onConnect: (config: LLMConfig) => void;
   onDisconnect: () => void;
   appSettingsComponents?: React.ComponentType[];
   visiblePacks?: string[];
@@ -136,14 +150,55 @@ function SettingsPanel({
 }) {
   const [open, setOpen] = useState(false);
   const [config, setConfig] = useState(loadLLMConfig);
+  const [entraLoading, setEntraLoading] = useState(false);
+  const [entraError, setEntraError] = useState<string | null>(null);
   const allPackSettings = getPackSettingsComponents();
   const packSettingsList = visiblePacks
     ? allPackSettings.filter(p => visiblePacks.includes(p.name))
     : [];
 
+  // Check for existing Entra ID session on mount
+  useEffect(() => {
+    if (config.authMode === 'entraId' && !isConnected) {
+      entraGetActiveAccount().then(account => {
+        if (account) {
+          setConfig(c => ({ ...c, entraAccount: account.account.username }));
+        }
+      }).catch(() => { /* ignore */ });
+    }
+  }, []);
+
   const handleConnect = () => {
     saveLLMConfig(config);
     onConnect(config);
+  };
+
+  const handleEntraSignIn = async () => {
+    setEntraLoading(true);
+    setEntraError(null);
+    try {
+      const result = await entraLogin();
+      const updatedConfig: LLMConfig = {
+        ...config,
+        authMode: 'entraId',
+        entraAccount: result.account.username,
+      };
+      setConfig(updatedConfig);
+      saveLLMConfig(updatedConfig);
+      onConnect(updatedConfig);
+    } catch (err) {
+      setEntraError(err instanceof Error ? err.message : 'Sign-in failed');
+    } finally {
+      setEntraLoading(false);
+    }
+  };
+
+  const handleEntraSignOut = async () => {
+    try {
+      await entraLogout();
+    } catch { /* ignore */ }
+    setConfig(c => ({ ...c, entraAccount: undefined }));
+    onDisconnect();
   };
 
   return createPortal(React.createElement('div', {
@@ -189,23 +244,56 @@ function SettingsPanel({
         }, '● Connected')
       ),
 
+      // Auth mode toggle
+      React.createElement('div', {
+        style: { display: 'flex', gap: '4px', marginBottom: '12px', borderRadius: 'var(--adaptive-radius)', overflow: 'hidden', border: '1px solid var(--adaptive-border, #e5e7eb)' },
+      },
+        React.createElement('button', {
+          onClick: () => !isConnected && setConfig(c => ({ ...c, authMode: 'apiKey' })),
+          disabled: isConnected,
+          style: {
+            flex: 1, padding: '6px 8px', border: 'none', cursor: isConnected ? 'default' : 'pointer',
+            fontSize: '12px', fontWeight: 500,
+            backgroundColor: config.authMode === 'apiKey' ? 'var(--adaptive-primary)' : 'transparent',
+            color: config.authMode === 'apiKey' ? '#fff' : 'var(--adaptive-text)',
+            opacity: isConnected ? 0.7 : 1,
+          },
+        }, 'API Key'),
+        React.createElement('button', {
+          onClick: () => !isConnected && setConfig(c => ({ ...c, authMode: 'entraId' })),
+          disabled: isConnected,
+          style: {
+            flex: 1, padding: '6px 8px', border: 'none', cursor: isConnected ? 'default' : 'pointer',
+            fontSize: '12px', fontWeight: 500,
+            backgroundColor: config.authMode === 'entraId' ? 'var(--adaptive-primary)' : 'transparent',
+            color: config.authMode === 'entraId' ? '#fff' : 'var(--adaptive-text)',
+            opacity: isConnected ? 0.7 : 1,
+          },
+        }, 'Entra ID')
+      ),
+
+      // Endpoint (shown in both modes)
       React.createElement('label', { style: { display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '4px' } }, 'Endpoint'),
       React.createElement('input', {
         type: 'text', value: config.endpoint,
         onChange: (e: React.ChangeEvent<HTMLInputElement>) => setConfig((c) => ({ ...c, endpoint: e.target.value })),
-        placeholder: 'https://api.openai.com/v1/chat/completions',
+        placeholder: config.authMode === 'entraId'
+          ? 'https://your-project.services.ai.azure.com/...'
+          : 'https://api.openai.com/v1/chat/completions',
         disabled: isConnected,
         style: { marginBottom: '10px' },
       }),
 
-      React.createElement('label', null, 'API Key'),
-      React.createElement('input', {
+      // API Key mode fields
+      config.authMode === 'apiKey' && React.createElement('label', null, 'API Key'),
+      config.authMode === 'apiKey' && React.createElement('input', {
         type: 'password', value: config.apiKey,
         onChange: (e: React.ChangeEvent<HTMLInputElement>) => setConfig((c) => ({ ...c, apiKey: e.target.value })),
         placeholder: 'sk-...', disabled: isConnected,
         style: { marginBottom: '10px' },
       }),
 
+      // Model (shown in both modes)
       React.createElement('label', null, 'Model'),
       React.createElement('input', {
         type: 'text', value: config.model,
@@ -214,7 +302,43 @@ function SettingsPanel({
         style: { marginBottom: '14px' },
       }),
 
-      React.createElement('button', {
+      // Entra ID mode: sign in button and account info
+      config.authMode === 'entraId' && !isConnected && React.createElement('button', {
+        onClick: handleEntraSignIn,
+        disabled: entraLoading || !config.endpoint.trim(),
+        style: {
+          width: '100%', padding: '8px', borderRadius: 'var(--adaptive-radius)', border: 'none',
+          fontSize: '14px', fontWeight: 500, cursor: 'pointer',
+          backgroundColor: '#0078d4',
+          color: '#fff',
+          opacity: entraLoading || !config.endpoint.trim() ? 0.6 : 1,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+        },
+      },
+        entraLoading ? 'Signing in…' : 'Sign in with Microsoft'
+      ),
+
+      config.authMode === 'entraId' && entraError && React.createElement('p', {
+        style: { fontSize: '12px', color: '#dc2626', margin: '6px 0 0', lineHeight: 1.4 },
+      }, entraError),
+
+      config.authMode === 'entraId' && isConnected && config.entraAccount && React.createElement('p', {
+        style: { fontSize: '12px', color: 'var(--adaptive-text-secondary)', margin: '0 0 10px', lineHeight: 1.4 },
+      }, 'Signed in as ', React.createElement('strong', null, config.entraAccount)),
+
+      config.authMode === 'entraId' && isConnected && React.createElement('button', {
+        onClick: handleEntraSignOut,
+        style: {
+          width: '100%', padding: '8px', borderRadius: 'var(--adaptive-radius)', border: 'none',
+          fontSize: '14px', fontWeight: 500, cursor: 'pointer',
+          backgroundColor: 'var(--adaptive-surface)',
+          color: 'var(--adaptive-text)',
+          boxShadow: 'inset 0 0 0 1px var(--adaptive-border)',
+        },
+      }, 'Sign out & Disconnect'),
+
+      // API Key mode: connect/disconnect button
+      config.authMode === 'apiKey' && React.createElement('button', {
         onClick: isConnected ? onDisconnect : handleConnect,
         disabled: !isConnected && !config.apiKey.trim(),
         style: {
@@ -226,9 +350,13 @@ function SettingsPanel({
         },
       }, isConnected ? 'Disconnect' : 'Connect'),
 
-      !isConnected && React.createElement('p', {
+      !isConnected && config.authMode === 'apiKey' && React.createElement('p', {
         style: { fontSize: '12px', color: 'var(--adaptive-text-secondary)', margin: '10px 0 0', lineHeight: 1.4 },
       }, 'Works with any OpenAI-compatible API. Leave endpoint blank for default OpenAI.'),
+
+      !isConnected && config.authMode === 'entraId' && React.createElement('p', {
+        style: { fontSize: '12px', color: 'var(--adaptive-text-secondary)', margin: '10px 0 0', lineHeight: 1.4 },
+      }, 'Authenticate with Microsoft Entra ID to use Azure AI Foundry endpoints.'),
 
       // Pack settings
       ...packSettingsList.map((pack) =>
@@ -381,9 +509,6 @@ export interface AdaptiveAppProps {
   /** Wrapper style */
   style?: React.CSSProperties;
 
-  /** Use intent-based mode for token-efficient LLM communication */
-  useIntents?: boolean;
-
   /** Ref callback that receives the sendPrompt function, allowing external components to trigger prompts */
   sendPromptRef?: React.MutableRefObject<((prompt: string) => void) | null>;
 
@@ -411,7 +536,6 @@ export function AdaptiveApp({
   settingsComponents,
   className,
   style,
-  useIntents,
   sendPromptRef,
   visiblePacks,
   settingsPosition,
@@ -419,24 +543,11 @@ export function AdaptiveApp({
   // ─── Internal adapter management ───
   const [isConnected, setIsConnected] = useState(() => {
     if (externalAdapter) return true;
-    return !!loadLLMConfig().apiKey.trim();
+    const cfg = loadLLMConfig();
+    if (cfg.authMode === 'entraId') return !!cfg.entraAccount;
+    return !!cfg.apiKey.trim();
   });
   const [adapterKey, setAdapterKey] = useState(0);
-  const [intentMode, setIntentMode] = useState(() => {
-    if (useIntents !== undefined) return useIntents;
-    try {
-      return localStorage.getItem('adaptive-ui-intent-mode') === 'true';
-    } catch { return false; }
-  });
-
-  const handleToggleIntentMode = useCallback(() => {
-    setIntentMode(prev => {
-      const next = !prev;
-      try { localStorage.setItem('adaptive-ui-intent-mode', String(next)); } catch {}
-      return next;
-    });
-    setAdapterKey(k => k + 1);
-  }, []);
 
   const adapter: LLMAdapter | null = useMemo(() => {
     if (externalAdapter) return externalAdapter;
@@ -448,11 +559,11 @@ export function AdaptiveApp({
       model: config.model || 'gpt-4o',
       systemPromptOverride,
       systemPromptSuffix,
-      useIntents: intentMode,
+      getAccessToken: config.authMode === 'entraId' ? entraGetAccessToken : undefined,
     });
-  }, [externalAdapter, isConnected, adapterKey, systemPromptOverride, systemPromptSuffix, intentMode]);
+  }, [externalAdapter, isConnected, adapterKey, systemPromptOverride, systemPromptSuffix]);
 
-  const handleConnect = useCallback((config: { endpoint: string; apiKey: string; model: string }) => {
+  const handleConnect = useCallback((config: LLMConfig) => {
     saveLLMConfig(config);
     setIsConnected(true);
     setAdapterKey((k) => k + 1);
@@ -769,7 +880,7 @@ export function AdaptiveApp({
           onResetSession: handleResetSession,
           theme,
         },
-          React.createElement(AdaptiveAppInner, { turns, isLoading, error, tokenUsage, lastRequestUsage, useIntents: intentMode, onToggleIntentMode: handleToggleIntentMode, lastRawResponse, lastRawRequest, lastDecisionLog, sendPromptRef: externalSendPromptRef })
+          React.createElement(AdaptiveAppInner, { turns, isLoading, error, tokenUsage, lastRequestUsage, lastRawResponse, lastRawRequest, lastDecisionLog, sendPromptRef: externalSendPromptRef })
         )
       : React.createElement('div', {
           style: {
@@ -801,8 +912,6 @@ function AdaptiveAppInner({
   error,
   tokenUsage,
   lastRequestUsage,
-  useIntents,
-  onToggleIntentMode,
   lastRawResponse,
   lastRawRequest,
   lastDecisionLog,
@@ -813,8 +922,6 @@ function AdaptiveAppInner({
   error: string | null;
   tokenUsage: { promptTokens: number; completionTokens: number };
   lastRequestUsage: { promptTokens: number; completionTokens: number };
-  useIntents: boolean;
-  onToggleIntentMode: () => void;
   lastRawResponse: string | null;
   lastRawRequest: string | null;
   lastDecisionLog: DecisionEntry[];
@@ -845,7 +952,7 @@ function AdaptiveAppInner({
     }, 'No conversation started. Provide an initialSpec to begin.');
   }
 
-  return React.createElement(ConversationThread, { turns, isLoading, error, tokenUsage, lastRequestUsage, useIntents, onToggleIntentMode, lastRawResponse, lastRawRequest, lastDecisionLog });
+  return React.createElement(ConversationThread, { turns, isLoading, error, tokenUsage, lastRequestUsage, lastRawResponse, lastRawRequest, lastDecisionLog });
 }
 
 export default AdaptiveApp;

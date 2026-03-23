@@ -1,10 +1,9 @@
 import type { AdaptiveUISpec } from './schema';
 import type { StateStore } from './interpolation';
-import { getPackSystemPrompts, resolvePackSkills, getIntentResolverPrompt } from './registry';
-import { expandCompact, COMPACT_PROMPT, INTENT_COMPACT_PROMPT } from './compact';
+import { getPackSystemPrompts, resolvePackSkills } from './registry';
+import { expandCompact, COMPACT_PROMPT } from './compact';
 import { sanitizeSpec } from './sanitize';
 import { trackStart, trackEnd } from './request-tracker';
-import { resolveIntent, isAgentIntent } from './intent-resolver';
 import { resetDecisionLog, logDecision, getDecisionLog, type DecisionEntry } from './decision-log';
 import { getToolDefinitions, executeTool, type ToolCall } from './tools';
 
@@ -196,39 +195,6 @@ Rules:
 - Use tools (fetch_webpage) for accurate docs; never guess API schemas.
 - VALIDATE your JSON before responding: count every { and } (must match), every [ and ] (must match). Code blocks with multi-line strings are especially error-prone — double-check brace counts after long code values.`;
 
-// ─── Intent-based system prompt (~400 tokens vs ~1,200 for full spec) ───
-export const INTENT_SYSTEM_PROMPT = `You drive multi-step workflows by asking questions and presenting choices. Respond ONLY with valid JSON.
-
-Format:
-{ "message":"Explain this step", "title":"Step Title", "ask":[/*fields*/], "show":[/*display*/], "next":"Summary with {{state.key}}", "state":{/*initial*/}, "diagram":"mermaid string" }
-
-ASK (collect input):
-- choice: {type:"choice",key,label?,options:[{label,value,description?}],multiple?:true}
-- text/number/email/date/textarea: {type:"...",key,label?,placeholder?}
-- toggle: {type:"toggle",key,label?,description?}
-- slider: {type:"slider",key,label?,min?,max?,step?}
-- free-text: {type:"free-text",placeholder?}
-- component: {type:"component",component:"name",props?:{}}
-
-SHOW (display-only — NO components):
-- info/success/warning/error: {type:"...",title?,content}
-- markdown: {type:"markdown",content}
-- table: {type:"table",columns:[{key,header}],rows:[{...}]}
-- progress: {type:"progress",value,max?,label?}
-- code: {type:"code",code,language?,label?} — label=filename
-
-Rules:
-- Components (azureLogin, etc.) go in "ask" ONLY, never "show".
-- "next" = factual summary of selections using {{state.key}}, NOT conversational prose. Omit if no user inputs (e.g., sign-in step).
-  GOOD: "Region: {{state.region}}, RG: {{state.rg}}"
-  BAD: "Great, I'll set up resources now."
-- One step per response. NEVER use {{st.key}} shorthand. NEVER reference __-prefixed keys.
-- Do NOT pre-select defaults unless user explicitly provided them.
-- Preserve collected state on re-adaptation.
-- Use tools for docs lookup; never guess API schemas.
-- Prefer standard ask types; for custom shapes include key/bind, label, options, children, rows/columns, or content for client fallback.
-- VALIDATE your JSON before responding: count every { and } (must match), every [ and ] (must match). Code blocks with multi-line strings are especially error-prone — double-check brace counts after long code values.`;
-
 // ─── Endpoint normalization ───
 // Handles various endpoint formats:
 // - No endpoint → default OpenAI
@@ -285,9 +251,10 @@ export interface OpenAIAdapterConfig {
   systemPromptSuffix?: string;
   /** Override the default system prompt entirely (pack prompts and suffix are still appended) */
   systemPromptOverride?: string;
-  /** Use intent-based mode: LLM outputs semantic intents, client resolves to UI.
-   *  Reduces input tokens ~40-50% and output tokens ~60%. Default: false. */
-  useIntents?: boolean;
+  /** Async callback to get a fresh access token (e.g. from Entra ID).
+   *  When provided, uses Bearer token auth instead of api-key header,
+   *  even for Azure endpoints. The apiKey field is ignored. */
+  getAccessToken?: () => Promise<string>;
 }
 
 export class OpenAIAdapter implements LLMAdapter {
@@ -313,14 +280,9 @@ export class OpenAIAdapter implements LLMAdapter {
     }
 
     const packContext = getPackSystemPrompts();
-    const useIntents = this.config.useIntents ?? false;
-    const basePrompt = this.config.systemPromptOverride
-      || (useIntents ? INTENT_SYSTEM_PROMPT : ADAPTIVE_UI_SYSTEM_PROMPT);
-    const compactPrompt = useIntents ? INTENT_COMPACT_PROMPT : COMPACT_PROMPT;
-    const intentTypes = useIntents ? getIntentResolverPrompt() : '';
+    const basePrompt = this.config.systemPromptOverride || ADAPTIVE_UI_SYSTEM_PROMPT;
     const systemPrompt = basePrompt +
-      '\n\n' + compactPrompt +
-      (intentTypes || '') +
+      '\n\n' + COMPACT_PROMPT +
       (packContext ? '\n\n' + packContext : '') +
       (this.config.systemPromptSuffix ? '\n\n' + this.config.systemPromptSuffix : '');
 
@@ -348,7 +310,11 @@ export class OpenAIAdapter implements LLMAdapter {
       'Content-Type': 'application/json',
     };
 
-    if (isAzure) {
+    if (this.config.getAccessToken) {
+      // Entra ID / OAuth token — always use Bearer, even for Azure endpoints
+      const token = await this.config.getAccessToken();
+      headers['Authorization'] = `Bearer ${token}`;
+    } else if (isAzure) {
       headers['api-key'] = this.config.apiKey;
     } else {
       headers['Authorization'] = `Bearer ${this.config.apiKey}`;
@@ -584,17 +550,8 @@ export class OpenAIAdapter implements LLMAdapter {
       logDecision('adapter', 'LLM used compact shorthand (e.g. "t" for type, "c" for children) — expanded to full property names');
     }
 
-    // If intent mode is active (or the response looks like an intent), resolve it
-    let spec: AdaptiveUISpec;
-    if (useIntents && isAgentIntent(expanded as Record<string, unknown>)) {
-      logDecision('adapter', 'LLM output looks like an intent (has "message" field, no "agentMessage") — routing through intent resolver to build the UI');
-      spec = resolveIntent(expanded as any);
-    } else {
-      logDecision('adapter', useIntents
-        ? 'Intent mode is on, but LLM returned a full AdaptiveUISpec instead of an intent — using it as-is'
-        : 'Adaptive mode — LLM returned a full UI spec, rendering directly without intent resolution');
-      spec = expanded as AdaptiveUISpec;
-    }
+    logDecision('adapter', 'LLM returned a full UI spec, rendering directly');
+    const spec = expanded as AdaptiveUISpec;
 
     logDecision('adapter', 'Sanitized the spec (blocked unsafe URLs, stripped script injection vectors)');
 
@@ -610,7 +567,10 @@ export class OpenAIAdapter implements LLMAdapter {
   async summarizeHistory(messages: LLMMessage[]): Promise<string> {
     const { url: endpoint, isAzure } = normalizeEndpoint(this.config.endpoint, this.config.model);
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (isAzure) {
+    if (this.config.getAccessToken) {
+      const token = await this.config.getAccessToken();
+      headers['Authorization'] = `Bearer ${token}`;
+    } else if (isAzure) {
       headers['api-key'] = this.config.apiKey;
     } else {
       headers['Authorization'] = `Bearer ${this.config.apiKey}`;

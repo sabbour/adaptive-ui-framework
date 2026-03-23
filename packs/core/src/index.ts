@@ -58,11 +58,8 @@ export {
   getComponent,
   hasComponent,
   getRegisteredTypes,
-  registerIntentResolver,
-  getIntentResolver,
-  getIntentResolverPrompt,
 } from './registry';
-export type { AdaptiveComponentProps, ComponentPack, IntentResolverEntry } from './registry';
+export type { AdaptiveComponentProps, ComponentPack } from './registry';
 
 // Renderer
 export { AdaptiveRenderer, renderChildren } from './renderer';
@@ -90,9 +87,12 @@ export {
   OpenAIAdapter,
   MockAdapter,
   ADAPTIVE_UI_SYSTEM_PROMPT,
-  INTENT_SYSTEM_PROMPT,
 } from './llm-adapter';
 export type { LLMAdapter, LLMMessage, OpenAIAdapterConfig } from './llm-adapter';
+
+// Entra ID authentication for Azure AI Foundry
+export { entraLogin, entraLogout, entraGetActiveAccount, entraGetAccessToken } from './entra-auth';
+export type { EntraAuthResult } from './entra-auth';
 
 // Tool system
 export { registerTool, getToolDefinitions } from './tools';
@@ -105,10 +105,6 @@ export type { Artifact } from './artifacts';
 // Session management
 export { getSessions, subscribeSessions, saveSession, loadSession, deleteSession, renameSession, generateSessionId, setSessionScope } from './session-manager';
 export type { Session } from './session-manager';
-
-// Intent-based UI resolution
-export { resolveIntent, isAgentIntent } from './intent-resolver';
-export type { AgentIntent, AskIntent, ShowIntent } from './intent-schema';
 
 // App registry & router
 export { registerApp, getApps, getApp } from './app-registry';

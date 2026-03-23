@@ -2,7 +2,7 @@
 // Shows saved conversation sessions and file artifacts in a collapsible left sidebar.
 // Sessions section on top, Files section below.
 
-import React, { useSyncExternalStore, useState } from 'react';
+import React, { useSyncExternalStore, useState, useCallback, useRef } from 'react';
 import {
   getSessions, subscribeSessions, deleteSession, renameSession,
   type Session,
@@ -66,6 +66,27 @@ export function SessionsSidebar({
   const artifacts = useSyncExternalStore(subscribeArtifacts, getArtifacts);
   const [internalCollapsed, setInternalCollapsed] = useState(false);
   const [confirmClearFiles, setConfirmClearFiles] = useState(false);
+  const [filesPanelHeight, setFilesPanelHeight] = useState(600);
+  const resizingRef = useRef(false);
+
+  const handleFilesResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    resizingRef.current = true;
+    const startY = e.clientY;
+    const startH = filesPanelHeight;
+    const onMove = (ev: MouseEvent) => {
+      if (!resizingRef.current) return;
+      const delta = startY - ev.clientY;
+      setFilesPanelHeight(Math.max(80, Math.min(800, startH + delta)));
+    };
+    const onUp = () => {
+      resizingRef.current = false;
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }, [filesPanelHeight]);
 
   const collapsed = controlledCollapsed !== undefined ? controlledCollapsed : internalCollapsed;
   const setCollapsed = (val: boolean) => {
@@ -150,7 +171,7 @@ export function SessionsSidebar({
 
     // Session list
     React.createElement('div', {
-      style: { flex: 1, overflow: 'auto', minHeight: 0 } as React.CSSProperties,
+      style: { flex: '0 1 auto', overflow: 'auto', minHeight: '40px', maxHeight: '40%' } as React.CSSProperties,
     },
       sessions.length === 0
         ? React.createElement('div', {
@@ -177,12 +198,22 @@ export function SessionsSidebar({
     // ─── Files section ───
     !hideFiles && React.createElement('div', {
       style: {
-        borderTop: '1px solid var(--adaptive-border, #e5e7eb)',
+        borderTop: 'none',
         display: 'flex', flexDirection: 'column',
-        minHeight: '80px', maxHeight: '50%',
-        flex: artifacts.length > 0 ? '0 1 auto' : '0 0 auto',
+        flex: 1, minHeight: filesPanelHeight + 'px',
+        overflow: 'hidden',
       } as React.CSSProperties,
     },
+      // Resize handle (drag to resize files panel)
+      React.createElement('div', {
+        onMouseDown: handleFilesResizeStart,
+        style: {
+          height: '5px', cursor: 'row-resize', flexShrink: 0,
+          borderTop: '1px solid var(--adaptive-border, #e5e7eb)',
+          borderBottom: '1px solid var(--adaptive-border, #e5e7eb)',
+          backgroundColor: 'var(--adaptive-surface, #fff)',
+        } as React.CSSProperties,
+      }),
       // Files header
       React.createElement('div', {
         style: {
@@ -624,15 +655,15 @@ function TreeNodeItem({ node, depth, selectedFileId, onSelectFile, onRemove, onD
     onClick: () => onSelectFile(artifact.id),
     style: {
       padding: '4px 8px 4px ' + (paddingLeft + 16) + 'px',
-      cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px',
-      fontSize: '13px',
+      cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px',
+      fontSize: '14px',
       backgroundColor: isSelected ? 'rgba(37, 99, 235, 0.08)' : 'transparent',
       color: 'var(--adaptive-text, #111827)',
     } as React.CSSProperties,
   },
     React.createElement('img', {
       src: getFileIcon(node.name), alt: 'File',
-      width: 14, height: 14, style: { opacity: 0.6, flexShrink: 0 },
+      width: 16, height: 16, style: { opacity: 0.6, flexShrink: 0 },
     }),
     React.createElement('span', {
       style: {

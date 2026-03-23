@@ -54,25 +54,28 @@ export function SearchableDropdown({
       type: 'button',
       onClick: () => { setOpen(!open); setSearch(''); },
       style: {
-        width: '100%', padding: '8px 12px', borderRadius: '6px',
-        border: '1px solid #d1d5db', fontSize: '15px',
+        width: '100%', padding: '0 8px', borderRadius: 'var(--adaptive-radius, 2px)',
+        border: '1px solid #8a8886', fontSize: 'var(--adaptive-fs-base, 13px)',
         backgroundColor: '#fff', cursor: 'pointer',
         textAlign: 'left' as const, display: 'flex',
         justifyContent: 'space-between', alignItems: 'center',
+        height: '32px', lineHeight: '20px',
+        fontFamily: 'var(--adaptive-font)',
+        color: 'var(--adaptive-text, #292827)',
       },
     },
       React.createElement('span', {
-        style: selectedLabel ? {} : { color: '#9ca3af' },
-      }, selectedLabel || placeholder || '— Select —'),
-      React.createElement('span', { style: { fontSize: '10px', marginLeft: '8px' } }, open ? '▲' : '▼')
+        style: selectedLabel ? { color: 'var(--adaptive-text, #292827)' } : { color: '#a19f9d' },
+      }, selectedLabel || placeholder || 'Select...'),
+      React.createElement('span', { style: { fontSize: '10px', marginLeft: '8px', color: '#605e5c' } }, open ? '\u25B2' : '\u25BC')
     ),
     // Dropdown panel
     open && React.createElement('div', {
       style: {
         position: 'absolute', top: '100%', left: 0, right: 0,
-        marginTop: '4px', backgroundColor: '#fff',
-        border: '1px solid #d1d5db', borderRadius: '6px',
-        boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+        marginTop: '2px', backgroundColor: '#fff',
+        border: '1px solid var(--adaptive-border, #e1dfdd)', borderRadius: 'var(--adaptive-radius, 2px)',
+        boxShadow: '0 3.2px 7.2px rgba(0,0,0,.132), 0 .6px 1.8px rgba(0,0,0,.108)',
         zIndex: 1000, maxHeight: '240px', display: 'flex',
         flexDirection: 'column',
       } as React.CSSProperties,
@@ -82,12 +85,15 @@ export function SearchableDropdown({
         type: 'text',
         value: search,
         onChange: (e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value),
-        placeholder: 'Search...',
+        placeholder: 'Filter...',
         autoFocus: true,
         style: {
-          padding: '8px 12px', border: 'none',
-          borderBottom: '1px solid #e5e7eb', fontSize: '15px',
-          outline: 'none', borderRadius: '6px 6px 0 0',
+          padding: '0 8px', border: 'none', height: '32px',
+          borderBottom: '1px solid var(--adaptive-border, #e1dfdd)', fontSize: 'var(--adaptive-fs-base, 13px)',
+          outline: 'none', boxShadow: 'none',
+          borderRadius: 'var(--adaptive-radius, 2px) var(--adaptive-radius, 2px) 0 0',
+          fontFamily: 'var(--adaptive-font)',
+          color: 'var(--adaptive-text, #292827)',
         },
       }),
       // Options list
@@ -96,22 +102,24 @@ export function SearchableDropdown({
       },
         filtered.length === 0
           ? React.createElement('div', {
-              style: { padding: '8px 12px', color: '#9ca3af', fontSize: '13px' },
+              style: { padding: '7px 10px', color: '#a19f9d', fontSize: '13px' },
             }, 'No matches')
           : filtered.map((opt) =>
               React.createElement('div', {
                 key: opt.value,
                 onClick: () => { onChange(opt.value); setOpen(false); setSearch(''); },
                 style: {
-                  padding: '8px 12px', cursor: 'pointer', fontSize: '15px',
-                  backgroundColor: opt.value === value ? 'rgba(37, 99, 235, 0.08)' : 'transparent',
-                  fontWeight: opt.value === value ? 500 : 400,
+                  padding: '7px 10px', cursor: 'pointer', fontSize: '13px',
+                  backgroundColor: opt.value === value ? '#e6f2ff' : 'transparent',
+                  fontWeight: opt.value === value ? 600 : 400,
+                  color: 'var(--adaptive-text, #292827)',
+                  borderBottom: '1px solid var(--adaptive-border, #e1dfdd)',
                 },
                 onMouseEnter: (e: React.MouseEvent<HTMLDivElement>) => {
-                  (e.currentTarget as HTMLDivElement).style.backgroundColor = 'rgba(37, 99, 235, 0.06)';
+                  (e.currentTarget as HTMLDivElement).style.backgroundColor = '#f3f2f1';
                 },
                 onMouseLeave: (e: React.MouseEvent<HTMLDivElement>) => {
-                  (e.currentTarget as HTMLDivElement).style.backgroundColor = opt.value === value ? 'rgba(37, 99, 235, 0.08)' : 'transparent';
+                  (e.currentTarget as HTMLDivElement).style.backgroundColor = opt.value === value ? '#e6f2ff' : 'transparent';
                 },
               }, opt.label)
             )
@@ -138,13 +146,13 @@ function TextComponent({ node }: AdaptiveComponentProps<TextNode>) {
   };
   const Tag = variantMap[node.variant ?? 'body'] ?? 'p';
   const variantStyles: Record<string, React.CSSProperties> = {
-    h1: { fontSize: '26px', fontWeight: 700, margin: '0 0 0.4em' },
-    h2: { fontSize: '22px', fontWeight: 600, margin: '0 0 0.3em' },
-    h3: { fontSize: '18px', fontWeight: 600, margin: '0 0 0.2em' },
-    h4: { fontSize: '16px', fontWeight: 600, margin: '0 0 0.15em' },
-    body: { fontSize: '15px', margin: '0 0 0.4em' },
-    caption: { fontSize: '13px', color: '#6b7280' },
-    code: { fontFamily: 'monospace', backgroundColor: '#f4f4f4', padding: '2px 6px', borderRadius: '3px' },
+    h1: { fontSize: '24px', fontWeight: 600, margin: '0 0 0.4em' },
+    h2: { fontSize: '20px', fontWeight: 600, margin: '0 0 0.3em' },
+    h3: { fontSize: '16px', fontWeight: 600, margin: '0 0 0.2em' },
+    h4: { fontSize: '14px', fontWeight: 600, margin: '0 0 0.15em' },
+    body: { fontSize: '13px', margin: '0 0 0.4em' },
+    caption: { fontSize: '12px', color: 'var(--adaptive-text-secondary, #646464)' },
+    code: { fontFamily: 'monospace', backgroundColor: '#f3f2f1', padding: '2px 6px', borderRadius: '2px' },
   };
   return React.createElement(Tag, {
     style: { ...variantStyles[node.variant ?? 'body'], ...node.style } as React.CSSProperties,
@@ -159,15 +167,17 @@ function ButtonComponent({ node }: AdaptiveComponentProps<ButtonNode>) {
     ?? (node as unknown as { action?: unknown }).action
     ?? (node as unknown as { onPress?: unknown }).onPress;
   const variantStyles: Record<string, React.CSSProperties> = {
-    primary: { backgroundColor: 'var(--adaptive-primary, #2563eb)', color: '#fff', border: 'none' },
-    secondary: { backgroundColor: 'transparent', color: 'var(--adaptive-primary, #2563eb)', border: '1px solid var(--adaptive-primary, #2563eb)' },
-    danger: { backgroundColor: '#dc2626', color: '#fff', border: 'none' },
+    primary: { backgroundColor: 'var(--adaptive-primary, #0078d4)', color: '#fff', border: '1px solid var(--adaptive-primary, #0078d4)' },
+    secondary: { backgroundColor: '#fff', color: 'var(--adaptive-text, #323130)', border: '1px solid #8a8886' },
+    danger: { backgroundColor: '#c32727', color: '#fff', border: '1px solid #c32727' },
     ghost: { backgroundColor: 'transparent', color: 'inherit', border: 'none' },
   };
   return React.createElement('button', {
     style: {
-      padding: '10px 20px', borderRadius: '6px', cursor: 'pointer', fontSize: '15px',
-      fontWeight: 500, transition: 'opacity 0.2s', marginTop: '4px',
+      padding: '0 20px', borderRadius: 'var(--adaptive-radius, 2px)', cursor: 'pointer', fontSize: 'var(--adaptive-fs-base, 13px)',
+      fontWeight: 600, transition: 'background 150ms ease', marginTop: '4px',
+      height: '32px', lineHeight: '20px',
+      fontFamily: 'var(--adaptive-font)',
       ...variantStyles[node.variant ?? 'primary'],
       ...node.style,
     } as React.CSSProperties,
@@ -192,7 +202,7 @@ function InputComponent({ node }: AdaptiveComponentProps<InputNode>) {
 
   return React.createElement('div', { style: { marginBottom: '12px', ...node.style } as React.CSSProperties },
     node.label && React.createElement('label', {
-      style: { display: 'block', marginBottom: '4px', fontSize: '15px', fontWeight: 500 },
+      style: { display: 'block', marginBottom: '4px', fontSize: '13px', fontWeight: 600, color: 'var(--adaptive-text, #292827)' },
     }, node.label),
     React.createElement(Tag, {
       type: isTextarea ? undefined : (node.inputType ?? 'text'),
@@ -202,10 +212,13 @@ function InputComponent({ node }: AdaptiveComponentProps<InputNode>) {
         dispatch({ type: 'SET', key: node.bind, value: e.target.value });
       },
       style: {
-        width: '100%', padding: '8px 12px', borderRadius: '6px',
-        border: '1px solid #d1d5db', fontSize: '15px',
+        width: '100%', padding: '0 8px', borderRadius: 'var(--adaptive-radius, 2px)',
+        border: '1px solid #8a8886', fontSize: 'var(--adaptive-fs-base, 13px)',
         boxSizing: 'border-box' as const,
-        ...(isTextarea ? { minHeight: '80px', resize: 'vertical' as const } : {}),
+        height: isTextarea ? undefined : '32px', lineHeight: '20px',
+        fontFamily: 'var(--adaptive-font)',
+        color: 'var(--adaptive-text, #292827)',
+        ...(isTextarea ? { minHeight: '80px', resize: 'vertical' as const, padding: '4px 8px' } : {}),
       },
       className: node.className,
     })
@@ -223,7 +236,7 @@ function SelectComponent({ node }: AdaptiveComponentProps<SelectNode>) {
 
   return React.createElement('div', { style: { marginBottom: '12px', ...node.style } as React.CSSProperties },
     node.label && React.createElement('label', {
-      style: { display: 'block', marginBottom: '4px', fontSize: '15px', fontWeight: 500 },
+      style: { display: 'block', marginBottom: '4px', fontSize: '13px', fontWeight: 600, color: 'var(--adaptive-text, #292827)' },
     }, node.label),
     React.createElement(SearchableDropdown, {
       options,
@@ -280,7 +293,7 @@ function ComboboxComponent({ node }: AdaptiveComponentProps<ComboboxNode>) {
 
   return React.createElement('div', { style: { marginBottom: '12px', ...node.style } as React.CSSProperties },
     node.label && React.createElement('label', {
-      style: { display: 'block', marginBottom: '4px', fontSize: '15px', fontWeight: 500 },
+      style: { display: 'block', marginBottom: '4px', fontSize: '13px', fontWeight: 600, color: 'var(--adaptive-text, #292827)' },
     }, node.label),
     React.createElement('div', {
       ref: containerRef,
@@ -291,25 +304,28 @@ function ComboboxComponent({ node }: AdaptiveComponentProps<ComboboxNode>) {
         type: 'button',
         onClick: () => { setOpen(!open); setSearch(''); },
         style: {
-          width: '100%', padding: '8px 12px', borderRadius: '6px',
-          border: '1px solid #d1d5db', fontSize: '15px',
+          width: '100%', padding: '0 8px', borderRadius: 'var(--adaptive-radius, 2px)',
+          border: '1px solid #8a8886', fontSize: 'var(--adaptive-fs-base, 13px)',
           backgroundColor: '#fff', cursor: 'pointer',
           textAlign: 'left' as const, display: 'flex',
           justifyContent: 'space-between', alignItems: 'center',
+          height: '32px', lineHeight: '20px',
+          fontFamily: 'var(--adaptive-font)',
+          color: 'var(--adaptive-text, #292827)',
         },
       },
         React.createElement('span', {
-          style: displayValue ? {} : { color: '#9ca3af' },
-        }, displayValue || node.placeholder || '\u2014 Select or type \u2014'),
-        React.createElement('span', { style: { fontSize: '10px', marginLeft: '8px' } }, open ? '\u25B2' : '\u25BC')
+          style: displayValue ? { color: 'var(--adaptive-text, #292827)' } : { color: '#a19f9d' },
+        }, displayValue || node.placeholder || 'Select or type...'),
+        React.createElement('span', { style: { fontSize: '10px', marginLeft: '8px', color: '#605e5c' } }, open ? '\u25B2' : '\u25BC')
       ),
       // Dropdown panel
       open && React.createElement('div', {
         style: {
           position: 'absolute', top: '100%', left: 0, right: 0,
-          marginTop: '4px', backgroundColor: '#fff',
-          border: '1px solid #d1d5db', borderRadius: '6px',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+          marginTop: '2px', backgroundColor: '#fff',
+          border: '1px solid var(--adaptive-border, #e1dfdd)', borderRadius: 'var(--adaptive-radius, 2px)',
+          boxShadow: '0 3.2px 7.2px rgba(0,0,0,.132), 0 .6px 1.8px rgba(0,0,0,.108)',
           zIndex: 1000, maxHeight: '280px', display: 'flex',
           flexDirection: 'column',
         } as React.CSSProperties,
@@ -322,12 +338,15 @@ function ComboboxComponent({ node }: AdaptiveComponentProps<ComboboxNode>) {
           onKeyDown: (e: React.KeyboardEvent) => {
             if (e.key === 'Enter' && allowCustom) handleCustomSubmit();
           },
-          placeholder: allowCustom ? 'Search or type a custom value...' : 'Search...',
+          placeholder: allowCustom ? 'Search or type a custom value...' : 'Filter...',
           autoFocus: true,
           style: {
-            padding: '8px 12px', border: 'none',
-            borderBottom: '1px solid #e5e7eb', fontSize: '15px',
-            outline: 'none', borderRadius: '6px 6px 0 0',
+            padding: '0 8px', border: 'none', height: '32px',
+            borderBottom: '1px solid var(--adaptive-border, #e1dfdd)', fontSize: 'var(--adaptive-fs-base, 13px)',
+            outline: 'none', boxShadow: 'none',
+            borderRadius: 'var(--adaptive-radius, 2px) var(--adaptive-radius, 2px) 0 0',
+            fontFamily: 'var(--adaptive-font)',
+            color: 'var(--adaptive-text, #292827)',
           },
         }),
         // Options list
@@ -339,15 +358,17 @@ function ComboboxComponent({ node }: AdaptiveComponentProps<ComboboxNode>) {
               key: opt.value,
               onClick: () => handleSelect(opt.value),
               style: {
-                padding: '8px 12px', cursor: 'pointer', fontSize: '15px',
-                backgroundColor: opt.value === value ? 'rgba(37, 99, 235, 0.08)' : 'transparent',
-                fontWeight: opt.value === value ? 500 : 400,
+                padding: '7px 10px', cursor: 'pointer', fontSize: '13px',
+                backgroundColor: opt.value === value ? '#e6f2ff' : 'transparent',
+                fontWeight: opt.value === value ? 600 : 400,
+                color: 'var(--adaptive-text, #292827)',
+                borderBottom: '1px solid var(--adaptive-border, #e1dfdd)',
               },
               onMouseEnter: (e: React.MouseEvent<HTMLDivElement>) => {
-                (e.currentTarget as HTMLDivElement).style.backgroundColor = 'rgba(37, 99, 235, 0.06)';
+                (e.currentTarget as HTMLDivElement).style.backgroundColor = '#f3f2f1';
               },
               onMouseLeave: (e: React.MouseEvent<HTMLDivElement>) => {
-                (e.currentTarget as HTMLDivElement).style.backgroundColor = opt.value === value ? 'rgba(37, 99, 235, 0.08)' : 'transparent';
+                (e.currentTarget as HTMLDivElement).style.backgroundColor = opt.value === value ? '#e6f2ff' : 'transparent';
               },
             }, opt.label)
           ),
@@ -356,12 +377,12 @@ function ComboboxComponent({ node }: AdaptiveComponentProps<ComboboxNode>) {
             && React.createElement('div', {
               onClick: handleCustomSubmit,
               style: {
-                padding: '8px 12px', cursor: 'pointer', fontSize: '15px',
-                borderTop: filtered.length > 0 ? '1px solid #e5e7eb' : 'none',
-                color: 'var(--adaptive-primary, #2563eb)', fontWeight: 500,
+                padding: '7px 10px', cursor: 'pointer', fontSize: '13px',
+                borderTop: filtered.length > 0 ? '1px solid var(--adaptive-border, #e1dfdd)' : 'none',
+                color: 'var(--adaptive-primary, #0078d4)', fontWeight: 600,
               },
               onMouseEnter: (e: React.MouseEvent<HTMLDivElement>) => {
-                (e.currentTarget as HTMLDivElement).style.backgroundColor = 'rgba(37, 99, 235, 0.06)';
+                (e.currentTarget as HTMLDivElement).style.backgroundColor = '#f3f2f1';
               },
               onMouseLeave: (e: React.MouseEvent<HTMLDivElement>) => {
                 (e.currentTarget as HTMLDivElement).style.backgroundColor = 'transparent';
@@ -421,7 +442,7 @@ function QuestionnaireComponent({ node }: AdaptiveComponentProps<QuestionnaireNo
 
   return React.createElement('div', {
     style: {
-      border: '1px solid var(--adaptive-border, #e5e7eb)',
+      border: '1px solid var(--adaptive-border, #e1dfdd)',
       borderRadius: '12px',
       backgroundColor: 'var(--adaptive-surface, #fff)',
       boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
@@ -439,14 +460,14 @@ function QuestionnaireComponent({ node }: AdaptiveComponentProps<QuestionnaireNo
       React.createElement('div', {
         style: {
           flex: 1, fontSize: '14px', fontWeight: 600,
-          color: 'var(--adaptive-text, #111827)', lineHeight: 1.4,
+          color: 'var(--adaptive-text, #292827)', lineHeight: 1.4,
         },
       }, q.question),
       // Step indicator + navigation
       React.createElement('div', {
         style: {
           display: 'flex', alignItems: 'center', gap: '4px',
-          flexShrink: 0, fontSize: '12px', color: 'var(--adaptive-text-secondary, #6b7280)',
+          flexShrink: 0, fontSize: '12px', color: 'var(--adaptive-text-secondary, #646464)',
         },
       },
         // Back arrow
@@ -454,7 +475,7 @@ function QuestionnaireComponent({ node }: AdaptiveComponentProps<QuestionnaireNo
           onClick: () => setStep((s) => s - 1),
           style: {
             background: 'none', border: 'none', cursor: 'pointer',
-            padding: '2px', fontSize: '14px', color: 'var(--adaptive-text-secondary, #6b7280)',
+            padding: '2px', fontSize: '14px', color: 'var(--adaptive-text-secondary, #646464)',
             display: 'flex', alignItems: 'center',
           },
           title: 'Previous question',
@@ -466,7 +487,7 @@ function QuestionnaireComponent({ node }: AdaptiveComponentProps<QuestionnaireNo
           onClick: () => setStep((s) => s + 1),
           style: {
             background: 'none', border: 'none', cursor: 'pointer',
-            padding: '2px', fontSize: '14px', color: 'var(--adaptive-text-secondary, #6b7280)',
+            padding: '2px', fontSize: '14px', color: 'var(--adaptive-text-secondary, #646464)',
             display: 'flex', alignItems: 'center',
           },
           title: 'Next question',
@@ -476,7 +497,7 @@ function QuestionnaireComponent({ node }: AdaptiveComponentProps<QuestionnaireNo
           onClick: () => setDismissed(true),
           style: {
             background: 'none', border: 'none', cursor: 'pointer',
-            padding: '2px', fontSize: '16px', color: 'var(--adaptive-text-secondary, #6b7280)',
+            padding: '2px', fontSize: '16px', color: 'var(--adaptive-text-secondary, #646464)',
             display: 'flex', alignItems: 'center', marginLeft: '4px',
           },
           title: 'Dismiss',
@@ -495,7 +516,7 @@ function QuestionnaireComponent({ node }: AdaptiveComponentProps<QuestionnaireNo
           style: {
             display: 'flex', alignItems: 'center', gap: '10px',
             padding: '8px 0', cursor: 'pointer',
-            fontSize: '14px', color: 'var(--adaptive-text, #111827)',
+            fontSize: '14px', color: 'var(--adaptive-text, #292827)',
           } as React.CSSProperties,
         },
           // Radio circle
@@ -503,8 +524,8 @@ function QuestionnaireComponent({ node }: AdaptiveComponentProps<QuestionnaireNo
             style: {
               width: '18px', height: '18px', borderRadius: '50%',
               border: currentValue === opt.value
-                ? '5px solid var(--adaptive-primary, #2563eb)'
-                : '2px solid var(--adaptive-border, #d1d5db)',
+                ? '5px solid var(--adaptive-primary, #0078d4)'
+                : '2px solid var(--adaptive-border, #8a8886)',
               backgroundColor: 'var(--adaptive-surface, #fff)',
               flexShrink: 0, boxSizing: 'border-box' as const,
               transition: 'border 0.15s',
@@ -544,11 +565,11 @@ function QuestionnaireInput({ placeholder, onSubmit }: { placeholder: string; on
       placeholder,
       style: {
         width: '100%', padding: '10px 12px',
-        borderRadius: '8px',
-        border: '1px solid var(--adaptive-border, #e5e7eb)',
+        borderRadius: '2px',
+        border: '1px solid var(--adaptive-border, #e1dfdd)',
         fontSize: '14px', outline: 'none',
         backgroundColor: 'var(--adaptive-bg, #f5f5f5)',
-        color: 'var(--adaptive-text, #111827)',
+        color: 'var(--adaptive-text, #292827)',
         boxSizing: 'border-box' as const,
       },
     })
@@ -612,7 +633,7 @@ function CardComponent({ node }: AdaptiveComponentProps<CardNode>) {
       padding: '16px',
       cursor: node.onClick ? 'pointer' : 'default',
       borderColor: pressed ? 'var(--adaptive-primary)' : undefined,
-      backgroundColor: pressed ? 'rgba(37, 99, 235, 0.04)' : undefined,
+      backgroundColor: pressed ? 'rgba(0, 120, 212, 0.04)' : undefined,
       ...node.style,
     } as React.CSSProperties,
     onClick: node.onClick ? () => {
@@ -628,10 +649,10 @@ function CardComponent({ node }: AdaptiveComponentProps<CardNode>) {
     } : undefined,
   },
     node.title && React.createElement('h3', {
-      style: { margin: '0 0 4px', fontSize: '1.05rem' },
+      style: { margin: '0 0 4px', fontSize: '14px', fontWeight: 600 },
     }, node.title),
     node.subtitle && React.createElement('p', {
-      style: { margin: '0 0 12px', fontSize: '0.85rem', color: 'var(--adaptive-text-secondary)' },
+      style: { margin: '0 0 12px', fontSize: '12px', color: 'var(--adaptive-text-secondary)' },
     }, node.subtitle),
     ...renderChildren(node.children)
   );
@@ -699,8 +720,8 @@ function TableComponent({ node }: AdaptiveComponentProps<TableNode>) {
       style: {
         padding: '10px 12px',
         borderRadius: 'var(--adaptive-radius, 8px)',
-        border: '1px solid var(--adaptive-border, #e5e7eb)',
-        color: 'var(--adaptive-text-secondary, #6b7280)',
+        border: '1px solid var(--adaptive-border, #e1dfdd)',
+        color: 'var(--adaptive-text-secondary, #646464)',
         fontSize: '12px',
         ...node.style,
       } as React.CSSProperties,
@@ -712,7 +733,7 @@ function TableComponent({ node }: AdaptiveComponentProps<TableNode>) {
     style: { overflowX: 'auto' as const, ...node.style } as React.CSSProperties,
   },
     React.createElement('table', {
-      style: { width: '100%', borderCollapse: 'collapse' as const, fontSize: '15px' },
+      style: { width: '100%', borderCollapse: 'collapse' as const, fontSize: '13px' },
       className: node.className,
     },
       React.createElement('thead', null,
@@ -722,7 +743,7 @@ function TableComponent({ node }: AdaptiveComponentProps<TableNode>) {
               key: col.key,
               style: {
                 textAlign: 'left' as const, padding: '10px 12px',
-                borderBottom: '2px solid #e5e7eb', fontWeight: 600,
+                borderBottom: '2px solid #e1dfdd', fontWeight: 600,
                 width: col.width,
               },
             }, col.header)
@@ -765,7 +786,7 @@ function TabsComponent({ node }: AdaptiveComponentProps<TabsNode>) {
 
   return React.createElement('div', { style: node.style as React.CSSProperties, className: node.className },
     React.createElement('div', {
-      style: { display: 'flex', borderBottom: '2px solid #e5e7eb', marginBottom: '16px' },
+      style: { display: 'flex', borderBottom: '2px solid #e1dfdd', marginBottom: '16px' },
     },
       ...node.tabs.map((tab) =>
         React.createElement('button', {
@@ -773,9 +794,9 @@ function TabsComponent({ node }: AdaptiveComponentProps<TabsNode>) {
           onClick: () => setActiveTab(tab.id),
           style: {
             padding: '8px 16px', border: 'none', background: 'none', cursor: 'pointer',
-            fontWeight: activeTab === tab.id ? 600 : 400, fontSize: '15px',
-            borderBottom: activeTab === tab.id ? '2px solid var(--adaptive-primary, #2563eb)' : '2px solid transparent',
-            color: activeTab === tab.id ? 'var(--adaptive-primary, #2563eb)' : '#666',
+            fontWeight: activeTab === tab.id ? 600 : 400, fontSize: '13px',
+            borderBottom: activeTab === tab.id ? '2px solid var(--adaptive-primary, #0078d4)' : '2px solid transparent',
+            color: activeTab === tab.id ? 'var(--adaptive-primary, #0078d4)' : '#666',
             marginBottom: '-2px',
           },
         }, tab.label)
@@ -793,18 +814,18 @@ function ProgressComponent({ node }: AdaptiveComponentProps<ProgressNode>) {
 
   return React.createElement('div', { style: { marginBottom: '12px', ...node.style } as React.CSSProperties },
     node.label && React.createElement('div', {
-      style: { fontSize: '15px', marginBottom: '4px', display: 'flex', justifyContent: 'space-between' },
+      style: { fontSize: '13px', marginBottom: '4px', display: 'flex', justifyContent: 'space-between' },
     },
       React.createElement('span', null, node.label),
       React.createElement('span', null, `${Math.round(pct)}%`)
     ),
     React.createElement('div', {
-      style: { height: '8px', backgroundColor: '#e5e7eb', borderRadius: '4px', overflow: 'hidden' },
+      style: { height: '8px', backgroundColor: '#e1dfdd', borderRadius: '4px', overflow: 'hidden' },
     },
       React.createElement('div', {
         style: {
           height: '100%', width: `${pct}%`,
-          backgroundColor: 'var(--adaptive-primary, #2563eb)',
+          backgroundColor: 'var(--adaptive-primary, #0078d4)',
           borderRadius: '4px', transition: 'width 0.3s ease',
         },
       })
@@ -815,17 +836,18 @@ function ProgressComponent({ node }: AdaptiveComponentProps<ProgressNode>) {
 // ─── Alert ───
 function AlertComponent({ node }: AdaptiveComponentProps<AlertNode>) {
   const colorMap: Record<string, { bg: string; border: string; text: string }> = {
-    info: { bg: '#eff6ff', border: '#3b82f6', text: '#1e40af' },
-    success: { bg: '#f0fdf4', border: '#22c55e', text: '#166534' },
-    warning: { bg: '#fffbeb', border: '#f59e0b', text: '#92400e' },
-    error: { bg: '#fef2f2', border: '#ef4444', text: '#991b1b' },
+    info: { bg: '#dae4ff', border: '#015cda', text: '#004578' },
+    success: { bg: '#e6ffcc', border: '#428000', text: '#292827' },
+    warning: { bg: '#ffdfb8', border: '#db7500', text: '#6d5700' },
+    error: { bg: '#fdd8db', border: '#a4262c', text: '#a80000' },
   };
   const colors = colorMap[node.severity] ?? colorMap.info;
 
   return React.createElement('div', {
     style: {
-      padding: '12px 16px', borderRadius: '6px', borderLeft: `4px solid ${colors.border}`,
+      padding: '12px 16px', borderRadius: '2px', border: `1px solid ${colors.border}`,
       backgroundColor: colors.bg, color: colors.text, marginBottom: '12px',
+      fontSize: '13px', lineHeight: '20px',
       ...node.style,
     } as React.CSSProperties,
     className: node.className,
@@ -900,7 +922,7 @@ function ChatInputComponent({ node }: AdaptiveComponentProps<ChatInputNode>) {
   return React.createElement('div', {
     style: {
       display: 'flex', gap: '8px', padding: '12px',
-      borderTop: '1px solid #e5e7eb', ...node.style,
+      borderTop: '1px solid #e1dfdd', ...node.style,
     } as React.CSSProperties,
   },
     React.createElement('input', {
@@ -911,17 +933,17 @@ function ChatInputComponent({ node }: AdaptiveComponentProps<ChatInputNode>) {
       placeholder: node.placeholder ?? 'Type a message...',
       disabled: isLoading,
       style: {
-        flex: 1, padding: '10px 14px', borderRadius: '8px',
-        border: '1px solid #d1d5db', fontSize: '15px', outline: 'none',
+        flex: 1, padding: '10px 14px', borderRadius: '2px',
+        border: '1px solid #8a8886', fontSize: '13px', outline: 'none',
       },
     }),
     React.createElement('button', {
       onClick: submit,
       disabled: isLoading || !value.trim(),
       style: {
-        padding: '10px 20px', borderRadius: '8px', border: 'none',
-        backgroundColor: 'var(--adaptive-primary, #2563eb)', color: '#fff',
-        cursor: 'pointer', fontSize: '15px', fontWeight: 500,
+        padding: '10px 20px', borderRadius: '2px', border: 'none',
+        backgroundColor: 'var(--adaptive-primary, #0078d4)', color: '#fff',
+        cursor: 'pointer', fontSize: '13px', fontWeight: 500,
         opacity: isLoading || !value.trim() ? 0.5 : 1,
       },
     }, isLoading ? '...' : 'Send')
@@ -933,7 +955,7 @@ function MarkdownComponent({ node }: AdaptiveComponentProps<MarkdownNode>) {
   // Simple markdown: headings, bold, italic, code, links, lists
   const html = simpleMarkdown(node.content);
   return React.createElement('div', {
-    style: { lineHeight: 1.6, fontSize: '15px', ...node.style } as React.CSSProperties,
+    style: { lineHeight: '20px', fontSize: '13px', ...node.style } as React.CSSProperties,
     className: `adaptive-markdown ${node.className || ''}`,
     dangerouslySetInnerHTML: { __html: html },
   });
@@ -953,7 +975,7 @@ export function simpleMarkdown(md: string): string {
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.+?)\*/g, '<em>$1</em>')
     // Inline code
-    .replace(/`(.+?)`/g, '<code style="background:#f4f4f4;padding:2px 4px;border-radius:3px">$1</code>')
+    .replace(/`(.+?)`/g, '<code style="background:#f3f2f1;padding:1px 4px;border-radius:2px;font-size:12px;border:1px solid #e1dfdd">$1</code>')
     // Links
     .replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
     // Unordered lists: handle -, *, and • bullets
@@ -976,10 +998,10 @@ function RadioGroupComponent({ node }: AdaptiveComponentProps<RadioGroupNode>) {
 
   return React.createElement('div', { style: { marginBottom: '12px', ...node.style } as React.CSSProperties },
     node.label && React.createElement('label', {
-      style: { display: 'block', marginBottom: '8px', fontSize: '15px', fontWeight: 500 },
+      style: { display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: 600, color: 'var(--adaptive-text, #292827)' },
     }, node.label),
     React.createElement('div', {
-      style: { display: 'flex', flexDirection: 'column', gap: '8px' } as React.CSSProperties,
+      style: { display: 'flex', flexDirection: 'column', gap: '0' } as React.CSSProperties,
     },
       ...node.options.map((opt) =>
         React.createElement('label', {
@@ -995,25 +1017,25 @@ function RadioGroupComponent({ node }: AdaptiveComponentProps<RadioGroupNode>) {
             }
           },
           style: {
-            display: 'flex', alignItems: 'flex-start', gap: '10px',
-            padding: '10px 14px', borderRadius: '8px',
-            border: value === opt.value ? '2px solid var(--adaptive-primary, #2563eb)' : '1px solid #d1d5db',
-            backgroundColor: value === opt.value ? 'rgba(37, 99, 235, 0.04)' : '#fff',
-            cursor: 'pointer', transition: 'all 0.15s ease',
+            display: 'flex', alignItems: 'center', gap: '8px',
+            padding: '4px 0',
+            border: 'none', backgroundColor: 'transparent',
+            cursor: 'pointer',
           } as React.CSSProperties,
         },
           React.createElement('div', {
             style: {
-              width: '18px', height: '18px', borderRadius: '50%',
-              border: value === opt.value ? '5px solid var(--adaptive-primary, #2563eb)' : '2px solid #d1d5db',
-              flexShrink: 0, marginTop: '2px',
+              width: '16px', height: '16px', borderRadius: '50%',
+              border: value === opt.value ? '5px solid var(--adaptive-primary, #0078d4)' : '1px solid #8a8886',
+              flexShrink: 0,
               boxSizing: 'border-box',
+              backgroundColor: '#fff',
             } as React.CSSProperties,
           }),
           React.createElement('div', { style: { flex: 1, minWidth: 0 } },
-            React.createElement('div', { style: { fontSize: '15px', fontWeight: 500 } }, opt.label),
+            React.createElement('span', { style: { fontSize: '13px', color: 'var(--adaptive-text, #292827)' } }, opt.label),
             opt.description && React.createElement('div', {
-              style: { fontSize: '12px', color: '#6b7280', marginTop: '2px' },
+              style: { fontSize: '12px', color: '#646464', marginTop: '1px' },
             }, opt.description)
           )
         )
@@ -1040,10 +1062,10 @@ function MultiSelectComponent({ node }: AdaptiveComponentProps<MultiSelectNode>)
 
   return React.createElement('div', { style: { marginBottom: '12px', ...node.style } as React.CSSProperties },
     node.label && React.createElement('label', {
-      style: { display: 'block', marginBottom: '8px', fontSize: '15px', fontWeight: 500 },
+      style: { display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: 600, color: 'var(--adaptive-text, #292827)' },
     }, node.label),
     React.createElement('div', {
-      style: { display: 'flex', flexDirection: 'column', gap: '8px' } as React.CSSProperties,
+      style: { display: 'flex', flexDirection: 'column', gap: '0' } as React.CSSProperties,
     },
       ...node.options.map((opt) => {
         const isSelected = selected.includes(opt.value);
@@ -1060,28 +1082,27 @@ function MultiSelectComponent({ node }: AdaptiveComponentProps<MultiSelectNode>)
             }
           },
           style: {
-            display: 'flex', alignItems: 'flex-start', gap: '10px',
-            padding: '10px 14px', borderRadius: '8px',
-            border: isSelected ? '2px solid var(--adaptive-primary, #2563eb)' : '1px solid #d1d5db',
-            backgroundColor: isSelected ? 'rgba(37, 99, 235, 0.04)' : '#fff',
-            cursor: 'pointer', transition: 'all 0.15s ease',
+            display: 'flex', alignItems: 'center', gap: '8px',
+            padding: '4px 0',
+            border: 'none', backgroundColor: 'transparent',
+            cursor: 'pointer',
           } as React.CSSProperties,
         },
           React.createElement('div', {
             style: {
-              width: '18px', height: '18px', borderRadius: '4px',
-              border: isSelected ? 'none' : '2px solid #d1d5db',
-              backgroundColor: isSelected ? 'var(--adaptive-primary, #2563eb)' : '#fff',
-              flexShrink: 0, marginTop: '2px',
+              width: '16px', height: '16px', borderRadius: '2px',
+              border: isSelected ? 'none' : '1px solid #8a8886',
+              backgroundColor: isSelected ? 'var(--adaptive-primary, #0078d4)' : '#fff',
+              flexShrink: 0,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: '#fff', fontSize: '12px', fontWeight: 700,
+              color: '#fff', fontSize: '11px', fontWeight: 700,
               boxSizing: 'border-box',
             } as React.CSSProperties,
           }, isSelected ? '✓' : ''),
           React.createElement('div', { style: { flex: 1, minWidth: 0 } },
-            React.createElement('div', { style: { fontSize: '15px', fontWeight: 500 } }, opt.label),
+            React.createElement('span', { style: { fontSize: '13px', color: 'var(--adaptive-text, #292827)' } }, opt.label),
             opt.description && React.createElement('div', {
-              style: { fontSize: '12px', color: '#6b7280', marginTop: '2px' },
+              style: { fontSize: '12px', color: '#646464', marginTop: '1px' },
             }, opt.description)
           )
         );
@@ -1102,7 +1123,7 @@ function ToggleComponent({ node }: AdaptiveComponentProps<ToggleNode>) {
     React.createElement('div', {
       style: {
         width: '44px', height: '24px', borderRadius: '12px',
-        backgroundColor: isOn ? 'var(--adaptive-primary, #2563eb)' : '#d1d5db',
+        backgroundColor: isOn ? 'var(--adaptive-primary, #0078d4)' : '#8a8886',
         position: 'relative', transition: 'background-color 0.2s', flexShrink: 0,
       } as React.CSSProperties,
     },
@@ -1116,8 +1137,8 @@ function ToggleComponent({ node }: AdaptiveComponentProps<ToggleNode>) {
       })
     ),
     React.createElement('div', null,
-      node.label && React.createElement('div', { style: { fontSize: '15px', fontWeight: 500 } }, node.label),
-      node.description && React.createElement('div', { style: { fontSize: '12px', color: '#6b7280' } }, node.description)
+      node.label && React.createElement('div', { style: { fontSize: '13px', fontWeight: 500 } }, node.label),
+      node.description && React.createElement('div', { style: { fontSize: '12px', color: '#646464' } }, node.description)
     )
   );
 }
@@ -1131,10 +1152,10 @@ function SliderComponent({ node }: AdaptiveComponentProps<SliderNode>) {
 
   return React.createElement('div', { style: { marginBottom: '12px', ...node.style } as React.CSSProperties },
     node.label && React.createElement('div', {
-      style: { display: 'flex', justifyContent: 'space-between', fontSize: '15px', fontWeight: 500, marginBottom: '6px' },
+      style: { display: 'flex', justifyContent: 'space-between', fontSize: '13px', fontWeight: 500, marginBottom: '6px' },
     },
       React.createElement('span', null, node.label),
-      React.createElement('span', { style: { color: 'var(--adaptive-primary, #2563eb)', fontWeight: 600 } }, value)
+      React.createElement('span', { style: { color: 'var(--adaptive-primary, #0078d4)', fontWeight: 600 } }, value)
     ),
     React.createElement('input', {
       type: 'range',
@@ -1142,7 +1163,7 @@ function SliderComponent({ node }: AdaptiveComponentProps<SliderNode>) {
       step: node.step ?? 1,
       value,
       onChange: (e: React.ChangeEvent<HTMLInputElement>) => dispatch({ type: 'SET', key: node.bind, value: e.target.value }),
-      style: { width: '100%', accentColor: 'var(--adaptive-primary, #2563eb)' },
+      style: { width: '100%', accentColor: 'var(--adaptive-primary, #0078d4)' },
     })
   );
 }
@@ -1153,13 +1174,13 @@ function DividerComponent({ node }: AdaptiveComponentProps<DividerNode>) {
     return React.createElement('div', {
       style: { display: 'flex', alignItems: 'center', gap: '12px', margin: '16px 0', ...node.style } as React.CSSProperties,
     },
-      React.createElement('div', { style: { flex: 1, height: '1px', backgroundColor: '#e5e7eb' } }),
-      React.createElement('span', { style: { fontSize: '12px', color: '#9ca3af', textTransform: 'uppercase' as const, letterSpacing: '0.05em' } }, node.label),
-      React.createElement('div', { style: { flex: 1, height: '1px', backgroundColor: '#e5e7eb' } })
+      React.createElement('div', { style: { flex: 1, height: '1px', backgroundColor: '#e1dfdd' } }),
+      React.createElement('span', { style: { fontSize: '12px', color: '#a19f9d', textTransform: 'uppercase' as const, letterSpacing: '0.05em' } }, node.label),
+      React.createElement('div', { style: { flex: 1, height: '1px', backgroundColor: '#e1dfdd' } })
     );
   }
   return React.createElement('hr', {
-    style: { border: 'none', height: '1px', backgroundColor: '#e5e7eb', margin: '16px 0', ...node.style },
+    style: { border: 'none', height: '1px', backgroundColor: '#e1dfdd', margin: '16px 0', ...node.style },
   });
 }
 
@@ -1193,21 +1214,21 @@ function AccordionComponent({ node }: AdaptiveComponentProps<AccordionNode>) {
       const itemId = item.id || `acc-${idx}`;
       const isOpen = openId === itemId;
       const label = item.label || `Section ${idx + 1}`;
-      return React.createElement('div', { key: itemId, style: { borderBottom: '1px solid #e5e7eb' } },
+      return React.createElement('div', { key: itemId, style: { borderBottom: '1px solid #e1dfdd' } },
         React.createElement('button', {
           onClick: () => setOpenId(isOpen ? null : itemId),
           style: {
             width: '100%', padding: '10px 0', background: 'none', border: 'none',
             cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            fontSize: '15px', fontWeight: 500, color: 'var(--adaptive-text, #111827)',
+            fontSize: '13px', fontWeight: 500, color: 'var(--adaptive-text, #292827)',
           },
         },
           label,
           React.createElement('span', {
-            style: { transition: 'transform 0.2s', transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)', fontSize: '10px', color: '#9ca3af' },
+            style: { transition: 'transform 0.2s', transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)', fontSize: '10px', color: '#a19f9d' },
           }, '▼')
         ),
-        isOpen && React.createElement('div', { style: { paddingBottom: '10px', fontSize: '15px', lineHeight: 1.6 } },
+        isOpen && React.createElement('div', { style: { paddingBottom: '10px', fontSize: '13px', lineHeight: 1.6 } },
           ...item.children.map((child, i) =>
             React.createElement(AdaptiveRenderer, { key: i, node: child })
           )
@@ -1247,8 +1268,8 @@ function CodeBlockComponent({ node }: AdaptiveComponentProps<CodeBlockNode>) {
   },
     (node.language || node.label) && React.createElement('div', {
       style: {
-        backgroundColor: '#1f2937', color: '#9ca3af', padding: '6px 12px',
-        fontSize: '11px', borderRadius: '8px 8px 0 0', fontFamily: 'monospace',
+        backgroundColor: '#2d2d2d', color: '#ccc', padding: '6px 12px',
+        fontSize: '11px', borderRadius: 'var(--adaptive-radius, 2px) var(--adaptive-radius, 2px) 0 0', fontFamily: "'Cascadia Code', 'Consolas', monospace",
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
       },
     },
@@ -1258,21 +1279,22 @@ function CodeBlockComponent({ node }: AdaptiveComponentProps<CodeBlockNode>) {
       React.createElement('div', { style: { display: 'flex', gap: '8px', flexShrink: 0 } },
         React.createElement('button', {
           onClick: handleSave,
-          style: { background: 'none', border: 'none', color: saved ? '#22c55e' : '#9ca3af', cursor: 'pointer', fontSize: '11px' },
+          style: { background: 'none', border: 'none', color: saved ? '#6a9955' : '#ccc', cursor: 'pointer', fontSize: '11px' },
         }, saved ? '\u2713 Saved' : 'Save'),
         React.createElement('button', {
           onClick: handleCopy,
-          style: { background: 'none', border: 'none', color: copied ? '#22c55e' : '#9ca3af', cursor: 'pointer', fontSize: '11px' },
+          style: { background: 'none', border: 'none', color: copied ? '#6a9955' : '#ccc', cursor: 'pointer', fontSize: '11px' },
         }, copied ? '\u2713 Copied' : 'Copy')
       )
     ),
     React.createElement('pre', {
       style: {
-        backgroundColor: '#111827', color: '#e5e7eb', padding: '14px',
-        borderRadius: (node.language || node.label) ? '0 0 8px 8px' : '8px',
-        fontSize: '13px', fontFamily: 'monospace', overflowX: 'auto' as const,
+        backgroundColor: '#1e1e1e', color: '#d4d4d4', padding: '14px',
+        borderRadius: (node.language || node.label) ? '0 0 var(--adaptive-radius, 2px) var(--adaptive-radius, 2px)' : 'var(--adaptive-radius, 2px)',
+        fontSize: '13px', fontFamily: "'Cascadia Code', 'Consolas', monospace", overflowX: 'auto' as const,
         margin: 0, lineHeight: 1.6,
         maxWidth: '100%', boxSizing: 'border-box',
+        border: '1px solid var(--adaptive-border, #e1dfdd)',
       },
     },
       React.createElement('code', null, node.code)
@@ -1287,8 +1309,8 @@ function LinkComponent({ node }: AdaptiveComponentProps<LinkNode>) {
     target: node.external ? '_blank' : undefined,
     rel: node.external ? 'noopener noreferrer' : undefined,
     style: {
-      color: 'var(--adaptive-primary, #2563eb)', textDecoration: 'none',
-      fontSize: '15px', fontWeight: 500, ...node.style,
+      color: 'var(--adaptive-primary, #0078d4)', textDecoration: 'none',
+      fontSize: '13px', fontWeight: 400, ...node.style,
     } as React.CSSProperties,
   }, node.label, node.external && ' ↗');
 }

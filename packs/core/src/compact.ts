@@ -106,19 +106,3 @@ Example:
 {"m":"Pick one","ly":{"t":"ctr","ch":[{"t":"rg","l":"Cloud","b":"cloud","o":[{"l":"AWS","val":"aws"},{"l":"Azure","val":"azure"}]},{"t":"btn","lb":"Next","oc":{"t":"sendPrompt","pr":"Selected: {{st.cloud}}"}}]}}
 
 ALWAYS use compact notation.`;
-
-// ─── Intent-mode compact prompt (smaller, used with intent-based system prompt) ───
-export const INTENT_COMPACT_PROMPT = `
-Use abbreviated keys. The client expands them.
-
-Keys: msg=message tt=title ask=ask sh=show nx=next st=state th=theme
-  t=type k=key l=label o=options d=description val=value ph=placeholder
-  mul=multiple comp=component c=content cols=columns rows=rows
-  hd=header w=width mn=min mx=max stp=step code=code lang=language
-  pc=primaryColor bg=backgroundColor sc=surfaceColor tc=textColor
-  rt=resourceType
-
-Example:
-{"msg":"Pick one","ask":[{"t":"choice","k":"cloud","l":"Cloud","o":[{"l":"AWS","val":"aws"},{"l":"Azure","val":"azure"}]}],"nx":"Selected: {{state.cloud}}"}
-
-ALWAYS use compact keys.`;

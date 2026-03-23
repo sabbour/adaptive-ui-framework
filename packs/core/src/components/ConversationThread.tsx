@@ -203,14 +203,12 @@ interface ConversationThreadProps {
   error?: string | null;
   tokenUsage: { promptTokens: number; completionTokens: number };
   lastRequestUsage: { promptTokens: number; completionTokens: number };
-  useIntents?: boolean;
-  onToggleIntentMode?: () => void;
   lastRawResponse?: string | null;
   lastRawRequest?: string | null;
   lastDecisionLog?: DecisionEntry[];
 }
 
-export function ConversationThread({ turns, isLoading, error, tokenUsage, lastRequestUsage, useIntents, onToggleIntentMode, lastRawResponse, lastRawRequest, lastDecisionLog }: ConversationThreadProps) {
+export function ConversationThread({ turns, isLoading, error, tokenUsage, lastRequestUsage, lastRawResponse, lastRawRequest, lastDecisionLog }: ConversationThreadProps) {
   const { resetSession, sendPrompt } = useAdaptive();
   const bottomRef = useRef<HTMLDivElement>(null);
   const latestTurnRef = useRef<HTMLDivElement>(null);
@@ -433,7 +431,7 @@ export function ConversationThread({ turns, isLoading, error, tokenUsage, lastRe
         error,
         error.includes('finish_reason=length') && React.createElement('div', {
           style: { marginTop: '6px', fontSize: '13px', color: '#b91c1c' },
-        }, 'The LLM ran out of output tokens. Try resetting the chat or switch to Intent mode for smaller payloads.')
+        }, 'The LLM ran out of output tokens. Try resetting the chat for smaller payloads.')
       )
     ),
 
@@ -576,21 +574,6 @@ export function ConversationThread({ turns, isLoading, error, tokenUsage, lastRe
           whiteSpace: 'nowrap' as const,
         },
       }, `OUT ${Math.round(lastRequestUsage.completionTokens / 163.84)}%`),
-      React.createElement('button', {
-        onClick: onToggleIntentMode,
-        title: useIntents
-          ? 'Intent mode: LLM outputs semantic intents, client resolves to UI. Click to switch to Adaptive mode.'
-          : 'Adaptive mode: LLM outputs full UI specs directly. Click to switch to Intent mode.',
-        style: {
-          fontSize: '11px', fontWeight: 500,
-          padding: '2px 6px', borderRadius: '4px',
-          backgroundColor: useIntents ? '#eff6ff' : '#f3e8ff',
-          color: useIntents ? '#2563eb' : '#7c3aed',
-          border: `1px solid ${useIntents ? '#bfdbfe' : '#ddd6fe'}`,
-          whiteSpace: 'nowrap' as const,
-          cursor: 'pointer',
-        },
-      }, useIntents ? 'Mode: Intent' : 'Mode: Adaptive'),
       React.createElement('button', {
         onClick: () => setShowDebug(d => !d),
         style: {

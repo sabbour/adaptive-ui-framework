@@ -10,7 +10,10 @@
     "./css/adaptive.css": "./src/css/adaptive.css",
     "./icons/*": "./src/icons/*"
   },
-  "files": ["src", "dist"],
+  "files": [
+    "src",
+    "dist"
+  ],
   "publishConfig": {
     "registry": "https://npm.pkg.github.com",
     "main": "src/index.ts",
@@ -29,9 +32,10 @@
     "prepublishOnly": "tsc"
   },
   "dependencies": {
+    "@azure/msal-browser": "^5.6.1",
     "@monaco-editor/react": "^4.7.0",
     "@types/prismjs": "^1.26.6",
-    "monaco-editor": "^0.52.0",
+    "monaco-editor": "^0.55.0",
     "prismjs": "^1.30.0"
   },
   "peerDependencies": {

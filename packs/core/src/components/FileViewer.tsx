@@ -247,7 +247,7 @@ export function FileViewer({ artifact, onArtifactUpdate, editorMode = 'prism', v
                   minimap: { enabled: editing },
                   lineNumbers: 'on' as const,
                   scrollBeyondLastLine: false,
-                  fontSize: 14,
+                  fontSize: 15,
                   fontFamily: 'Consolas, "Courier New", monospace',
                   wordWrap: 'on' as const,
                   automaticLayout: true,

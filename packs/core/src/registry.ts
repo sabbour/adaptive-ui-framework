@@ -18,41 +18,8 @@ const packPrompts = new Map<string, string>();
 const packSkillPrompts = new Map<string, string>();
 const packSettings = new Map<string, { displayName: string; component: React.ComponentType }>();
 
-// ─── Intent Resolver Registry ───
-// Packs can register custom intent resolvers that map ask types to AdaptiveNode trees.
-
-export interface IntentResolverEntry {
-  /** Description shown to the LLM (e.g., "Pick an Azure region from live API data") */
-  description: string;
-  /** Props the LLM can pass (e.g., "key, label?") */
-  props: string;
-  /** Resolve function: maps the ask object to an AdaptiveNode */
-  resolve: (ask: Record<string, unknown>) => AdaptiveNode;
-}
-
-const intentResolvers = new Map<string, IntentResolverEntry>();
-
-/** Register a custom intent resolver. Packs use this to add domain-specific ask types. */
-export function registerIntentResolver(type: string, entry: IntentResolverEntry): void {
-  intentResolvers.set(type, entry);
-}
-
-/** Look up a registered intent resolver */
-export function getIntentResolver(type: string): IntentResolverEntry | undefined {
-  return intentResolvers.get(type);
-}
-
-/** Get all registered intent types as a prompt fragment for the LLM */
-export function getIntentResolverPrompt(): string {
-  if (intentResolvers.size === 0) return '';
-  const lines = Array.from(intentResolvers.entries()).map(
-    ([type, entry]) => `- { type: "${type}", ${entry.props} } — ${entry.description}`
-  );
-  return '\nDynamic ask types (fetched from live APIs, use instead of hardcoding options):\n' + lines.join('\n');
-}
-
 // ─── Component Pack ───
-// A bundle of components + LLM context + optional knowledge skills + optional intent resolvers.
+// A bundle of components + LLM context + optional knowledge skills.
 
 export interface ComponentPack {
   name: string;
@@ -69,10 +36,6 @@ export interface ComponentPack {
 
   /** Optional settings UI component injected into the settings panel. */
   settingsComponent?: React.ComponentType;
-
-  /** Optional intent resolvers — custom ask types the LLM can use in intent mode.
-   *  Auto-documented in the system prompt so the LLM knows they exist. */
-  intentResolvers?: Record<string, IntentResolverEntry>;
 
   /** Optional tools — functions the LLM can call during inference (e.g., read-only API queries).
    *  Registered via registerTool() so the LLM can invoke them before producing the UI response. */
@@ -97,11 +60,6 @@ export async function registerPack(pack: ComponentPack): Promise<void> {
       registry.set(type, component);
     }
   }
-  if (pack.intentResolvers) {
-    for (const [type, entry] of Object.entries(pack.intentResolvers)) {
-      registerIntentResolver(type, entry);
-    }
-  }
   if (pack.tools) {
     for (const tool of pack.tools) {
       registerTool(tool.definition, tool.handler);
@@ -117,11 +75,6 @@ export function unregisterPack(pack: ComponentPack): void {
   packPrompts.delete(pack.name);
   packSkillPrompts.delete(pack.name);
   packSettings.delete(pack.name);
-  if (pack.intentResolvers) {
-    for (const type of Object.keys(pack.intentResolvers)) {
-      intentResolvers.delete(type);
-    }
-  }
 }
 
 /** Clear all registered packs (prompts, tools, resolvers, settings). Components stay. */
@@ -130,7 +83,6 @@ export function clearAllPacks(): void {
   packSkillPrompts.clear();
   packSettings.clear();
   packResolvers.clear();
-  intentResolvers.clear();
   clearTools();
 }
 
