@@ -125,7 +125,7 @@ import type {
   TextNode, ButtonNode, InputNode, SelectNode, ImageNode,
   ContainerNode, ColumnsNode, CardNode, ListNode, TableNode, FormNode,
   TabsNode, ProgressNode, AlertNode, ChatInputNode, MarkdownNode,
-  RadioGroupNode, MultiSelectNode, ToggleNode, SliderNode,
+  RadioGroupNode, MultiSelectNode, ComboboxNode, ToggleNode, SliderNode,
   DividerNode, BadgeNode, AccordionNode, CodeBlockNode, LinkNode,
   AdaptiveValue,
 } from '../schema';
@@ -231,6 +231,145 @@ function SelectComponent({ node }: AdaptiveComponentProps<SelectNode>) {
       onChange: (v: string) => dispatch({ type: 'SET', key: node.bind, value: v }),
       className: node.className,
     })
+  );
+}
+
+// ─── Combobox ───
+// A dropdown that also allows typing a custom value not in the options list.
+function ComboboxComponent({ node }: AdaptiveComponentProps<ComboboxNode>) {
+  const { state, dispatch } = useAdaptive();
+  const value = (state[node.bind] as string) ?? '';
+  const allowCustom = node.allowCustom !== false; // default true
+  const options = Array.isArray(node.options) ? node.options : [];
+
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const selectedLabel = options.find((o) => o.value === value)?.label ?? '';
+  // Show the raw value if it doesn't match any option (custom typed value)
+  const displayValue = selectedLabel || value;
+
+  const filtered = options.filter((o) =>
+    o.label.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const handleSelect = (v: string) => {
+    dispatch({ type: 'SET', key: node.bind, value: v });
+    setOpen(false);
+    setSearch('');
+  };
+
+  const handleCustomSubmit = () => {
+    if (search.trim()) {
+      dispatch({ type: 'SET', key: node.bind, value: search.trim() });
+      setOpen(false);
+      setSearch('');
+    }
+  };
+
+  return React.createElement('div', { style: { marginBottom: '12px', ...node.style } as React.CSSProperties },
+    node.label && React.createElement('label', {
+      style: { display: 'block', marginBottom: '4px', fontSize: '15px', fontWeight: 500 },
+    }, node.label),
+    React.createElement('div', {
+      ref: containerRef,
+      style: { position: 'relative' } as React.CSSProperties,
+    },
+      // Trigger button
+      React.createElement('button', {
+        type: 'button',
+        onClick: () => { setOpen(!open); setSearch(''); },
+        style: {
+          width: '100%', padding: '8px 12px', borderRadius: '6px',
+          border: '1px solid #d1d5db', fontSize: '15px',
+          backgroundColor: '#fff', cursor: 'pointer',
+          textAlign: 'left' as const, display: 'flex',
+          justifyContent: 'space-between', alignItems: 'center',
+        },
+      },
+        React.createElement('span', {
+          style: displayValue ? {} : { color: '#9ca3af' },
+        }, displayValue || node.placeholder || '\u2014 Select or type \u2014'),
+        React.createElement('span', { style: { fontSize: '10px', marginLeft: '8px' } }, open ? '\u25B2' : '\u25BC')
+      ),
+      // Dropdown panel
+      open && React.createElement('div', {
+        style: {
+          position: 'absolute', top: '100%', left: 0, right: 0,
+          marginTop: '4px', backgroundColor: '#fff',
+          border: '1px solid #d1d5db', borderRadius: '6px',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+          zIndex: 1000, maxHeight: '280px', display: 'flex',
+          flexDirection: 'column',
+        } as React.CSSProperties,
+      },
+        // Search / custom input
+        React.createElement('input', {
+          type: 'text',
+          value: search,
+          onChange: (e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value),
+          onKeyDown: (e: React.KeyboardEvent) => {
+            if (e.key === 'Enter' && allowCustom) handleCustomSubmit();
+          },
+          placeholder: allowCustom ? 'Search or type a custom value...' : 'Search...',
+          autoFocus: true,
+          style: {
+            padding: '8px 12px', border: 'none',
+            borderBottom: '1px solid #e5e7eb', fontSize: '15px',
+            outline: 'none', borderRadius: '6px 6px 0 0',
+          },
+        }),
+        // Options list
+        React.createElement('div', {
+          style: { overflowY: 'auto', maxHeight: '200px' } as React.CSSProperties,
+        },
+          filtered.map((opt) =>
+            React.createElement('div', {
+              key: opt.value,
+              onClick: () => handleSelect(opt.value),
+              style: {
+                padding: '8px 12px', cursor: 'pointer', fontSize: '15px',
+                backgroundColor: opt.value === value ? 'rgba(37, 99, 235, 0.08)' : 'transparent',
+                fontWeight: opt.value === value ? 500 : 400,
+              },
+              onMouseEnter: (e: React.MouseEvent<HTMLDivElement>) => {
+                (e.currentTarget as HTMLDivElement).style.backgroundColor = 'rgba(37, 99, 235, 0.06)';
+              },
+              onMouseLeave: (e: React.MouseEvent<HTMLDivElement>) => {
+                (e.currentTarget as HTMLDivElement).style.backgroundColor = opt.value === value ? 'rgba(37, 99, 235, 0.08)' : 'transparent';
+              },
+            }, opt.label)
+          ),
+          // Custom value option — shown when search doesn't match any option exactly
+          allowCustom && search.trim() && !options.some((o) => o.label.toLowerCase() === search.toLowerCase())
+            && React.createElement('div', {
+              onClick: handleCustomSubmit,
+              style: {
+                padding: '8px 12px', cursor: 'pointer', fontSize: '15px',
+                borderTop: filtered.length > 0 ? '1px solid #e5e7eb' : 'none',
+                color: 'var(--adaptive-primary, #2563eb)', fontWeight: 500,
+              },
+              onMouseEnter: (e: React.MouseEvent<HTMLDivElement>) => {
+                (e.currentTarget as HTMLDivElement).style.backgroundColor = 'rgba(37, 99, 235, 0.06)';
+              },
+              onMouseLeave: (e: React.MouseEvent<HTMLDivElement>) => {
+                (e.currentTarget as HTMLDivElement).style.backgroundColor = 'transparent';
+              },
+            }, 'Use: "' + search.trim() + '"')
+        )
+      )
+    )
   );
 }
 
@@ -979,6 +1118,7 @@ export function registerBuiltinComponents(): void {
     button: ButtonComponent,
     input: InputComponent,
     select: SelectComponent,
+    combobox: ComboboxComponent,
     image: ImageComponent,
     container: ContainerComponent,    columns: ColumnsComponent,    card: CardComponent,
     list: ListComponent,

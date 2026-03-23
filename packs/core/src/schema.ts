@@ -234,6 +234,19 @@ export interface MultiSelectNode extends AdaptiveNodeBase {
   bind: string;
 }
 
+export interface ComboboxNode extends AdaptiveNodeBase {
+  type: 'combobox';
+  label?: string;
+  /** Predefined options the user can pick from */
+  options: Array<{ label: string; value: string }>;
+  /** State key to bind the selected/typed value to */
+  bind: string;
+  /** Placeholder text shown when no value is selected */
+  placeholder?: string;
+  /** Whether to allow the user to type a custom value not in the options list. Defaults to true. */
+  allowCustom?: boolean;
+}
+
 export interface ToggleNode extends AdaptiveNodeBase {
   type: 'toggle';
   label?: string;
@@ -300,6 +313,7 @@ export type AdaptiveNode =
   | MarkdownNode
   | RadioGroupNode
   | MultiSelectNode
+  | ComboboxNode
   | ToggleNode
   | SliderNode
   | DividerNode
