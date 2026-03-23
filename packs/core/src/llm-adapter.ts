@@ -169,12 +169,13 @@ Component types:
 
 LAYOUT: container(children), columns(children,sizes?:["1","2"],gap?), card(title?,subtitle?,children,onClick?), tabs(tabs:[{label,id,children}])
 TEXT: text(content,variant?:h1|h2|h3|h4|body|caption|code), markdown(content), image(src,alt?)
-INPUT: input(inputType?:text|number|email|password|textarea|date, label?,placeholder?,bind), select(label?,options:[{label,value}],bind), radioGroup(label?,options:[{label,value,description?}],bind), multiSelect(label?,options:[{label,value,description?}],bind)
+INPUT: input(inputType?:text|number|email|password|textarea|date, label?,placeholder?,bind), select(label?,options:[{label,value}],bind), combobox(label?,options:[{label,value}],bind,placeholder?,allowCustom?:true — dropdown with search that also accepts typed custom values), radioGroup(label?,options:[{label,value,description?}],bind), multiSelect(label?,options:[{label,value,description?}],bind)
 ACTION: button(label,variant?:primary|secondary|danger|ghost,onClick,disabled?), form(children,onSubmit)
 DATA: list(items:"stateKey"|[...],itemTemplate), table(columns:[{key,header,width?}],rows:"stateKey"|[...])
 FEEDBACK: progress(value,max?,label?), alert(severity:info|success|warning|error,title?,content), badge(content,color?:blue|green|red|yellow|gray|purple), divider(label?)
 TOGGLE: toggle(label?,description?,bind), slider(label?,min?,max?,step?,bind)
 CONTENT: accordion(items:[{label,id,children}]), codeBlock(code,language?,label?), link(label,href,external?)
+GUIDED: questionnaire(questions:[{question,options?:[{label,value}],bind,freeformPlaceholder?}],onComplete — stepped question cards shown one at a time with radio options + freeform text input, auto-advances, triggers onComplete when done)
 USER INPUT: chatInput(placeholder?)
 
 Actions: {type:"sendPrompt",prompt:"text with {{state.key}}"}, {type:"setState",state:{k:v}}, {type:"submit",prompt?}, {type:"custom",name,payload}
@@ -185,7 +186,8 @@ Rules:
 - One step per response. Include agentMessage explaining what/why.
 - {{state.key}} for interpolation. NEVER use {{st.key}} shorthand.
 - NEVER reference __-prefixed keys (sensitive/internal) in any visible text.
-- ≤5 options → radioGroup; ≥6 → select. Tables are read-only, not for selection.
+- ≤5 options → radioGroup; ≥6 → select or combobox. Use combobox when the user might need to type a value not in the list. Use questionnaire for multi-step intake (2-4 quick questions) where you want clean stepped UX instead of a long form.
+- Tables are read-only, not for selection.
 - Do NOT pre-select user-choice fields unless user explicitly provided the value.
 - Always include Continue/Next button with sendPrompt or submit action.
 - Preserve collected state on re-adaptation; pre-fill known values.
