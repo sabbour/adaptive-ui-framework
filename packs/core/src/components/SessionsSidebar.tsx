@@ -594,8 +594,55 @@ function FileTreeView({ artifacts, selectedFileId, onSelectFile, onRemove, onDow
   onRemove: (id: string) => void;
   onDownload: (artifact: Artifact) => void;
 }) {
-  const tree = buildFileTree(artifacts);
+  const diagramArtifact = artifacts.find((a) => a.filename === 'architecture.mmd');
+  const otherArtifacts = artifacts.filter((a) => a.filename !== 'architecture.mmd');
+  const tree = buildFileTree(otherArtifacts);
+  const isSelected = diagramArtifact ? diagramArtifact.id === selectedFileId : false;
+
   return React.createElement('div', null,
+    diagramArtifact && React.createElement('div', {
+      onClick: () => onSelectFile(diagramArtifact.id),
+      style: {
+        padding: '4px 8px 4px 28px',
+        cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px',
+        fontSize: '14px',
+        backgroundColor: isSelected ? 'rgba(37, 99, 235, 0.08)' : 'transparent',
+        color: 'var(--adaptive-text, #111827)',
+      } as React.CSSProperties,
+    },
+      React.createElement('img', {
+        src: iconDiagram, alt: 'Diagram',
+        width: 16, height: 16, style: { opacity: 0.6, flexShrink: 0 },
+      }),
+      React.createElement('span', {
+        style: {
+          flex: 1, minWidth: 0,
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const,
+          fontWeight: 500,
+        },
+      }, 'Architecture diagram'),
+      React.createElement('div', {
+        style: { display: 'flex', gap: '2px', flexShrink: 0 },
+        onClick: (e: React.MouseEvent) => e.stopPropagation(),
+      },
+        React.createElement('button', {
+          onClick: () => onDownload(diagramArtifact),
+          title: 'Download',
+          style: {
+            background: 'none', border: 'none', cursor: 'pointer', padding: '2px',
+            display: 'flex', alignItems: 'center',
+          },
+        }, React.createElement('img', { src: iconArrowDownload, alt: 'Download', width: 11, height: 11, style: { opacity: 0.4 } })),
+        React.createElement('button', {
+          onClick: () => onRemove(diagramArtifact.id),
+          title: 'Delete',
+          style: {
+            background: 'none', border: 'none', cursor: 'pointer', padding: '2px',
+            display: 'flex', alignItems: 'center',
+          },
+        }, React.createElement('img', { src: iconDelete, alt: 'Delete', width: 11, height: 11, style: { opacity: 0.4 } }))
+      )
+    ),
     tree.map((node) =>
       React.createElement(TreeNodeItem, {
         key: node.fullPath, node, depth: 0,

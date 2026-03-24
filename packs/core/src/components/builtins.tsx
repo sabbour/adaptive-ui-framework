@@ -104,9 +104,9 @@ export function SearchableDropdown({
           ? React.createElement('div', {
               style: { padding: '7px 10px', color: '#a19f9d', fontSize: '13px' },
             }, 'No matches')
-          : filtered.map((opt) =>
+          : filtered.map((opt, idx) =>
               React.createElement('div', {
-                key: opt.value,
+                key: opt.value + '-' + idx,
                 onClick: () => { onChange(opt.value); setOpen(false); setSearch(''); },
                 style: {
                   padding: '7px 10px', cursor: 'pointer', fontSize: '13px',
@@ -403,6 +403,11 @@ function QuestionnaireComponent({ node }: AdaptiveComponentProps<QuestionnaireNo
   const [step, setStep] = useState(0);
   const [dismissed, setDismissed] = useState(false);
 
+  // Keep a ref to handleAction so setTimeout callbacks always use the latest
+  // version (which closes over the updated state after React re-renders).
+  const handleActionRef = useRef(handleAction);
+  handleActionRef.current = handleAction;
+
   if (dismissed || questions.length === 0) return null;
 
   const q = questions[step];
@@ -418,12 +423,20 @@ function QuestionnaireComponent({ node }: AdaptiveComponentProps<QuestionnaireNo
     // Auto-advance to next question after a short delay
     if (!isLast) {
       setTimeout(() => setStep((s) => Math.min(s + 1, questions.length - 1)), 200);
-    } else if (allAnswered || value.trim()) {
-      // On last question, auto-submit if all answered
-      setTimeout(() => {
-        handleAction(node.onComplete);
-        setDismissed(true);
-      }, 300);
+    } else {
+      // On last question, auto-submit — check other questions from state,
+      // but treat the current question as answered (state hasn't updated yet)
+      const othersAnswered = questions.every((qq) => {
+        if (qq.bind === q.bind) return true; // this one is being set right now
+        const v = state[qq.bind] as string;
+        return v && v.trim() !== '';
+      });
+      if (othersAnswered && value.trim()) {
+        setTimeout(() => {
+          handleActionRef.current(node.onComplete);
+          setDismissed(true);
+        }, 300);
+      }
     }
   };
 
@@ -434,7 +447,7 @@ function QuestionnaireComponent({ node }: AdaptiveComponentProps<QuestionnaireNo
       setTimeout(() => setStep((s) => Math.min(s + 1, questions.length - 1)), 200);
     } else {
       setTimeout(() => {
-        handleAction(node.onComplete);
+        handleActionRef.current(node.onComplete);
         setDismissed(true);
       }, 300);
     }
@@ -998,10 +1011,10 @@ function RadioGroupComponent({ node }: AdaptiveComponentProps<RadioGroupNode>) {
 
   return React.createElement('div', { style: { marginBottom: '12px', ...node.style } as React.CSSProperties },
     node.label && React.createElement('label', {
-      style: { display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: 600, color: 'var(--adaptive-text, #292827)' },
+      style: { display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: 600, color: 'var(--adaptive-text, #292827)' },
     }, node.label),
     React.createElement('div', {
-      style: { display: 'flex', flexDirection: 'column', gap: '0' } as React.CSSProperties,
+      style: { display: 'flex', flexDirection: 'column', gap: '2px' } as React.CSSProperties,
     },
       ...node.options.map((opt) =>
         React.createElement('label', {
@@ -1018,24 +1031,24 @@ function RadioGroupComponent({ node }: AdaptiveComponentProps<RadioGroupNode>) {
           },
           style: {
             display: 'flex', alignItems: 'center', gap: '8px',
-            padding: '4px 0',
+            padding: '6px 0',
             border: 'none', backgroundColor: 'transparent',
             cursor: 'pointer',
           } as React.CSSProperties,
         },
           React.createElement('div', {
             style: {
-              width: '16px', height: '16px', borderRadius: '50%',
-              border: value === opt.value ? '5px solid var(--adaptive-primary, #0078d4)' : '1px solid #8a8886',
+              width: '18px', height: '18px', borderRadius: '50%',
+              border: value === opt.value ? '5px solid var(--adaptive-primary, #0078d4)' : '1.5px solid #8a8886',
               flexShrink: 0,
               boxSizing: 'border-box',
               backgroundColor: '#fff',
             } as React.CSSProperties,
           }),
           React.createElement('div', { style: { flex: 1, minWidth: 0 } },
-            React.createElement('span', { style: { fontSize: '13px', color: 'var(--adaptive-text, #292827)' } }, opt.label),
+            React.createElement('span', { style: { fontSize: '14px', color: 'var(--adaptive-text, #292827)' } }, opt.label),
             opt.description && React.createElement('div', {
-              style: { fontSize: '12px', color: '#646464', marginTop: '1px' },
+              style: { fontSize: '13px', color: '#646464', marginTop: '2px' },
             }, opt.description)
           )
         )

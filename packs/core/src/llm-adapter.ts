@@ -255,6 +255,12 @@ export interface OpenAIAdapterConfig {
    *  When provided, uses Bearer token auth instead of api-key header,
    *  even for Azure endpoints. The apiKey field is ignored. */
   getAccessToken?: () => Promise<string>;
+  /** API type for the endpoint: "chat" (default, Chat Completions) or "responses" (Responses API).
+   *  When set to "responses", the adapter formats requests/responses using the Responses API format. */
+  apiType?: 'chat' | 'responses';
+  /** Callback to resolve apiType per model (used by hosted proxy mode).
+   *  Called with the model name, returns the apiType for that model. */
+  resolveApiType?: (model: string) => 'chat' | 'responses';
 }
 
 export class OpenAIAdapter implements LLMAdapter {
@@ -304,47 +310,57 @@ export class OpenAIAdapter implements LLMAdapter {
       )}\n\nUser request: ${prompt}`,
     });
 
-    const { url: endpoint, isAzure } = normalizeEndpoint(this.config.endpoint, this.config.model);
+    // Determine API type for this model
+    const model = this.config.model ?? 'gpt-4o';
+    const apiType = this.config.resolveApiType
+      ? this.config.resolveApiType(model)
+      : (this.config.apiType ?? 'chat');
+
+    if (apiType === 'responses') {
+      return this.generateUIResponses(messages, systemPrompt, model);
+    }
+
+    return this.generateUIChat(messages, model);
+  }
+
+  // ─── Chat Completions API path ───
+  private async generateUIChat(
+    messages: LLMMessage[],
+    model: string,
+  ): Promise<GenerateUIResult> {
+    const { url: endpoint, isAzure } = normalizeEndpoint(this.config.endpoint, model);
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
 
     if (this.config.getAccessToken) {
-      // Entra ID / OAuth token — always use Bearer, even for Azure endpoints
       const token = await this.config.getAccessToken();
       headers['Authorization'] = `Bearer ${token}`;
-    } else if (isAzure) {
+    } else if (isAzure && this.config.apiKey) {
       headers['api-key'] = this.config.apiKey;
-    } else {
+    } else if (this.config.apiKey) {
       headers['Authorization'] = `Bearer ${this.config.apiKey}`;
     }
 
     const body: Record<string, unknown> = {
-      model: this.config.model ?? 'gpt-4o',
+      model,
       messages,
       max_completion_tokens: this.config.maxTokens ?? 16384,
     };
 
-    // Add tools if registered; when tools are present, use json_schema or omit response_format
-    // (OpenAI doesn't support response_format: json_object + tools simultaneously)
     const tools = getToolDefinitions();
     if (tools.length > 0) {
       body.tools = tools;
-      // Don't set response_format when tools are available — the system prompt
-      // already instructs the LLM to respond with JSON on the final turn
     } else {
       body.response_format = { type: 'json_object' };
     }
 
-    // Only include temperature if explicitly set (some models only support default)
     if (this.config.temperature !== undefined) {
       body.temperature = this.config.temperature;
     }
 
     // ─── Tool-call loop ───
-    // The LLM may request tool calls before producing the final JSON response.
-    // We loop up to MAX_TOOL_ROUNDS, executing tools and feeding results back.
     const MAX_TOOL_ROUNDS = 5;
     let loopMessages = [...messages];
     let content: string | null = null;
@@ -377,33 +393,26 @@ export class OpenAIAdapter implements LLMAdapter {
       const choice = data.choices?.[0];
       finishReason = choice?.finish_reason ?? 'unknown';
 
-      // Accumulate token usage across rounds
       usage.promptTokens += data.usage?.prompt_tokens ?? 0;
       usage.completionTokens += data.usage?.completion_tokens ?? 0;
 
-      // Check for tool calls
       const toolCalls: ToolCall[] | undefined = choice?.message?.tool_calls;
       if (toolCalls && toolCalls.length > 0) {
         logDecision('adapter', `LLM requested ${toolCalls.length} tool call(s): ${toolCalls.map(tc => tc.function.name).join(', ')} (round ${round + 1}/${MAX_TOOL_ROUNDS})`);
-
-        // Add assistant message with tool_calls to the conversation
         loopMessages.push(choice.message);
-
-        // Execute each tool and add results
         for (const tc of toolCalls) {
           const result = await executeTool(tc);
           loopMessages.push(result as any);
         }
-        continue; // Loop back to the LLM with tool results
+        continue;
       }
 
-      // Normal completion — extract content
       content = choice?.message?.content ?? null;
       break;
     }
 
     // If tools were used and the final response isn't JSON, retry with response_format enforcement
-    if (content && tools.length > 0 && !content.trim().startsWith('{')) {
+    if (content && getToolDefinitions().length > 0 && !content.trim().startsWith('{')) {
       logDecision('adapter', 'Response after tool calls was not JSON — retrying with response_format: json_object to force structured output');
       loopMessages.push({ role: 'assistant', content } as any);
       loopMessages.push({ role: 'user', content: 'Please respond with ONLY the JSON object as specified in the system prompt. No prose, no markdown fences, just the raw JSON.' } as any);
@@ -413,11 +422,11 @@ export class OpenAIAdapter implements LLMAdapter {
           method: 'POST',
           headers,
           body: JSON.stringify({
-            model: body.model,
+            model,
             messages: loopMessages,
-            max_completion_tokens: body.max_completion_tokens,
+            max_completion_tokens: this.config.maxTokens ?? 16384,
             response_format: { type: 'json_object' },
-            ...(body.temperature !== undefined ? { temperature: body.temperature } : {}),
+            ...(this.config.temperature !== undefined ? { temperature: this.config.temperature } : {}),
           }),
         });
         trackEnd(retryReqId);
@@ -436,6 +445,151 @@ export class OpenAIAdapter implements LLMAdapter {
       }
     }
 
+    return this.parseAndReturnSpec(content, finishReason, usage, messages);
+  }
+
+  // ─── Responses API path ───
+  private async generateUIResponses(
+    messages: LLMMessage[],
+    systemPrompt: string,
+    model: string,
+  ): Promise<GenerateUIResult> {
+    const { url: endpoint, isAzure } = normalizeEndpoint(this.config.endpoint, model);
+    // Replace /chat/completions with /responses in the URL
+    const responsesEndpoint = endpoint.replace(/\/chat\/completions/, '/responses');
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+
+    if (this.config.getAccessToken) {
+      const token = await this.config.getAccessToken();
+      headers['Authorization'] = `Bearer ${token}`;
+    } else if (isAzure && this.config.apiKey) {
+      headers['api-key'] = this.config.apiKey;
+    } else if (this.config.apiKey) {
+      headers['Authorization'] = `Bearer ${this.config.apiKey}`;
+    }
+
+    // Convert messages to Responses API input format
+    // System message → instructions field; rest → input array
+    const input = messages
+      .filter(m => m.role !== 'system')
+      .map(m => ({ role: m.role, content: m.content }));
+
+    // Convert tool definitions to Responses API format
+    // Chat format: { type:"function", function:{ name, description, parameters } }
+    // Responses format: { type:"function", name, description, parameters }
+    const chatTools = getToolDefinitions();
+    const responsesTools = chatTools.map(t => ({
+      type: 'function' as const,
+      name: t.function.name,
+      description: t.function.description,
+      parameters: t.function.parameters,
+    }));
+
+    const body: Record<string, unknown> = {
+      model,
+      instructions: systemPrompt,
+      input,
+      max_output_tokens: this.config.maxTokens ?? 16384,
+    };
+
+    if (responsesTools.length > 0) {
+      body.tools = responsesTools;
+    } else {
+      body.text = { format: { type: 'json_object' } };
+    }
+
+    if (this.config.temperature !== undefined) {
+      body.temperature = this.config.temperature;
+    }
+
+    // ─── Tool-call loop ───
+    const MAX_TOOL_ROUNDS = 5;
+    // Responses API input can hold messages, function_call items, and function_call_output items
+    let loopInput: any[] = [...input];
+    let content: string | null = null;
+    let finishReason = 'unknown';
+    const usage: TokenUsage = { promptTokens: 0, completionTokens: 0 };
+
+    for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
+      const reqId = trackStart('POST', responsesEndpoint);
+      let response: Response;
+      try {
+        response = await fetch(responsesEndpoint, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ ...body, input: loopInput }),
+        });
+      } catch (err) {
+        trackEnd(reqId);
+        throw err;
+      }
+
+      if (!response.ok) {
+        trackEnd(reqId);
+        const text = await response.text();
+        throw new Error(`LLM API error (${response.status}): ${text}`);
+      }
+
+      const data = await response.json();
+      trackEnd(reqId);
+
+      finishReason = data.status ?? 'unknown';
+      usage.promptTokens += data.usage?.input_tokens ?? 0;
+      usage.completionTokens += data.usage?.output_tokens ?? 0;
+
+      // Parse Responses API output array
+      const outputItems: any[] = data.output ?? [];
+
+      // Collect function calls
+      const functionCalls = outputItems.filter((item: any) => item.type === 'function_call');
+      if (functionCalls.length > 0) {
+        logDecision('adapter', `LLM requested ${functionCalls.length} tool call(s): ${functionCalls.map((fc: any) => fc.name).join(', ')} (round ${round + 1}/${MAX_TOOL_ROUNDS})`);
+
+        // Add all output items to the conversation
+        loopInput.push(...outputItems);
+
+        // Execute each function call and add results
+        for (const fc of functionCalls) {
+          const tc: ToolCall = {
+            id: fc.call_id,
+            type: 'function',
+            function: { name: fc.name, arguments: fc.arguments },
+          };
+          const result = await executeTool(tc);
+          // Responses API: function_call_output format
+          loopInput.push({
+            type: 'function_call_output',
+            call_id: fc.call_id,
+            output: result.content,
+          });
+        }
+        continue;
+      }
+
+      // Extract text content from message output items
+      const messageItem = outputItems.find((item: any) => item.type === 'message');
+      if (messageItem?.content) {
+        const textParts = messageItem.content
+          .filter((c: any) => c.type === 'output_text')
+          .map((c: any) => c.text);
+        content = textParts.join('');
+      }
+      break;
+    }
+
+    return this.parseAndReturnSpec(content, finishReason, usage, messages);
+  }
+
+  // ─── Shared JSON parsing and spec resolution ───
+  private parseAndReturnSpec(
+    content: string | null,
+    finishReason: string,
+    usage: TokenUsage,
+    messages: LLMMessage[],
+  ): GenerateUIResult {
     if (!content) {
       let detail = `finish_reason=${finishReason}`;
       if (finishReason === 'tool_calls') detail = 'LLM only produced tool calls but no final content within the allowed rounds';
@@ -559,7 +713,7 @@ export class OpenAIAdapter implements LLMAdapter {
       spec: sanitizeSpec(spec) as AdaptiveUISpec,
       usage,
       rawResponse: content,
-      rawRequest: JSON.stringify(loopMessages, null, 2),
+      rawRequest: JSON.stringify(messages, null, 2),
       decisionLog: getDecisionLog(),
     };
   }

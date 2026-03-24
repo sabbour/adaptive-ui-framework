@@ -99,11 +99,22 @@ input[type="number"],
 input[type="email"],
 input[type="password"],
 input[type="date"],
-textarea,
+textarea {
+  font-family: var(--adaptive-font);
+  font-size: var(--adaptive-fs-base);
+  
+  border: 1px solid var(--adaptive-border);
+  border-radius: var(--adaptive-radius);
+  background: var(--adaptive-surface);
+  color: var(--adaptive-text);
+  transition: border-color var(--adaptive-transition), box-shadow var(--adaptive-transition);
+  width: 100%;
+}
+
 select {
   font-family: var(--adaptive-font);
   font-size: var(--adaptive-fs-base);
-  padding: 10px 12px;
+  padding: 6px 10px;
   border: 1px solid var(--adaptive-border);
   border-radius: var(--adaptive-radius);
   background: var(--adaptive-surface);

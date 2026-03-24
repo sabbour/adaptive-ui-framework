@@ -175,8 +175,9 @@ export function AdaptiveProvider({
   };
 
   const resetSession = useCallback(() => {
+    dispatch({ type: 'RESET', state: { ...initialState, ...(initialSpec?.state ?? {}) } });
     onResetSession?.();
-  }, [onResetSession]);
+  }, [onResetSession, initialState, initialSpec]);
 
   const contextValue: AdaptiveContextValue = {
     state: adaptiveState.store,

@@ -1,0 +1,68 @@
+<svg
+  width="640"
+  height="160"
+  viewBox="0 0 640 160"
+  xmlns="http://www.w3.org/2000/svg"
+  role="img"
+  aria-label="Adaptive UI Framework Logo"
+>
+  <!-- Icon: adaptive surfaces -->
+  <g transform="translate(16,16)">
+    <!-- Primary surface -->
+    <rect
+      x="0"
+      y="16"
+      width="72"
+      height="96"
+      rx="10"
+      fill="#111111"
+    />
+
+    <!-- Top-right variant -->
+    <rect
+      x="60"
+      y="0"
+      width="64"
+      height="48"
+      rx="8"
+      fill="#333333"
+    />
+
+    <!-- Bottom-right variant -->
+    <rect
+      x="60"
+      y="64"
+      width="48"
+      height="48"
+      rx="8"
+      fill="#555555"
+    />
+  </g>
+
+  <!-- Wordmark -->
+  <g transform="translate(168,48)">
+    <text
+      x="0"
+      y="32"
+      font-family="Inter, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
+      font-size="36"
+      font-weight="600"
+      fill="#000000"
+    >
+      Adaptive UI
+    </text>
+
+    <text
+      x="2"
+      y="64"
+      font-family="Inter, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
+      font-size="14"
+      font-weight="500"
+      letter-spacing="3"
+      fill="#000000"
+      opacity="0.7"
+    >
+      FRAMEWORK
+    </text>
+  </g>
+</svg>

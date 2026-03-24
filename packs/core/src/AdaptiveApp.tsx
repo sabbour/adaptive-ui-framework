@@ -11,7 +11,7 @@ import { getPackSettingsComponents } from './registry';
 import { getActiveRequests, subscribe as subscribeRequests } from './request-tracker';
 import { logDecision } from './decision-log';
 import type { DecisionEntry } from './decision-log';
-import { entraLogin, entraLogout, entraGetActiveAccount, entraGetAccessToken } from './entra-auth';
+
 
 // Icons
 import iconGear from './icons/commands/gear.svg?url';
@@ -105,29 +105,63 @@ function summarizeUserSelections(currentState: StateStore): string | null {
 }
 
 // ─── LLM Config persistence ───
-type AuthMode = 'apiKey' | 'entraId';
+type AuthMode = 'apiKey' | 'hosted';
 
 interface LLMConfig {
   endpoint: string;
   apiKey: string;
   model: string;
   authMode: AuthMode;
-  entraAccount?: string;
 }
 
-function loadLLMConfig(): LLMConfig {
+function configKey(appId?: string): string {
+  return appId ? `adaptive-ui-config-${appId}` : 'adaptive-ui-config';
+}
+
+function loadLLMConfig(appId?: string): LLMConfig {
   try {
-    const raw = localStorage.getItem('adaptive-ui-config');
+    const raw = localStorage.getItem(configKey(appId));
     if (raw) {
       const parsed = JSON.parse(raw);
-      return { authMode: 'apiKey', ...parsed };
+      return { authMode: 'hosted', ...parsed };
     }
   } catch { /* ignore */ }
-  return { endpoint: '', apiKey: '', model: 'gpt-4o', authMode: 'apiKey' };
+  return { endpoint: '', apiKey: '', model: 'gpt-4o', authMode: 'hosted' };
 }
 
-function saveLLMConfig(config: LLMConfig) {
-  localStorage.setItem('adaptive-ui-config', JSON.stringify(config));
+function saveLLMConfig(config: LLMConfig, appId?: string) {
+  localStorage.setItem(configKey(appId), JSON.stringify(config));
+}
+
+// ─── Hosted LLM proxy discovery ───
+interface HostedModelInfo {
+  name: string;
+  apiType: 'chat' | 'responses';
+}
+
+interface HostedModelsInfo {
+  models: HostedModelInfo[];
+  default: string;
+}
+
+// Module-level cache so the adapter's resolveApiType callback can access it
+let cachedHostedModels: HostedModelsInfo | null = null;
+
+async function fetchHostedModels(): Promise<HostedModelsInfo | null> {
+  try {
+    const resp = await fetch('/api/llm-proxy/models');
+    if (!resp.ok) return null;
+    const info = await resp.json() as HostedModelsInfo;
+    cachedHostedModels = info;
+    return info;
+  } catch {
+    return null;
+  }
+}
+
+function resolveHostedApiType(model: string): 'chat' | 'responses' {
+  const m = cachedHostedModels?.models.find(m => m.name === model);
+  return m?.apiType ?? 'chat';
 }
 
 // ─── Settings Panel ───
@@ -140,6 +174,8 @@ function SettingsPanel({
   appSettingsComponents,
   visiblePacks,
   settingsPosition,
+  models,
+  appId,
 }: {
   isConnected: boolean;
   onConnect: (config: LLMConfig) => void;
@@ -147,58 +183,43 @@ function SettingsPanel({
   appSettingsComponents?: React.ComponentType[];
   visiblePacks?: string[];
   settingsPosition?: { top?: string; right?: string };
+  models?: string[];
+  appId?: string;
 }) {
   const [open, setOpen] = useState(false);
-  const [config, setConfig] = useState(loadLLMConfig);
-  const [entraLoading, setEntraLoading] = useState(false);
-  const [entraError, setEntraError] = useState<string | null>(null);
+  const [config, setConfig] = useState(() => loadLLMConfig(appId));
+  const [hostedModels, setHostedModels] = useState<HostedModelsInfo | null>(null);
+  const [hostedChecked, setHostedChecked] = useState(false);
   const allPackSettings = getPackSettingsComponents();
   const packSettingsList = visiblePacks
     ? allPackSettings.filter(p => visiblePacks.includes(p.name))
     : [];
 
-  // Check for existing Entra ID session on mount
+  // Auto-detect hosted LLM proxy on mount
   useEffect(() => {
-    if (config.authMode === 'entraId' && !isConnected) {
-      entraGetActiveAccount().then(account => {
-        if (account) {
-          setConfig(c => ({ ...c, entraAccount: account.account.username }));
+    fetchHostedModels().then(info => {
+      setHostedModels(info);
+      setHostedChecked(true);
+      // Auto-select and auto-connect in hosted mode if proxy is available
+      // and user hasn't manually configured a BYO API key
+      if (info && !isConnected) {
+        const saved = loadLLMConfig(appId);
+        if (!saved.apiKey) {
+          // Prefer the app's first preferred model (from models prop) if available on the server
+          const preferred = models?.find(m => info.models.some(hm => hm.name === m));
+          const defaultModel = preferred || info.default;
+          const hostedConfig: LLMConfig = { ...saved, authMode: 'hosted', model: defaultModel, endpoint: '', apiKey: '' };
+          setConfig(hostedConfig);
+          saveLLMConfig(hostedConfig, appId);
+          onConnect(hostedConfig);
         }
-      }).catch(() => { /* ignore */ });
-    }
+      }
+    });
   }, []);
 
   const handleConnect = () => {
-    saveLLMConfig(config);
+    saveLLMConfig(config, appId);
     onConnect(config);
-  };
-
-  const handleEntraSignIn = async () => {
-    setEntraLoading(true);
-    setEntraError(null);
-    try {
-      const result = await entraLogin();
-      const updatedConfig: LLMConfig = {
-        ...config,
-        authMode: 'entraId',
-        entraAccount: result.account.username,
-      };
-      setConfig(updatedConfig);
-      saveLLMConfig(updatedConfig);
-      onConnect(updatedConfig);
-    } catch (err) {
-      setEntraError(err instanceof Error ? err.message : 'Sign-in failed');
-    } finally {
-      setEntraLoading(false);
-    }
-  };
-
-  const handleEntraSignOut = async () => {
-    try {
-      await entraLogout();
-    } catch { /* ignore */ }
-    setConfig(c => ({ ...c, entraAccount: undefined }));
-    onDisconnect();
   };
 
   return createPortal(React.createElement('div', {
@@ -244,47 +265,75 @@ function SettingsPanel({
         }, '● Connected')
       ),
 
-      // Auth mode toggle
-      React.createElement('div', {
+      // Auth mode toggle (only shown when built-in models are available)
+      hostedModels && React.createElement('div', {
         style: { display: 'flex', gap: '4px', marginBottom: '12px', borderRadius: 'var(--adaptive-radius)', overflow: 'hidden', border: '1px solid var(--adaptive-border, #e5e7eb)' },
       },
         React.createElement('button', {
-          onClick: () => !isConnected && setConfig(c => ({ ...c, authMode: 'apiKey' })),
-          disabled: isConnected,
+          onClick: () => {
+            if (config.authMode === 'hosted') return;
+            const preferred = models?.find(m => hostedModels.models.some(hm => hm.name === m));
+            const hostedConfig: LLMConfig = { ...config, authMode: 'hosted', model: preferred || hostedModels.default, endpoint: '', apiKey: '' };
+            setConfig(hostedConfig);
+            saveLLMConfig(hostedConfig, appId);
+            onConnect(hostedConfig);
+          },
           style: {
-            flex: 1, padding: '6px 8px', border: 'none', cursor: isConnected ? 'default' : 'pointer',
+            flex: 1, padding: '6px 8px', border: 'none', cursor: 'pointer',
+            fontSize: '12px', fontWeight: 500,
+            backgroundColor: config.authMode === 'hosted' ? 'var(--adaptive-primary)' : 'transparent',
+            color: config.authMode === 'hosted' ? '#fff' : 'var(--adaptive-text)',
+          },
+        }, 'Built-in'),
+        React.createElement('button', {
+          onClick: () => {
+            if (config.authMode === 'apiKey') return;
+            const byoConfig: LLMConfig = { ...config, authMode: 'apiKey' };
+            setConfig(byoConfig);
+            saveLLMConfig(byoConfig, appId);
+            onDisconnect();
+          },
+          style: {
+            flex: 1, padding: '6px 8px', border: 'none', cursor: 'pointer',
             fontSize: '12px', fontWeight: 500,
             backgroundColor: config.authMode === 'apiKey' ? 'var(--adaptive-primary)' : 'transparent',
             color: config.authMode === 'apiKey' ? '#fff' : 'var(--adaptive-text)',
-            opacity: isConnected ? 0.7 : 1,
           },
-        }, 'API Key'),
-        React.createElement('button', {
-          onClick: () => !isConnected && setConfig(c => ({ ...c, authMode: 'entraId' })),
-          disabled: isConnected,
-          style: {
-            flex: 1, padding: '6px 8px', border: 'none', cursor: isConnected ? 'default' : 'pointer',
-            fontSize: '12px', fontWeight: 500,
-            backgroundColor: config.authMode === 'entraId' ? 'var(--adaptive-primary)' : 'transparent',
-            color: config.authMode === 'entraId' ? '#fff' : 'var(--adaptive-text)',
-            opacity: isConnected ? 0.7 : 1,
-          },
-        }, 'Entra ID')
+        }, 'BYO Model')
       ),
 
-      // Endpoint (shown in both modes)
-      React.createElement('label', { style: { display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '4px' } }, 'Endpoint'),
-      React.createElement('input', {
+      // Built-in mode: model picker (uses server-reported models)
+      config.authMode === 'hosted' && hostedModels && React.createElement('label', null, 'Model'),
+      config.authMode === 'hosted' && hostedModels && React.createElement('select', {
+        value: config.model,
+        onChange: (e: React.ChangeEvent<HTMLSelectElement>) => {
+          const newModel = e.target.value;
+          const updated = { ...config, model: newModel };
+          setConfig(updated);
+          // Hot-swap model without disconnect/reconnect cycle
+          if (isConnected) {
+            saveLLMConfig(updated, appId);
+            onConnect(updated);
+          }
+        },
+        style: { marginBottom: '14px' },
+      },
+        ...hostedModels.models.map(m =>
+          React.createElement('option', { key: m.name, value: m.name }, m.name)
+        )
+      ),
+
+      // BYO Model mode: Endpoint
+      config.authMode === 'apiKey' && React.createElement('label', { style: { display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '4px' } }, 'Endpoint'),
+      config.authMode === 'apiKey' && React.createElement('input', {
         type: 'text', value: config.endpoint,
         onChange: (e: React.ChangeEvent<HTMLInputElement>) => setConfig((c) => ({ ...c, endpoint: e.target.value })),
-        placeholder: config.authMode === 'entraId'
-          ? 'https://your-project.services.ai.azure.com/...'
-          : 'https://api.openai.com/v1/chat/completions',
+        placeholder: 'https://api.openai.com/v1/chat/completions',
         disabled: isConnected,
         style: { marginBottom: '10px' },
       }),
 
-      // API Key mode fields
+      // BYO Model mode: API Key
       config.authMode === 'apiKey' && React.createElement('label', null, 'API Key'),
       config.authMode === 'apiKey' && React.createElement('input', {
         type: 'password', value: config.apiKey,
@@ -293,51 +342,16 @@ function SettingsPanel({
         style: { marginBottom: '10px' },
       }),
 
-      // Model (shown in both modes)
-      React.createElement('label', null, 'Model'),
-      React.createElement('input', {
+      // BYO Model mode: Model
+      config.authMode === 'apiKey' && React.createElement('label', null, 'Model'),
+      config.authMode === 'apiKey' && React.createElement('input', {
         type: 'text', value: config.model,
         onChange: (e: React.ChangeEvent<HTMLInputElement>) => setConfig((c) => ({ ...c, model: e.target.value })),
         placeholder: 'gpt-4o', disabled: isConnected,
         style: { marginBottom: '14px' },
       }),
 
-      // Entra ID mode: sign in button and account info
-      config.authMode === 'entraId' && !isConnected && React.createElement('button', {
-        onClick: handleEntraSignIn,
-        disabled: entraLoading || !config.endpoint.trim(),
-        style: {
-          width: '100%', padding: '8px', borderRadius: 'var(--adaptive-radius)', border: 'none',
-          fontSize: '14px', fontWeight: 500, cursor: 'pointer',
-          backgroundColor: '#0078d4',
-          color: '#fff',
-          opacity: entraLoading || !config.endpoint.trim() ? 0.6 : 1,
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-        },
-      },
-        entraLoading ? 'Signing in…' : 'Sign in with Microsoft'
-      ),
-
-      config.authMode === 'entraId' && entraError && React.createElement('p', {
-        style: { fontSize: '12px', color: '#dc2626', margin: '6px 0 0', lineHeight: 1.4 },
-      }, entraError),
-
-      config.authMode === 'entraId' && isConnected && config.entraAccount && React.createElement('p', {
-        style: { fontSize: '12px', color: 'var(--adaptive-text-secondary)', margin: '0 0 10px', lineHeight: 1.4 },
-      }, 'Signed in as ', React.createElement('strong', null, config.entraAccount)),
-
-      config.authMode === 'entraId' && isConnected && React.createElement('button', {
-        onClick: handleEntraSignOut,
-        style: {
-          width: '100%', padding: '8px', borderRadius: 'var(--adaptive-radius)', border: 'none',
-          fontSize: '14px', fontWeight: 500, cursor: 'pointer',
-          backgroundColor: 'var(--adaptive-surface)',
-          color: 'var(--adaptive-text)',
-          boxShadow: 'inset 0 0 0 1px var(--adaptive-border)',
-        },
-      }, 'Sign out & Disconnect'),
-
-      // API Key mode: connect/disconnect button
+      // BYO Model mode: connect/disconnect button
       config.authMode === 'apiKey' && React.createElement('button', {
         onClick: isConnected ? onDisconnect : handleConnect,
         disabled: !isConnected && !config.apiKey.trim(),
@@ -352,11 +366,7 @@ function SettingsPanel({
 
       !isConnected && config.authMode === 'apiKey' && React.createElement('p', {
         style: { fontSize: '12px', color: 'var(--adaptive-text-secondary)', margin: '10px 0 0', lineHeight: 1.4 },
-      }, 'Works with any OpenAI-compatible API. Leave endpoint blank for default OpenAI.'),
-
-      !isConnected && config.authMode === 'entraId' && React.createElement('p', {
-        style: { fontSize: '12px', color: 'var(--adaptive-text-secondary)', margin: '10px 0 0', lineHeight: 1.4 },
-      }, 'Authenticate with Microsoft Entra ID to use Azure AI Foundry endpoints.'),
+      }, 'Bring your own OpenAI-compatible API. Leave endpoint blank for default OpenAI.'),
 
       // Pack settings
       ...packSettingsList.map((pack) =>
@@ -417,7 +427,7 @@ function ShellActivityIndicator() {
     style: {
       position: 'fixed',
       bottom: '12px',
-      left: '260px',
+      right: '12px',
       zIndex: 50,
       display: 'flex',
       flexDirection: 'column' as const,
@@ -427,7 +437,7 @@ function ShellActivityIndicator() {
       color: 'var(--adaptive-text-secondary, #6b7280)',
       maxWidth: '40vw',
       pointerEvents: 'none' as const,
-      alignItems: 'flex-start' as const,
+      alignItems: 'flex-end' as const,
     } as React.CSSProperties,
   },
     ...log.slice(-8).map(entry =>
@@ -517,6 +527,12 @@ export interface AdaptiveAppProps {
 
   /** Override the settings gear position. Defaults to { top: '6px', right: '12px' }. */
   settingsPosition?: { top?: string; right?: string };
+
+  /** List of model names to show in a dropdown. When not provided, the model field is a free-text input. */
+  models?: string[];
+
+  /** Unique app identifier. When set, LLM config (model, endpoint) is stored per-app in localStorage. */
+  appId?: string;
 }
 
 let turnCounter = Date.now();
@@ -539,12 +555,14 @@ export function AdaptiveApp({
   sendPromptRef,
   visiblePacks,
   settingsPosition,
+  models,
+  appId,
 }: AdaptiveAppProps) {
   // ─── Internal adapter management ───
   const [isConnected, setIsConnected] = useState(() => {
     if (externalAdapter) return true;
-    const cfg = loadLLMConfig();
-    if (cfg.authMode === 'entraId') return !!cfg.entraAccount;
+    const cfg = loadLLMConfig(appId);
+    if (cfg.authMode === 'hosted') return true;
     return !!cfg.apiKey.trim();
   });
   const [adapterKey, setAdapterKey] = useState(0);
@@ -552,19 +570,29 @@ export function AdaptiveApp({
   const adapter: LLMAdapter | null = useMemo(() => {
     if (externalAdapter) return externalAdapter;
     if (!isConnected) return null;
-    const config = loadLLMConfig();
+    const config = loadLLMConfig(appId);
+    // Hosted mode: use server-side proxy (no API key sent to browser)
+    if (config.authMode === 'hosted') {
+      return new OpenAIAdapter({
+        apiKey: '',
+        endpoint: window.location.origin + '/api/llm-proxy',
+        model: config.model || 'gpt-4o',
+        systemPromptOverride,
+        systemPromptSuffix,
+        resolveApiType: resolveHostedApiType,
+      });
+    }
     return new OpenAIAdapter({
       apiKey: config.apiKey,
       endpoint: config.endpoint || undefined,
       model: config.model || 'gpt-4o',
       systemPromptOverride,
       systemPromptSuffix,
-      getAccessToken: config.authMode === 'entraId' ? entraGetAccessToken : undefined,
     });
   }, [externalAdapter, isConnected, adapterKey, systemPromptOverride, systemPromptSuffix]);
 
   const handleConnect = useCallback((config: LLMConfig) => {
-    saveLLMConfig(config);
+    saveLLMConfig(config, appId);
     setIsConnected(true);
     setAdapterKey((k) => k + 1);
   }, []);
@@ -611,6 +639,10 @@ export function AdaptiveApp({
   const [lastDecisionLog, setLastDecisionLog] = useState<DecisionEntry[]>([]);
   const historyRef = useRef<LLMMessage[]>([]);
   const busyRef = useRef(false);
+
+  // Rewind state
+  const lastSentRef = useRef<{ prompt: string; state: StateStore; userDisplayText?: string | null } | null>(null);
+  const rewindPendingRef = useRef<{ prompt: string; state: StateStore; userDisplayText?: string | null } | null>(null);
 
   // Rebuild conversation history from restored turns (page reload / session restore)
   // Without this, the LLM loses all context when turns are restored from localStorage.
@@ -683,6 +715,9 @@ export function AdaptiveApp({
     async (prompt: string, currentState: StateStore, userDisplayText?: string | null) => {
       if (busyRef.current || !adapter) return;
       busyRef.current = true;
+
+      // Save prompt info for potential rewind
+      lastSentRef.current = { prompt, state: currentState, userDisplayText };
 
       try {
         setIsLoading(true);
@@ -831,6 +866,67 @@ export function AdaptiveApp({
     [adapter, maxHistory, onSpecChange, onError]
   );
 
+  // ─── Rewind & Reissue ───
+  const handleRewind = useCallback((modelOverride?: string) => {
+    if (turns.length < 2 || !lastSentRef.current) return;
+
+    const pending = lastSentRef.current;
+
+    // Pop the last turn and clear userMessage from the now-last turn
+    setTurns(prev => {
+      if (prev.length < 2) return prev;
+      const updated = prev.slice(0, -1);
+      updated[updated.length - 1] = {
+        ...updated[updated.length - 1],
+        userMessage: undefined,
+        userData: undefined,
+      };
+      return updated;
+    });
+
+    // Pop last 2 entries from historyRef (user prompt + assistant response)
+    if (historyRef.current.length >= 2) {
+      historyRef.current = historyRef.current.slice(0, -2);
+    }
+
+    // Reset busy/loading state
+    busyRef.current = false;
+    setIsLoading(false);
+    setError(null);
+
+    if (modelOverride) {
+      // Model switch: save new model, bump adapter key so useMemo recreates it,
+      // then use the pending-ref + effect to fire after the new adapter is ready.
+      const config = loadLLMConfig(appId);
+      saveLLMConfig({ ...config, model: modelOverride }, appId);
+      rewindPendingRef.current = pending;
+      setIsConnected(true);
+      setAdapterKey(k => k + 1);
+    } else {
+      // Same model: adapter is unchanged, re-send after React flushes state updates.
+      // Use setTimeout to ensure setTurns/setIsLoading have committed.
+      setTimeout(() => {
+        handleSendPrompt(pending.prompt, pending.state, pending.userDisplayText);
+      }, 0);
+    }
+  }, [turns.length, appId, handleSendPrompt]);
+
+  // Process pending rewinds after model switch (adapter recreated by useMemo)
+  useEffect(() => {
+    const pending = rewindPendingRef.current;
+    if (pending && adapter && !busyRef.current) {
+      rewindPendingRef.current = null;
+      handleSendPrompt(pending.prompt, pending.state, pending.userDisplayText);
+    }
+  }, [adapter, handleSendPrompt]);
+
+  // Derive available models and current model for rewind UI
+  const currentModel = useMemo(() => loadLLMConfig(appId).model || 'gpt-4o', [adapterKey]);
+  const rewindModels = useMemo(() => {
+    if (cachedHostedModels) return cachedHostedModels.models.map(m => m.name);
+    return models ?? [];
+  }, [adapterKey, models]);
+
   // Expose sendPrompt to external components via ref
   // The actual state-aware sendPrompt is set by AdaptiveProvider (see below)
   const externalSendPromptRef = sendPromptRef;
@@ -868,6 +964,8 @@ export function AdaptiveApp({
       appSettingsComponents: settingsComponents,
       visiblePacks,
       settingsPosition,
+      models,
+      appId,
     }),
 
     // Main content
@@ -880,7 +978,7 @@ export function AdaptiveApp({
           onResetSession: handleResetSession,
           theme,
         },
-          React.createElement(AdaptiveAppInner, { turns, isLoading, error, tokenUsage, lastRequestUsage, lastRawResponse, lastRawRequest, lastDecisionLog, sendPromptRef: externalSendPromptRef })
+          React.createElement(AdaptiveAppInner, { turns, isLoading, error, tokenUsage, lastRequestUsage, lastRawResponse, lastRawRequest, lastDecisionLog, sendPromptRef: externalSendPromptRef, onRewind: handleRewind, rewindModels, currentModel })
         )
       : React.createElement('div', {
           style: {
@@ -916,6 +1014,9 @@ function AdaptiveAppInner({
   lastRawRequest,
   lastDecisionLog,
   sendPromptRef,
+  onRewind,
+  rewindModels,
+  currentModel,
 }: {
   turns: ConversationTurn[];
   isLoading: boolean;
@@ -926,6 +1027,9 @@ function AdaptiveAppInner({
   lastRawRequest: string | null;
   lastDecisionLog: DecisionEntry[];
   sendPromptRef?: React.MutableRefObject<((prompt: string) => void) | null>;
+  onRewind?: (modelOverride?: string) => void;
+  rewindModels?: string[];
+  currentModel?: string;
 }) {
   const { dispatch, sendPrompt } = useAdaptive();
 
@@ -952,7 +1056,7 @@ function AdaptiveAppInner({
     }, 'No conversation started. Provide an initialSpec to begin.');
   }
 
-  return React.createElement(ConversationThread, { turns, isLoading, error, tokenUsage, lastRequestUsage, lastRawResponse, lastRawRequest, lastDecisionLog });
+  return React.createElement(ConversationThread, { turns, isLoading, error, tokenUsage, lastRequestUsage, lastRawResponse, lastRawRequest, lastDecisionLog, onRewind, rewindModels, currentModel });
 }
 
 export default AdaptiveApp;

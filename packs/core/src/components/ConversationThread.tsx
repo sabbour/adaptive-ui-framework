@@ -4,7 +4,8 @@ import type { DecisionEntry } from '../decision-log';
 import { AdaptiveRenderer } from '../renderer';
 import { useAdaptive, DisabledScope } from '../context';
 import { simpleMarkdown, promptHistory, MAX_PROMPT_HISTORY } from './builtins';
-import { getCompletedRequests, subscribeCompleted, type CompletedRequest } from '../request-tracker';
+import { getCompletedRequests, subscribeCompleted } from '../request-tracker';
+
 
 // Icons
 import iconBrainSparkle from '../icons/fluent/brain-sparkle.svg?url';
@@ -20,6 +21,41 @@ function summarizableEntries(data: Record<string, unknown>): Array<[string, stri
       return [k, s] as [string, string];
     })
     .filter(([, s]) => s.length < 200 && !s.startsWith('[{') && !s.startsWith('{"'));
+}
+
+// Extract a flat list of component types + key props from a layout node tree
+interface ComponentEntry { type: string; props: string[]; depth: number; }
+
+function extractComponentTree(node: any, depth?: number): ComponentEntry[] {
+  if (!node) return [];
+  const d = depth ?? 0;
+  const entries: ComponentEntry[] = [];
+  const type: string = node.type || '?';
+  // Gather interesting props (skip type, children, style, className, id)
+  const skip = new Set(['type', 'children', 'ch', 'style', 'className', 'id', 'tabs', 'items', 'visible']);
+  const props = Object.keys(node).filter(k => !skip.has(k) && node[k] !== undefined && node[k] !== null);
+  // Summarize prop values to keep it short
+  const propSummary = props.slice(0, 6).map(k => {
+    const v = node[k];
+    if (typeof v === 'string') return k + '="' + (v.length > 30 ? v.slice(0, 27) + '...' : v) + '"';
+    if (typeof v === 'boolean') return v ? k : '';
+    if (typeof v === 'number') return k + '=' + v;
+    return k;
+  }).filter(Boolean);
+  entries.push({ type, props: propSummary, depth: d });
+  const kids: any[] = node.children || node.ch || [];
+  for (const child of kids) entries.push(...extractComponentTree(child, d + 1));
+  if (Array.isArray(node.tabs)) {
+    for (const tab of node.tabs) {
+      entries.push({ type: 'tab', props: [tab.label ? 'label="' + tab.label + '"' : ''].filter(Boolean), depth: d + 1 });
+      const tabKids = tab.children || [];
+      for (const child of tabKids) entries.push(...extractComponentTree(child, d + 2));
+    }
+  }
+  if (Array.isArray(node.items)) {
+    for (const item of node.items) entries.push(...extractComponentTree(item, d + 1));
+  }
+  return entries;
 }
 
 // Reusable AI avatar element
@@ -206,17 +242,28 @@ interface ConversationThreadProps {
   lastRawResponse?: string | null;
   lastRawRequest?: string | null;
   lastDecisionLog?: DecisionEntry[];
+  onRewind?: (modelOverride?: string) => void;
+  rewindModels?: string[];
+  currentModel?: string;
 }
 
-export function ConversationThread({ turns, isLoading, error, tokenUsage, lastRequestUsage, lastRawResponse, lastRawRequest, lastDecisionLog }: ConversationThreadProps) {
+export function ConversationThread({ turns, isLoading, error, tokenUsage, lastRequestUsage, lastRawResponse, lastRawRequest, lastDecisionLog, onRewind, rewindModels, currentModel }: ConversationThreadProps) {
   const { resetSession, sendPrompt } = useAdaptive();
   const bottomRef = useRef<HTMLDivElement>(null);
   const latestTurnRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const [showDebug, setShowDebug] = useState(false);
   const [isScrolledUp, setIsScrolledUp] = useState(false);
   const isScrolledUpRef = useRef(false);
   const [hasNewMessage, setHasNewMessage] = useState(false);
+
+  // Debug panel state
+  const [showDebug, setShowDebug] = useState(false);
+  const [expandedRequestId, setExpandedRequestId] = useState<number | null>(null);
+  const apiRequests = useSyncExternalStore(subscribeCompleted, getCompletedRequests);
+
+  // Rewind state
+  const [rewindModel, setRewindModel] = useState<string | undefined>(undefined);
+  const canRewind = !!onRewind && turns.length >= 2 && !isLoading;
 
   // Escape hatch state (lifted from ActiveTurn so it can render in the fixed bottom bar)
   const [escapeText, setEscapeText] = useState('');
@@ -278,55 +325,19 @@ export function ConversationThread({ turns, isLoading, error, tokenUsage, lastRe
       return;
     }
   };
-  const [requestOpen, setRequestOpen] = useState(false);
-  const [responseOpen, setResponseOpen] = useState(true);
-  const [decisionsOpen, setDecisionsOpen] = useState(true);
-  const [apiLogOpen, setApiLogOpen] = useState(true);
-  const [expandedRequestId, setExpandedRequestId] = useState<number | null>(null);
-  const apiRequests = useSyncExternalStore(subscribeCompleted, getCompletedRequests);
 
-  // Track data versions for ping animation
-  const [requestPing, setRequestPing] = useState(false);
-  const [responsePing, setResponsePing] = useState(false);
-  const [decisionsPing, setDecisionsPing] = useState(false);
-  const [apiPing, setApiPing] = useState(false);
-  const prevRequestRef = useRef(lastRawRequest);
-  const prevResponseRef = useRef(lastRawResponse);
-  const prevDecisionsRef = useRef(lastDecisionLog?.length ?? 0);
-  const prevApiRef = useRef(apiRequests.length);
 
+  // On mount, scroll to the latest turn if restoring a session
+  const didInitialScroll = useRef(false);
   useEffect(() => {
-    if (lastRawRequest && lastRawRequest !== prevRequestRef.current) {
-      setRequestPing(true);
-      setTimeout(() => setRequestPing(false), 1500);
+    if (!didInitialScroll.current && turns.length > 1 && bottomRef.current) {
+      didInitialScroll.current = true;
+      // Use requestAnimationFrame to ensure DOM has rendered restored turns
+      requestAnimationFrame(() => {
+        bottomRef.current?.scrollIntoView({ behavior: 'instant' });
+      });
     }
-    prevRequestRef.current = lastRawRequest;
-  }, [lastRawRequest]);
-
-  useEffect(() => {
-    if (lastRawResponse && lastRawResponse !== prevResponseRef.current) {
-      setResponsePing(true);
-      setTimeout(() => setResponsePing(false), 1500);
-    }
-    prevResponseRef.current = lastRawResponse;
-  }, [lastRawResponse]);
-
-  useEffect(() => {
-    const len = lastDecisionLog?.length ?? 0;
-    if (len > 0 && len !== prevDecisionsRef.current) {
-      setDecisionsPing(true);
-      setTimeout(() => setDecisionsPing(false), 1500);
-    }
-    prevDecisionsRef.current = len;
-  }, [lastDecisionLog]);
-
-  useEffect(() => {
-    if (apiRequests.length > 0 && apiRequests.length !== prevApiRef.current) {
-      setApiPing(true);
-      setTimeout(() => setApiPing(false), 1500);
-    }
-    prevApiRef.current = apiRequests.length;
-  }, [apiRequests]);
+  }, [turns.length]);
 
   const prevTurnCountRef = useRef(turns.length);
   useEffect(() => {
@@ -474,8 +485,7 @@ export function ConversationThread({ turns, isLoading, error, tokenUsage, lastRe
       style: {
         flexShrink: 0,
         flexGrow: 0,
-        height: showDebug ? '50vh' : 'auto',
-        maxHeight: '50vh',
+        maxHeight: showDebug ? '50vh' : undefined,
         overflowY: showDebug ? 'auto' as const : 'visible' as const,
         borderTop: '1px solid var(--adaptive-border, #e5e7eb)',
         backgroundColor: 'var(--adaptive-bg, #f5f5f5)',
@@ -588,7 +598,123 @@ export function ConversationThread({ turns, isLoading, error, tokenUsage, lastRe
       }, showDebug ? 'Hide Debug' : 'Debug')
     ),
 
-    // Debug panel — raw LLM request
+    // Debug: Rewind & Reissue
+    showDebug && canRewind && React.createElement('div', {
+      style: {
+        margin: '0 24px 6px', borderRadius: '8px', border: '1px solid #333',
+        backgroundColor: '#1e1e1e',
+      },
+    },
+      React.createElement('div', {
+        style: {
+          padding: '8px 12px',
+          borderBottom: '1px solid #333',
+          fontSize: '10px', color: '#888',
+          textTransform: 'uppercase' as const, letterSpacing: '0.05em',
+        },
+      }, 'Rewind & Reissue'),
+      React.createElement('div', {
+        style: {
+          padding: '8px 12px', display: 'flex', gap: '8px', alignItems: 'center',
+          flexWrap: 'wrap' as const,
+        },
+      },
+        // Model picker
+        rewindModels && rewindModels.length > 1 && React.createElement('select', {
+          value: rewindModel ?? currentModel ?? '',
+          onChange: (e: React.ChangeEvent<HTMLSelectElement>) => setRewindModel(e.target.value),
+          style: {
+            padding: '4px 8px', borderRadius: '4px', fontSize: '11px',
+            fontFamily: 'Consolas, "Courier New", monospace',
+            backgroundColor: '#2a2a2a', color: '#d4d4d4',
+            border: '1px solid #555', cursor: 'pointer',
+          },
+        },
+          ...rewindModels.map(m =>
+            React.createElement('option', { key: m, value: m }, m)
+          )
+        ),
+        // Current model label when no picker
+        rewindModels && rewindModels.length <= 1 && currentModel && React.createElement('span', {
+          style: { fontSize: '11px', color: '#888', fontFamily: 'Consolas, "Courier New", monospace' },
+        }, currentModel),
+        // Rewind button
+        React.createElement('button', {
+          onClick: () => {
+            const override = rewindModel && rewindModel !== currentModel ? rewindModel : undefined;
+            onRewind!(override);
+          },
+          style: {
+            padding: '4px 12px', borderRadius: '4px', border: 'none',
+            fontSize: '11px', fontWeight: 600, cursor: 'pointer',
+            backgroundColor: '#3b82f6', color: '#fff',
+            display: 'flex', alignItems: 'center', gap: '4px',
+          },
+        },
+          '\u21A9',
+          rewindModel && rewindModel !== currentModel
+            ? `Rewind & retry with ${rewindModel}`
+            : 'Rewind & retry'
+        ),
+      )
+    ),
+
+    // Debug: Component tree for last 3 turns (collapsible)
+    showDebug && turns.length > 0 && React.createElement('details', {
+      style: {
+        margin: '0 24px 6px', borderRadius: '8px', border: '1px solid #333',
+        backgroundColor: '#1e1e1e',
+      },
+    },
+      React.createElement('summary', {
+        style: {
+          padding: '8px 12px',
+          fontSize: '10px', color: '#888',
+          textTransform: 'uppercase' as const, letterSpacing: '0.05em',
+          cursor: 'pointer', userSelect: 'none' as const,
+          listStyle: 'none',
+        },
+      }, '\u25B6 Component Tree (last ' + Math.min(turns.length, 3) + ' turn' + (Math.min(turns.length, 3) > 1 ? 's' : '') + ')'),
+      ...turns.slice(-3).map((turn, ti) =>
+        React.createElement('div', { key: 'tree-' + ti },
+          turns.length > 1 && React.createElement('div', {
+            style: {
+              padding: '4px 12px 2px', fontSize: '10px', color: '#6a9955',
+              fontFamily: 'Consolas, "Courier New", monospace',
+              borderTop: '1px solid #333',
+            },
+          }, '\u2500\u2500 Turn ' + (turns.length - Math.min(turns.length, 3) + ti + 1) + (ti === turns.slice(-3).length - 1 ? ' (current)' : '')),
+          React.createElement('div', {
+            style: {
+              padding: '6px 12px 10px', fontSize: '11px',
+              fontFamily: 'Consolas, "Courier New", monospace',
+              maxHeight: '200px', overflow: 'auto',
+              color: '#d4d4d4',
+            },
+          },
+            ...extractComponentTree(turn.agentSpec.layout).map((entry, i) =>
+              React.createElement('div', {
+                key: i,
+                style: {
+                  paddingLeft: (entry.depth * 16) + 'px',
+                  padding: '1px 0 1px ' + (entry.depth * 16) + 'px',
+                  display: 'flex', gap: '6px', alignItems: 'baseline',
+                },
+              },
+                React.createElement('span', {
+                  style: { color: '#569cd6', fontWeight: 600 },
+                }, entry.type),
+                entry.props.length > 0 && React.createElement('span', {
+                  style: { color: '#9cdcfe', fontSize: '10px' },
+                }, entry.props.join(' '))
+              )
+            )
+          )
+        )
+      )
+    ),
+
+    // Debug: API request log
     showDebug && React.createElement('div', {
       style: {
         margin: '0 24px 8px', borderRadius: '8px', border: '1px solid #333',
@@ -598,154 +724,14 @@ export function ConversationThread({ turns, isLoading, error, tokenUsage, lastRe
       React.createElement('div', {
         style: {
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          padding: '8px 12px', cursor: 'pointer',
-          backgroundColor: '#1e1e1e', borderBottom: requestOpen ? '1px solid #333' : 'none',
-          borderRadius: requestOpen ? '8px 8px 0 0' : '8px',
-          fontSize: '10px', color: requestPing ? '#60a5fa' : '#888',
-          transition: 'color 0.3s ease',
+          padding: '8px 12px',
+          borderBottom: '1px solid #333',
+          fontSize: '10px', color: '#888',
         },
-        onClick: () => setRequestOpen(o => !o),
       },
         React.createElement('span', {
           style: { textTransform: 'uppercase' as const, letterSpacing: '0.05em' },
-        }, `${requestOpen ? '▾' : '▸'} Last LLM Raw Request`),
-        lastRawRequest && React.createElement('button', {
-          onClick: (e: React.MouseEvent) => { e.stopPropagation(); navigator.clipboard.writeText(lastRawRequest!); },
-          title: 'Copy to clipboard',
-          style: { background: 'none', border: 'none', color: '#aaa', fontSize: '14px', cursor: 'pointer', padding: '0 2px', lineHeight: 1 },
-        }, '\u2398')
-      ),
-      requestOpen && React.createElement('div', {
-        style: {
-          padding: '8px 12px 12px', fontSize: '11px', color: '#d4d4d4',
-          fontFamily: 'Consolas, "Courier New", monospace',
-          maxHeight: '260px', overflow: 'auto',
-          whiteSpace: 'pre-wrap' as const, wordBreak: 'break-all' as const,
-        },
-      }, lastRawRequest || React.createElement('span', { style: { color: '#555' } }, 'No request yet'))
-    ),
-
-    // Debug panel — raw LLM response
-    showDebug && React.createElement('div', {
-      style: {
-        margin: '0 24px', borderRadius: '8px', border: '1px solid #333',
-        backgroundColor: '#1e1e1e',
-      },
-    },
-      React.createElement('div', {
-        style: {
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          padding: '8px 12px', cursor: 'pointer',
-          backgroundColor: '#1e1e1e', borderBottom: responseOpen ? '1px solid #333' : 'none',
-          borderRadius: responseOpen ? '8px 8px 0 0' : '8px',
-          fontSize: '10px', color: responsePing ? '#60a5fa' : '#888',
-          transition: 'color 0.3s ease',
-        },
-        onClick: () => setResponseOpen(o => !o),
-      },
-        React.createElement('span', {
-          style: { textTransform: 'uppercase' as const, letterSpacing: '0.05em' },
-        }, `${responseOpen ? '▾' : '▸'} Last LLM Raw Response`),
-        lastRawResponse && React.createElement('button', {
-          onClick: (e: React.MouseEvent) => { e.stopPropagation(); navigator.clipboard.writeText((() => { try { return JSON.stringify(JSON.parse(lastRawResponse!), null, 2); } catch { return lastRawResponse!; } })()); },
-          title: 'Copy to clipboard',
-          style: { background: 'none', border: 'none', color: '#aaa', fontSize: '14px', cursor: 'pointer', padding: '0 2px', lineHeight: 1 },
-        }, '\u2398')
-      ),
-      responseOpen && React.createElement('div', {
-        style: {
-          padding: '8px 12px 12px', fontSize: '11px', color: '#d4d4d4',
-          fontFamily: 'Consolas, "Courier New", monospace',
-          maxHeight: '260px', overflow: 'auto',
-          whiteSpace: 'pre-wrap' as const, wordBreak: 'break-all' as const,
-        },
-      },
-        lastRawResponse
-          ? (() => { try { return JSON.stringify(JSON.parse(lastRawResponse), null, 2); } catch { return lastRawResponse; } })()
-          : React.createElement('span', { style: { color: '#555' } }, 'No response yet')
-      )
-    ),
-
-    // Debug panel — logical decisions
-    showDebug && React.createElement('div', {
-      style: {
-        margin: '8px 24px 0', borderRadius: '8px', border: '1px solid #333',
-        backgroundColor: '#1e1e1e',
-      },
-    },
-      React.createElement('div', {
-        style: {
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          padding: '8px 12px', cursor: 'pointer',
-          backgroundColor: '#1e1e1e', borderBottom: decisionsOpen ? '1px solid #333' : 'none',
-          borderRadius: decisionsOpen ? '8px 8px 0 0' : '8px',
-          fontSize: '10px', color: decisionsPing ? '#a78bfa' : '#888',
-          transition: 'color 0.3s ease',
-        },
-        onClick: () => setDecisionsOpen(o => !o),
-      },
-        React.createElement('span', {
-          style: { textTransform: 'uppercase' as const, letterSpacing: '0.05em' },
-        }, `${decisionsOpen ? '\u25BE' : '\u25B8'} Logical Decisions (${lastDecisionLog?.length ?? 0})`),
-        (lastDecisionLog && lastDecisionLog.length > 0) && React.createElement('button', {
-          onClick: (e: React.MouseEvent) => { e.stopPropagation(); navigator.clipboard.writeText(lastDecisionLog!.map(d => `[${d.stage}] ${d.message}`).join('\n')); },
-          title: 'Copy to clipboard',
-          style: { background: 'none', border: 'none', color: '#aaa', fontSize: '14px', cursor: 'pointer', padding: '0 2px', lineHeight: 1 },
-        }, '\u2398')
-      ),
-      decisionsOpen && React.createElement('div', {
-        style: {
-          padding: '8px 12px 12px', fontSize: '11px',
-          fontFamily: 'Consolas, "Courier New", monospace',
-          maxHeight: '260px', overflow: 'auto',
-        },
-      },
-        lastDecisionLog && lastDecisionLog.length > 0
-          ? lastDecisionLog.map((entry, i) => {
-          const stageColors: Record<string, string> = { adapter: '#60a5fa', intent: '#a78bfa', renderer: '#34d399' };
-          return React.createElement('div', {
-            key: i,
-            style: {
-              display: 'flex', gap: '8px', padding: '2px 0',
-              color: '#d4d4d4', lineHeight: '1.5',
-            },
-          },
-            React.createElement('span', {
-              style: {
-                fontSize: '9px', fontWeight: 600, textTransform: 'uppercase' as const,
-                padding: '1px 5px', borderRadius: '3px', flexShrink: 0, alignSelf: 'flex-start',
-                backgroundColor: stageColors[entry.stage] ?? '#888',
-                color: '#1e1e1e', marginTop: '2px',
-              },
-            }, entry.stage),
-            React.createElement('span', null, entry.message)
-          );
-        })
-          : [React.createElement('span', { key: 'empty', style: { color: '#555' } }, 'No decisions yet')]
-      )
-    ),
-
-    // Debug panel — API requests
-    showDebug && React.createElement('div', {
-      style: {
-        margin: '8px 24px 0', borderRadius: '8px', border: '1px solid #333',
-        backgroundColor: '#1e1e1e',
-      },
-    },
-      React.createElement('div', {
-        style: {
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          padding: '8px 12px', cursor: 'pointer',
-          backgroundColor: '#1e1e1e', borderBottom: apiLogOpen ? '1px solid #333' : 'none',
-          borderRadius: apiLogOpen ? '8px 8px 0 0' : '8px',
-          fontSize: '10px', color: apiPing ? '#34d399' : '#888',
-          transition: 'color 0.3s ease',
-        },
-        onClick: () => setApiLogOpen(o => !o),
-      },
-        React.createElement('span', {
-          style: { textTransform: 'uppercase' as const, letterSpacing: '0.05em' },
-        }, `${apiLogOpen ? '\u25BE' : '\u25B8'} Requests (${apiRequests.length})`),
+        }, `API Requests (${apiRequests.length})`),
         React.createElement('button', {
           onClick: (e: React.MouseEvent) => {
             e.stopPropagation();
@@ -757,20 +743,20 @@ export function ConversationThread({ turns, isLoading, error, tokenUsage, lastRe
           style: { background: 'none', border: 'none', color: '#aaa', fontSize: '14px', cursor: 'pointer', padding: '0 2px', lineHeight: 1 },
         }, '\u2398')
       ),
-      apiLogOpen && React.createElement('div', {
+      React.createElement('div', {
         style: {
-          padding: '8px 12px 12px', fontSize: '11px',
+          padding: '6px 12px 10px', fontSize: '11px',
           fontFamily: 'Consolas, "Courier New", monospace',
           maxHeight: '300px', overflow: 'auto',
         },
       },
         apiRequests.length > 0
-          ? apiRequests.slice(-20).map((req, i) =>
+          ? apiRequests.slice(-30).map((req) =>
           React.createElement('div', {
             key: req.id,
             style: {
               padding: '4px 0',
-              borderBottom: i < apiRequests.length - 1 ? '1px solid #333' : 'none',
+              borderBottom: '1px solid #2a2a2a',
               cursor: 'pointer',
             },
             onClick: () => setExpandedRequestId(prev => prev === req.id ? null : req.id),
@@ -787,14 +773,17 @@ export function ConversationThread({ turns, isLoading, error, tokenUsage, lastRe
                 },
               }, String(req.status)),
               React.createElement('span', {
-                style: { fontWeight: 600, color: req.method === 'GET' ? '#60a5fa' : '#f59e0b' },
+                style: { fontWeight: 600, color: req.method === 'GET' ? '#60a5fa' : req.method === 'POST' ? '#f59e0b' : req.method === 'PUT' ? '#a78bfa' : req.method === 'DELETE' ? '#ef4444' : '#d4d4d4' },
               }, req.method),
               React.createElement('span', {
                 style: { color: '#9ca3af', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, flex: 1 },
               }, req.url),
               React.createElement('span', {
-                style: { color: '#6b7280', flexShrink: 0 },
-              }, `${req.duration}ms`),
+                style: { color: req.duration > 2000 ? '#f59e0b' : '#6b7280', flexShrink: 0, fontSize: '10px' },
+              }, req.duration >= 1000 ? (req.duration / 1000).toFixed(1) + 's' : req.duration + 'ms'),
+              React.createElement('span', {
+                style: { color: '#555', flexShrink: 0, fontSize: '10px' },
+              }, new Date(req.time).toLocaleTimeString()),
               React.createElement('span', {
                 style: { color: '#555', flexShrink: 0, fontSize: '9px' },
               }, expandedRequestId === req.id ? '\u25BE' : '\u25B8')
