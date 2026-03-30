@@ -2,6 +2,7 @@ import React, { createContext, useContext, useCallback, useReducer, type Dispatc
 import type { AdaptiveValue, AdaptiveAction, AdaptiveUISpec, AdaptiveTheme } from './schema';
 import type { StateStore } from './interpolation';
 import { interpolate } from './interpolation';
+import { consumePlaceholderDefaults } from './components/builtins';
 
 // ─── Adaptive Context ───
 // Provides state, dispatch, and action handling to the entire tree.
@@ -104,8 +105,8 @@ export function AdaptiveProvider({
   });
 
   const sendPrompt = useCallback(
-    (prompt: string, userDisplayText?: string | null) => {
-      onSendPrompt(prompt, adaptiveState.store, userDisplayText);
+    (prompt: string, userDisplayText?: string | null, storeOverride?: StateStore) => {
+      onSendPrompt(prompt, storeOverride || adaptiveState.store, userDisplayText);
     },
     [onSendPrompt, adaptiveState.store]
   );
@@ -115,13 +116,33 @@ export function AdaptiveProvider({
       if (!action || typeof action !== 'object' || !('type' in action)) {
         return;
       }
-
+      // Backfill empty input fields with their placeholder examples before submit.
+      // This lets users click Continue without typing if the placeholder shows a
+      // sensible default (e.g. "e.g. contract-risk-analyzer" → "contract-risk-analyzer").
+      let store = adaptiveState.store;
+      if (action.type === 'sendPrompt' || action.type === 'submit') {
+        const defaults = consumePlaceholderDefaults();
+        if (defaults.size > 0) {
+          const fills: Record<string, string> = {};
+          for (const [key, def] of defaults) {
+            const current = store[key];
+            if (current === undefined || current === null || current === '') {
+              fills[key] = def;
+            }
+          }
+          if (Object.keys(fills).length > 0) {
+            dispatch({ type: 'MERGE', values: fills });
+            // Use augmented store for interpolation in the same tick
+            store = { ...store, ...fills };
+          }
+        }
+      }
       switch (action.type) {
         case 'sendPrompt': {
           const resolvedPrompt = action.prompt
-            ? interpolate(action.prompt, adaptiveState.store)
+            ? interpolate(action.prompt, store)
             : '';
-          if (resolvedPrompt) sendPrompt(resolvedPrompt, resolvedPrompt);
+          if (resolvedPrompt) sendPrompt(resolvedPrompt, resolvedPrompt, store);
           break;
         }
         case 'setState': {
@@ -139,12 +160,12 @@ export function AdaptiveProvider({
         case 'submit': {
           // Submit triggers sendPrompt with current state as context
           const safeStore = Object.fromEntries(
-            Object.entries(adaptiveState.store).filter(([k]) => !k.startsWith('__'))
+            Object.entries(store).filter(([k]) => !k.startsWith('__'))
           );
           const prompt = action.prompt
-            ? interpolate(action.prompt, adaptiveState.store)
+            ? interpolate(action.prompt, store)
             : `Form submitted with data: ${JSON.stringify(safeStore)}`;
-          sendPrompt(prompt, null);
+          sendPrompt(prompt, null, store);
           break;
         }
         case 'custom': {

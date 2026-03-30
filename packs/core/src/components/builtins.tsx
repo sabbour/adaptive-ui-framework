@@ -4,6 +4,22 @@ import { registerComponents } from '../registry';
 import { renderChildren, AdaptiveRenderer } from '../renderer';
 import { useAdaptive } from '../context';
 
+// ─── Input placeholder defaults registry ───
+// When an input has a placeholder like "e.g. my-app", the example value is
+// registered here. On form submit, empty fields are backfilled from this map.
+const placeholderDefaults = new Map<string, string>();
+
+/** Strip common example prefixes from a placeholder to extract the default value. */
+function extractDefault(placeholder: string): string {
+  return placeholder.replace(/^e\.?g\.?\s*/i, '').replace(/^ex\.\s*/i, '').trim();
+}
+
+/** Get placeholder defaults for all registered inputs (and clear the registry). */
+export function consumePlaceholderDefaults(): Map<string, string> {
+  const copy = new Map(placeholderDefaults);
+  return copy;
+}
+
 // ─── Searchable Dropdown (shared) ───
 export interface SearchableDropdownOption {
   value: string;
@@ -195,10 +211,20 @@ function ButtonComponent({ node }: AdaptiveComponentProps<ButtonNode>) {
 
 // ─── Input ───
 function InputComponent({ node }: AdaptiveComponentProps<InputNode>) {
-  const { state, dispatch } = useAdaptive();
+  const { state, dispatch, disabled } = useAdaptive();
   const value = (state[node.bind] as string) ?? '';
   const isTextarea = node.inputType === 'textarea';
   const Tag = isTextarea ? 'textarea' : 'input';
+
+  // Register placeholder as a default value for empty-field backfill on submit
+  useEffect(() => {
+    if (disabled) return;
+    if (node.placeholder && node.bind) {
+      const def = extractDefault(node.placeholder);
+      if (def) placeholderDefaults.set(node.bind, def);
+      return () => { placeholderDefaults.delete(node.bind); };
+    }
+  }, [node.bind, node.placeholder, disabled]);
 
   return React.createElement('div', { style: { marginBottom: '12px', ...node.style } as React.CSSProperties },
     node.label && React.createElement('label', {
