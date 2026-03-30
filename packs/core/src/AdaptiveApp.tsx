@@ -562,7 +562,13 @@ export function AdaptiveApp({
   const [isConnected, setIsConnected] = useState(() => {
     if (externalAdapter) return true;
     const cfg = loadLLMConfig(appId);
-    if (cfg.authMode === 'hosted') return true;
+    // Only auto-connect in hosted mode if there's a SAVED config — on first
+    // load (no localStorage), wait for the SettingsPanel's hosted model
+    // detection to pick the correct default model before connecting.
+    if (cfg.authMode === 'hosted') {
+      const hasSaved = !!localStorage.getItem(configKey(appId));
+      return hasSaved;
+    }
     return !!cfg.apiKey.trim();
   });
   const [adapterKey, setAdapterKey] = useState(0);
