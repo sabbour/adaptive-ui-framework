@@ -370,21 +370,37 @@ export class OpenAIAdapter implements LLMAdapter {
     for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
       const reqId = trackStart('POST', endpoint);
       let response: Response;
-      try {
-        response = await fetch(endpoint, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({ ...body, messages: loopMessages }),
-        });
-      } catch (err) {
-        trackEnd(reqId);
-        throw err;
+
+      // Retry with exponential backoff on transient failures
+      const MAX_FETCH_RETRIES = 3;
+      const RETRYABLE_STATUSES = [429, 502, 503, 504];
+      for (let attempt = 0; attempt < MAX_FETCH_RETRIES; attempt++) {
+        if (attempt > 0) {
+          await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt - 1))); // 1s, 2s
+        }
+        try {
+          response = await fetch(endpoint, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ ...body, messages: loopMessages }),
+          });
+          if (RETRYABLE_STATUSES.includes(response.status) && attempt < MAX_FETCH_RETRIES - 1) {
+            continue;
+          }
+          break; // success or non-retryable status
+        } catch (err) {
+          if (attempt >= MAX_FETCH_RETRIES - 1) {
+            trackEnd(reqId);
+            throw err;
+          }
+          // network error — retry
+        }
       }
 
-      if (!response.ok) {
+      if (!response!.ok) {
         trackEnd(reqId);
-        const text = await response.text();
-        throw new Error(`LLM API error (${response.status}): ${text}`);
+        const text = await response!.text();
+        throw new Error(`LLM API error (${response!.status}): ${text}`);
       }
 
       const data = await response.json();

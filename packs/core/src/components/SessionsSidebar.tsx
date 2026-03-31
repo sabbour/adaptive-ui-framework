@@ -2,7 +2,7 @@
 // Shows saved conversation sessions and file artifacts in a collapsible left sidebar.
 // Sessions section on top, Files section below.
 
-import React, { useSyncExternalStore, useState, useCallback, useRef } from 'react';
+import React, { useSyncExternalStore, useState, useCallback, useRef, useEffect } from 'react';
 import {
   getSessions, subscribeSessions, deleteSession, renameSession,
   type Session,
@@ -68,6 +68,15 @@ export function SessionsSidebar({
   const [confirmClearFiles, setConfirmClearFiles] = useState(false);
   const [filesPanelHeight, setFilesPanelHeight] = useState(600);
   const resizingRef = useRef(false);
+
+  // Inject slide-in keyframe once
+  useEffect(() => {
+    if (document.getElementById('adaptive-slide-in-style')) return;
+    const style = document.createElement('style');
+    style.id = 'adaptive-slide-in-style';
+    style.textContent = '@keyframes adaptive-slide-in { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: translateX(0); } }';
+    document.head.appendChild(style);
+  }, []);
 
   const handleFilesResizeStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -348,31 +357,35 @@ function SessionItem({
   if (confirmingDelete) {
     return React.createElement('div', {
       style: {
-        padding: '10px 12px',
+        padding: '8px 12px',
         backgroundColor: 'rgba(239, 68, 68, 0.06)',
         borderLeft: '3px solid #ef4444',
         borderBottom: '1px solid var(--adaptive-border, #e5e7eb)',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        gap: '8px',
+        animation: 'adaptive-slide-in 0.15s ease-out',
       } as React.CSSProperties,
     },
-      React.createElement('div', {
-        style: { fontSize: '14px', color: 'var(--adaptive-text, #111827)', marginBottom: '8px' },
-      }, `Delete "${session.name}"? This will remove the session and all its files.`),
-      React.createElement('div', { style: { display: 'flex', gap: '6px' } },
+      React.createElement('span', {
+        style: { fontSize: '12px', color: '#991b1b', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, flex: 1, minWidth: 0 },
+      }, `Delete "${session.name}"?`),
+      React.createElement('div', { style: { display: 'flex', gap: '4px', flexShrink: 0 } },
         React.createElement('button', {
           onClick: (e: React.MouseEvent) => { e.stopPropagation(); onDelete(); setConfirmingDelete(false); },
           style: {
             background: '#ef4444', border: 'none', borderRadius: '4px',
-            color: '#fff', cursor: 'pointer', fontSize: '14px', padding: '4px 10px',
-            fontWeight: 600,
+            color: '#fff', cursor: 'pointer', fontSize: '11px', padding: '2px 8px',
+            fontWeight: 600, lineHeight: '20px',
           },
-        }, 'Delete'),
+        }, 'Yes'),
         React.createElement('button', {
           onClick: (e: React.MouseEvent) => { e.stopPropagation(); setConfirmingDelete(false); },
           style: {
             background: 'none', border: '1px solid var(--adaptive-border, #e5e7eb)', borderRadius: '4px',
-            color: 'var(--adaptive-text, #111827)', cursor: 'pointer', fontSize: '14px', padding: '4px 10px',
+            color: 'var(--adaptive-text, #111827)', cursor: 'pointer', fontSize: '11px', padding: '2px 8px',
+            lineHeight: '20px',
           },
-        }, 'Cancel')
+        }, 'No')
       )
     );
   }
@@ -447,31 +460,35 @@ function FileItem({
   if (confirmingDelete) {
     return React.createElement('div', {
       style: {
-        padding: '8px 12px',
+        padding: '6px 12px',
         backgroundColor: 'rgba(239, 68, 68, 0.06)',
         borderLeft: '3px solid #ef4444',
         borderBottom: '1px solid var(--adaptive-border, #e5e7eb)',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        gap: '8px',
+        animation: 'adaptive-slide-in 0.15s ease-out',
       } as React.CSSProperties,
     },
-      React.createElement('div', {
-        style: { fontSize: '14px', color: 'var(--adaptive-text, #111827)', marginBottom: '6px' },
+      React.createElement('span', {
+        style: { fontSize: '12px', color: '#991b1b', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, flex: 1, minWidth: 0 },
       }, `Delete "${artifact.filename}"?`),
-      React.createElement('div', { style: { display: 'flex', gap: '6px' } },
+      React.createElement('div', { style: { display: 'flex', gap: '4px', flexShrink: 0 } },
         React.createElement('button', {
           onClick: (e: React.MouseEvent) => { e.stopPropagation(); onRemove(); setConfirmingDelete(false); },
           style: {
             background: '#ef4444', border: 'none', borderRadius: '4px',
-            color: '#fff', cursor: 'pointer', fontSize: '14px', padding: '3px 8px',
-            fontWeight: 600,
+            color: '#fff', cursor: 'pointer', fontSize: '11px', padding: '2px 8px',
+            fontWeight: 600, lineHeight: '20px',
           },
-        }, 'Delete'),
+        }, 'Yes'),
         React.createElement('button', {
           onClick: (e: React.MouseEvent) => { e.stopPropagation(); setConfirmingDelete(false); },
           style: {
             background: 'none', border: '1px solid var(--adaptive-border, #e5e7eb)', borderRadius: '4px',
-            color: 'var(--adaptive-text, #111827)', cursor: 'pointer', fontSize: '14px', padding: '3px 8px',
+            color: 'var(--adaptive-text, #111827)', cursor: 'pointer', fontSize: '11px', padding: '2px 8px',
+            lineHeight: '20px',
           },
-        }, 'Cancel')
+        }, 'No')
       )
     );
   }

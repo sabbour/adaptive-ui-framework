@@ -5,6 +5,7 @@ import { AdaptiveRenderer } from '../renderer';
 import { useAdaptive, DisabledScope } from '../context';
 import { simpleMarkdown, promptHistory, MAX_PROMPT_HISTORY } from './builtins';
 import { getCompletedRequests, subscribeCompleted } from '../request-tracker';
+import { resolveHostedPricing } from '../AdaptiveApp';
 
 
 // Icons
@@ -260,6 +261,26 @@ export function ConversationThread({ turns, isLoading, error, tokenUsage, lastRe
   const [showDebug, setShowDebug] = useState(false);
   const [expandedRequestId, setExpandedRequestId] = useState<number | null>(null);
   const apiRequests = useSyncExternalStore(subscribeCompleted, getCompletedRequests);
+
+  // ─── Cost estimation ───
+  // Pricing sourced from /api/llm-proxy/models (configured per-model in LLM_PROXY_MODELS_CONFIG).
+  // Falls back to conservative defaults if the model has no pricing configured.
+  const DEFAULT_PRICING = { inputPer1M: 2.50, outputPer1M: 10.00 }; // conservative fallback
+
+  function estimateCost(usage: { promptTokens: number; completionTokens: number }, model?: string): number {
+    const hosted = model ? resolveHostedPricing(model) : null;
+    const pricing = hosted || DEFAULT_PRICING;
+    return (usage.promptTokens / 1_000_000) * pricing.inputPer1M
+         + (usage.completionTokens / 1_000_000) * pricing.outputPer1M;
+  }
+
+  function formatCost(usd: number): string {
+    if (usd < 0.005) return '<$0.01';
+    return '$' + usd.toFixed(2);
+  }
+
+  const lastCost = estimateCost(lastRequestUsage, currentModel);
+  const totalCost = estimateCost(tokenUsage, currentModel);
 
   // Rewind state
   const [rewindModel, setRewindModel] = useState<string | undefined>(undefined);
@@ -554,7 +575,7 @@ export function ConversationThread({ turns, isLoading, error, tokenUsage, lastRe
       ),
       (tokenUsage.promptTokens > 0 || tokenUsage.completionTokens > 0)
         ? React.createElement('span', {
-            title: `Last request — Input: ${lastRequestUsage.promptTokens.toLocaleString()} / Output: ${lastRequestUsage.completionTokens.toLocaleString()}\nTotal — Input: ${tokenUsage.promptTokens.toLocaleString()} / Output: ${tokenUsage.completionTokens.toLocaleString()}`,
+            title: `Last request — Input: ${lastRequestUsage.promptTokens.toLocaleString()} / Output: ${lastRequestUsage.completionTokens.toLocaleString()} (${formatCost(lastCost)})\nTotal — Input: ${tokenUsage.promptTokens.toLocaleString()} / Output: ${tokenUsage.completionTokens.toLocaleString()} (${formatCost(totalCost)})\nModel: ${currentModel || 'unknown'}`,
             style: {
               fontSize: '12px', color: 'var(--adaptive-text-secondary, #6b7280)',
               fontFamily: 'monospace', whiteSpace: 'nowrap',
@@ -564,7 +585,13 @@ export function ConversationThread({ turns, isLoading, error, tokenUsage, lastRe
             React.createElement('span', {
               style: { margin: '0 6px', color: 'var(--adaptive-border, #d1d5db)' },
             }, '│'),
-            `Σ ${tokenUsage.promptTokens.toLocaleString()} / ${tokenUsage.completionTokens.toLocaleString()}`
+            `Σ ${tokenUsage.promptTokens.toLocaleString()} / ${tokenUsage.completionTokens.toLocaleString()}`,
+            React.createElement('span', {
+              style: { margin: '0 6px', color: 'var(--adaptive-border, #d1d5db)' },
+            }, '│'),
+            React.createElement('span', {
+              style: { color: totalCost > 0.50 ? '#d97706' : 'var(--adaptive-text-secondary, #6b7280)' },
+            }, formatCost(totalCost))
           )
         : React.createElement('span', {
             style: {

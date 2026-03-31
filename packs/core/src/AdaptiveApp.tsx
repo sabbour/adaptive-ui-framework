@@ -137,6 +137,8 @@ function saveLLMConfig(config: LLMConfig, appId?: string) {
 interface HostedModelInfo {
   name: string;
   apiType: 'chat' | 'responses';
+  inputPer1M?: number;
+  outputPer1M?: number;
 }
 
 interface HostedModelsInfo {
@@ -162,6 +164,15 @@ async function fetchHostedModels(): Promise<HostedModelsInfo | null> {
 function resolveHostedApiType(model: string): 'chat' | 'responses' {
   const m = cachedHostedModels?.models.find(m => m.name === model);
   return m?.apiType ?? 'chat';
+}
+
+/** Resolve per-1M-token pricing from the hosted models cache. */
+export function resolveHostedPricing(model: string): { inputPer1M: number; outputPer1M: number } | null {
+  const m = cachedHostedModels?.models.find(m => m.name === model);
+  if (m?.inputPer1M != null && m?.outputPer1M != null) {
+    return { inputPer1M: m.inputPer1M, outputPer1M: m.outputPer1M };
+  }
+  return null;
 }
 
 // ─── Settings Panel ───
