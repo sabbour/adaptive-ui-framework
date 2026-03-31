@@ -369,7 +369,7 @@ export class OpenAIAdapter implements LLMAdapter {
 
     for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
       const reqId = trackStart('POST', endpoint);
-      let response: Response;
+      let response!: Response;
 
       // Retry with exponential backoff on transient failures
       const MAX_FETCH_RETRIES = 3;
