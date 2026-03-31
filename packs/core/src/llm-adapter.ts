@@ -531,7 +531,7 @@ export class OpenAIAdapter implements LLMAdapter {
 
     for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
       const reqId = trackStart('POST', responsesEndpoint);
-      let response: Response;
+      let response!: Response;
       try {
         response = await fetch(responsesEndpoint, {
           method: 'POST',
