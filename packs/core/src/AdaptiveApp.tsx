@@ -530,8 +530,9 @@ export interface AdaptiveAppProps {
   /** Wrapper style */
   style?: React.CSSProperties;
 
-  /** Ref callback that receives the sendPrompt function, allowing external components to trigger prompts */
-  sendPromptRef?: React.MutableRefObject<((prompt: string) => void) | null>;
+  /** Ref callback that receives the sendPrompt function, allowing external components to trigger prompts.
+   *  Pass userDisplayText=null to suppress the user bubble (e.g. auto-continuation). */
+  sendPromptRef?: React.MutableRefObject<((prompt: string, userDisplayText?: string | null) => void) | null>;
 
   /** Restrict which pack settings appear in the settings panel. Defaults to none — explicitly list pack names to show. */
   visiblePacks?: string[];
@@ -1043,7 +1044,7 @@ function AdaptiveAppInner({
   lastRawResponse: string | null;
   lastRawRequest: string | null;
   lastDecisionLog: DecisionEntry[];
-  sendPromptRef?: React.MutableRefObject<((prompt: string) => void) | null>;
+  sendPromptRef?: React.MutableRefObject<((prompt: string, userDisplayText?: string | null) => void) | null>;
   onRewind?: (modelOverride?: string) => void;
   rewindModels?: string[];
   currentModel?: string;
