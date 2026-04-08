@@ -88,7 +88,7 @@ export {
   MockAdapter,
   ADAPTIVE_UI_SYSTEM_PROMPT,
 } from './llm-adapter';
-export type { LLMAdapter, LLMMessage, OpenAIAdapterConfig } from './llm-adapter';
+export type { LLMAdapter, LLMMessage, OpenAIAdapterConfig, ModelRouter, ModelTaskType } from './llm-adapter';
 
 // Entra ID authentication for Azure AI Foundry
 export { entraLogin, entraLogout, entraGetActiveAccount, entraGetAccessToken } from './entra-auth';

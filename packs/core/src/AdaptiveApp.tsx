@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState, useMemo, useSyncExtern
 import { createPortal } from 'react-dom';
 import type { AdaptiveUISpec, AdaptiveTheme, ConversationTurn } from './schema';
 import type { StateStore } from './interpolation';
-import type { LLMAdapter, LLMMessage } from './llm-adapter';
+import type { LLMAdapter, LLMMessage, ModelRouter } from './llm-adapter';
 import { OpenAIAdapter } from './llm-adapter';
 import { AdaptiveProvider, useAdaptive } from './context';
 import { ConversationThread } from './components/ConversationThread';
@@ -545,6 +545,9 @@ export interface AdaptiveAppProps {
 
   /** Unique app identifier. When set, LLM config (model, endpoint) is stored per-app in localStorage. */
   appId?: string;
+
+  /** Route requests to different models based on task type (code, planning, conversation, tool). */
+  modelRouter?: ModelRouter;
 }
 
 let turnCounter = Date.now();
@@ -569,6 +572,7 @@ export function AdaptiveApp({
   settingsPosition,
   models,
   appId,
+  modelRouter,
 }: AdaptiveAppProps) {
   // ─── Internal adapter management ───
   const [isConnected, setIsConnected] = useState(() => {
@@ -598,6 +602,7 @@ export function AdaptiveApp({
         systemPromptOverride,
         systemPromptSuffix,
         resolveApiType: resolveHostedApiType,
+        modelRouter,
       });
     }
     return new OpenAIAdapter({
@@ -606,8 +611,9 @@ export function AdaptiveApp({
       model: config.model || 'gpt-4o',
       systemPromptOverride,
       systemPromptSuffix,
+      modelRouter,
     });
-  }, [externalAdapter, isConnected, adapterKey, systemPromptOverride, systemPromptSuffix]);
+  }, [externalAdapter, isConnected, adapterKey, systemPromptOverride, systemPromptSuffix, modelRouter]);
 
   const handleConnect = useCallback((config: LLMConfig) => {
     saveLLMConfig(config, appId);

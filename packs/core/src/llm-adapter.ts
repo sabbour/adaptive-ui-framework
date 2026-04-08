@@ -241,6 +241,65 @@ function normalizeEndpoint(endpoint: string | undefined, model?: string): { url:
 
 // ─── OpenAI-compatible adapter ───
 
+/** Task categories for model routing. */
+export type ModelTaskType = 'code' | 'planning' | 'default';
+
+/** Maps task types to model names. The router picks the best model per-request. */
+export interface ModelRouter {
+  /** Model for code/file generation turns (e.g. a code-specialized model). */
+  code?: string;
+  /** Model for planning/architecture turns (e.g. a strong reasoning model). */
+  planning?: string;
+  /** Default model used for everything else AND for the classification call itself.
+   *  Should be fast and cheap (e.g. gpt-5.4-nano). Falls back to the adapter's configured model. */
+  default?: string;
+}
+
+/**
+ * Ask the cheap/default model to classify the request as code, planning, or default.
+ * Returns the task type. The call uses minimal tokens (~100 input, ~5 output).
+ */
+async function classifyTaskWithLLM(
+  prompt: string,
+  state: Record<string, unknown>,
+  endpoint: string,
+  model: string,
+  headers: Record<string, string>,
+): Promise<ModelTaskType> {
+  // Fast path: auto-continuation is always code
+  if (state.filesComplete === false) return 'code';
+
+  const classifyPrompt = `Classify this user request into exactly one category. Reply with ONLY the category name, nothing else.
+
+Categories:
+- code: generating files, code, Dockerfiles, YAML manifests, Bicep templates, CI/CD pipelines, kustomize, scaffolding
+- planning: architecture design, diagrams, recommendations, comparisons, trade-offs, infrastructure planning
+- default: everything else (questions, clarifications, login, deployment actions, tool usage, cost estimation)
+
+User request: ${prompt}`;
+
+  try {
+    const resp = await fetch(endpoint, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model,
+        messages: [{ role: 'user', content: classifyPrompt }],
+        max_completion_tokens: 10,
+        temperature: 0,
+      }),
+    });
+    if (!resp.ok) return 'default';
+    const data = await resp.json();
+    const answer = (data.choices?.[0]?.message?.content ?? '').trim().toLowerCase();
+    if (answer === 'code' || answer.startsWith('code')) return 'code';
+    if (answer === 'planning' || answer.startsWith('planning')) return 'planning';
+    return 'default';
+  } catch {
+    return 'default';
+  }
+}
+
 export interface OpenAIAdapterConfig {
   apiKey: string;
   endpoint?: string;
@@ -261,6 +320,9 @@ export interface OpenAIAdapterConfig {
   /** Callback to resolve apiType per model (used by hosted proxy mode).
    *  Called with the model name, returns the apiType for that model. */
   resolveApiType?: (model: string) => 'chat' | 'responses';
+  /** Route requests to different models based on task type.
+   *  When set, the adapter classifies each request and picks the best model. */
+  modelRouter?: ModelRouter;
 }
 
 export class OpenAIAdapter implements LLMAdapter {
@@ -310,8 +372,34 @@ export class OpenAIAdapter implements LLMAdapter {
       )}\n\nUser request: ${prompt}`,
     });
 
-    // Determine API type for this model
-    const model = this.config.model ?? 'gpt-4o';
+    // Determine model — use router if configured, otherwise fall back to config.model
+    const defaultModel = this.config.modelRouter?.default || this.config.model || 'gpt-5.4-nano';
+    let model = defaultModel;
+
+    if (this.config.modelRouter && (this.config.modelRouter.code || this.config.modelRouter.planning)) {
+      // Build headers for the classification call (same auth as main request)
+      const { url: classifyEndpoint, isAzure: classifyIsAzure } = normalizeEndpoint(this.config.endpoint, defaultModel);
+      const classifyHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (this.config.getAccessToken) {
+        classifyHeaders['Authorization'] = `Bearer ${await this.config.getAccessToken()}`;
+      } else if (classifyIsAzure && this.config.apiKey) {
+        classifyHeaders['api-key'] = this.config.apiKey;
+      } else if (this.config.apiKey) {
+        classifyHeaders['Authorization'] = `Bearer ${this.config.apiKey}`;
+      }
+
+      const taskType = await classifyTaskWithLLM(
+        prompt, currentState as Record<string, unknown>,
+        classifyEndpoint, defaultModel, classifyHeaders,
+      );
+      const routed = this.config.modelRouter[taskType];
+      if (routed && routed !== defaultModel) {
+        model = routed;
+        logDecision('adapter', `Model router: "${defaultModel}" classified task as "${taskType}" → upgrading to "${model}"`);
+      } else {
+        logDecision('adapter', `Model router: "${defaultModel}" classified task as "${taskType}" → staying on default`);
+      }
+    }
     const apiType = this.config.resolveApiType
       ? this.config.resolveApiType(model)
       : (this.config.apiType ?? 'chat');
