@@ -29,6 +29,8 @@ const KEY_MAP: Record<string, string> = {
   // Intent keys
   msg: 'message', ask: 'ask', sh: 'show', nx: 'next',
   mul: 'multiple', comp: 'component',
+  q: 'questions', qs: 'questions', onC: 'onComplete',
+  fp: 'freeformPlaceholder',
 };
 
 const TYPE_MAP: Record<string, string> = {
@@ -38,6 +40,7 @@ const TYPE_MAP: Record<string, string> = {
   rg: 'radioGroup', ms: 'multiSelect', tgl: 'toggle', sld: 'slider',
   div: 'divider', bdg: 'badge', acc: 'accordion', cb: 'codeBlock', lnk: 'link',
   azl: 'azureLogin', azrf: 'azureResourceForm',
+  qst: 'questionnaire', cmb: 'combobox', ce: 'costEstimate',
 };
 
 export function expandCompact(obj: any): any {
