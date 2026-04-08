@@ -661,6 +661,7 @@ export function AdaptiveApp({
   const [lastRawResponse, setLastRawResponse] = useState<string | null>(null);
   const [lastRawRequest, setLastRawRequest] = useState<string | null>(null);
   const [lastDecisionLog, setLastDecisionLog] = useState<DecisionEntry[]>([]);
+  const [lastModel, setLastModel] = useState<string | null>(null);
   const historyRef = useRef<LLMMessage[]>([]);
   const busyRef = useRef(false);
 
@@ -850,6 +851,10 @@ export function AdaptiveApp({
         if (result.decisionLog) {
           setLastDecisionLog(result.decisionLog);
         }
+        // Track which model actually served this request
+        if (result.model) {
+          setLastModel(result.model);
+        }
 
         // Summarize the spec for history instead of storing full JSON (~80% smaller)
         historyRef.current.push({
@@ -1002,7 +1007,7 @@ export function AdaptiveApp({
           onResetSession: handleResetSession,
           theme,
         },
-          React.createElement(AdaptiveAppInner, { turns, isLoading, error, tokenUsage, lastRequestUsage, lastRawResponse, lastRawRequest, lastDecisionLog, sendPromptRef: externalSendPromptRef, onRewind: handleRewind, rewindModels, currentModel })
+          React.createElement(AdaptiveAppInner, { turns, isLoading, error, tokenUsage, lastRequestUsage, lastRawResponse, lastRawRequest, lastDecisionLog, sendPromptRef: externalSendPromptRef, onRewind: handleRewind, rewindModels, currentModel: lastModel || currentModel })
         )
       : React.createElement('div', {
           style: {

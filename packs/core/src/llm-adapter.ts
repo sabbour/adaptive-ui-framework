@@ -135,6 +135,8 @@ export interface TokenUsage {
 export interface GenerateUIResult {
   spec: AdaptiveUISpec;
   usage: TokenUsage;
+  /** The model that actually served this request (may differ from default if router upgraded) */
+  model?: string;
   /** Raw JSON string from the LLM (before expansion/resolution) for debugging */
   rawResponse?: string;
   /** Raw messages array sent to the LLM for debugging */
@@ -549,7 +551,7 @@ export class OpenAIAdapter implements LLMAdapter {
       }
     }
 
-    return this.parseAndReturnSpec(content, finishReason, usage, messages);
+    return this.parseAndReturnSpec(content, finishReason, usage, messages, model);
   }
 
   // ─── Responses API path ───
@@ -684,7 +686,7 @@ export class OpenAIAdapter implements LLMAdapter {
       break;
     }
 
-    return this.parseAndReturnSpec(content, finishReason, usage, messages);
+    return this.parseAndReturnSpec(content, finishReason, usage, messages, model);
   }
 
   // ─── Shared JSON parsing and spec resolution ───
@@ -693,6 +695,7 @@ export class OpenAIAdapter implements LLMAdapter {
     finishReason: string,
     usage: TokenUsage,
     messages: LLMMessage[],
+    model?: string,
   ): GenerateUIResult {
     if (!content) {
       let detail = `finish_reason=${finishReason}`;
@@ -816,6 +819,7 @@ export class OpenAIAdapter implements LLMAdapter {
     return {
       spec: sanitizeSpec(spec) as AdaptiveUISpec,
       usage,
+      model,
       rawResponse: content,
       rawRequest: JSON.stringify(messages, null, 2),
       decisionLog: getDecisionLog(),

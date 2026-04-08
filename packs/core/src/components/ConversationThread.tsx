@@ -591,7 +591,13 @@ export function ConversationThread({ turns, isLoading, error, tokenUsage, lastRe
             }, '│'),
             React.createElement('span', {
               style: { color: totalCost > 0.50 ? '#d97706' : 'var(--adaptive-text-secondary, #6b7280)' },
-            }, formatCost(totalCost))
+            }, formatCost(totalCost)),
+            React.createElement('span', {
+              style: { margin: '0 6px', color: 'var(--adaptive-border, #d1d5db)' },
+            }, '│'),
+            React.createElement('span', {
+              style: { color: 'var(--adaptive-text-secondary, #6b7280)' },
+            }, currentModel || 'unknown')
           )
         : React.createElement('span', {
             style: {
